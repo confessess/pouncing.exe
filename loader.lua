@@ -1,4 +1,4 @@
--- Pouncing.exe | Inline Loader v3 — minimal + 1 debug bar
+-- Pouncing.exe | Inline Loader v4 — CreateTab diagnostics
 
 local CoreGui = game:GetService("CoreGui")
 for _, c in pairs(CoreGui:GetChildren()) do
@@ -24,13 +24,13 @@ local function Load(path)
 end
 
 local sg = Instance.new("ScreenGui")
-sg.Name = "PouncingV3"
+sg.Name = "PouncingV4"
 sg.ResetOnSpawn = false
 sg.Parent = CoreGui
 
--- One debug bar
+-- Debug bar
 local dbg = Instance.new("Frame")
-dbg.Size = UDim2.new(0, 400, 0, 24)
+dbg.Size = UDim2.new(0, 500, 0, 24)
 dbg.Position = UDim2.new(0, 20, 0, 20)
 dbg.BackgroundColor3 = Color3.fromRGB(80,80,80)
 dbg.BorderSizePixel = 0
@@ -39,7 +39,7 @@ local dbgt = Instance.new("TextLabel")
 dbgt.Size = UDim2.new(1, -10, 1, 0)
 dbgt.Position = UDim2.new(0, 5, 0, 0)
 dbgt.BackgroundTransparency = 1
-dbgt.Text = "Loading framework..."
+dbgt.Text = "Loading..."
 dbgt.TextColor3 = Color3.new(1,1,1)
 dbgt.TextSize = 12
 dbgt.Font = Enum.Font.GothamBold
@@ -54,14 +54,32 @@ if not GUI then
 end
 
 dbg.BackgroundColor3 = Color3.fromRGB(0,255,0)
-dbgt.Text = "Framework OK — building GUI..."
-
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
+dbgt.Text = "Framework OK — type="..typeof(GUI).." has CreateTab="..tostring(GUI.CreateTab ~= nil)
 
 local window = GUI.CreateWindow(sg, "Pouncing.exe", UDim2.new(0, 560, 0, 400))
 
+-- Check window.Tabs before creating
+dbgt.Text = "Window created. Tabs type="..typeof(window.Tabs).." count="..tostring(#window.Tabs)
+
+-- Try ONE CreateTab with full diagnostics
+local testOk, testResult = pcall(function()
+	return GUI.CreateTab(window, "TEST", "X")
+end)
+if not testOk then
+	dbg.BackgroundColor3 = Color3.fromRGB(255,0,0)
+	dbgt.Text = "CreateTab CRASHED: "..tostring(testResult)
+	return
+end
+if not testResult then
+	dbg.BackgroundColor3 = Color3.fromRGB(255,100,0)
+	dbgt.Text = "CreateTab returned nil!"
+	return
+end
+
+dbg.BackgroundColor3 = Color3.fromRGB(0,255,0)
+dbgt.Text = "CreateTab works! type="..typeof(testResult).." count="..tostring(#window.Tabs)
+
+-- Now create all tabs
 local Tabs = {
 	{Name = "Aimbot", Icon = "🎯"},
 	{Name = "ESP", Icon = "👁️"},
@@ -70,41 +88,44 @@ local Tabs = {
 	{Name = "Config", Icon = "💾"}
 }
 
-local TabContents = {}
 for _, tabInfo in ipairs(Tabs) do
-	TabContents[tabInfo.Name] = GUI.CreateTab(window, tabInfo.Name, tabInfo.Icon)
+	local ok, res = pcall(function()
+		return GUI.CreateTab(window, tabInfo.Name, tabInfo.Icon)
+	end)
 end
 
--- Update debug with tab count
-dbgt.Text = "Tabs created: "..tostring(#window.Tabs).."/5"
+dbgt.Text = "All tabs done. count="..tostring(#window.Tabs).."/5"
 
--- Aimbot
-local ACon = TabContents["Aimbot"]
-GUI.CreateSection(ACon, "Aimbot")
-GUI.CreateToggle(ACon, "Enabled", false, nil, function(v) end)
+-- Build content
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
--- ESP
-local ECon = TabContents["ESP"]
-GUI.CreateSection(ECon, "ESP")
-GUI.CreateToggle(ECon, "Enabled", false, nil, function(v) end)
+local function BuildTab(name)
+	local con = window.Contents[name]
+	if not con then return end
+	if name == "Aimbot" then
+		GUI.CreateSection(con, "Aimbot")
+		GUI.CreateToggle(con, "Enabled", false, nil, function(v) end)
+	elseif name == "ESP" then
+		GUI.CreateSection(con, "ESP")
+		GUI.CreateToggle(con, "Enabled", false, nil, function(v) end)
+	elseif name == "Gun" then
+		GUI.CreateSection(con, "Gun")
+		GUI.CreateToggle(con, "Enabled", false, nil, function(v) end)
+	elseif name == "Misc" then
+		GUI.CreateSection(con, "Misc")
+		GUI.CreateToggle(con, "Enabled", false, nil, function(v) end)
+	elseif name == "Config" then
+		GUI.CreateSection(con, "Config")
+		GUI.CreateLabel(con, "Pouncing.exe v1.0", false)
+		GUI.CreateLabel(con, "RightShift to toggle", true)
+	end
+end
 
--- Gun
-local GCon = TabContents["Gun"]
-GUI.CreateSection(GCon, "Gun")
-GUI.CreateToggle(GCon, "Enabled", false, nil, function(v) end)
+for _, tabInfo in ipairs(Tabs) do
+	BuildTab(tabInfo.Name)
+end
 
--- Misc
-local MCon = TabContents["Misc"]
-GUI.CreateSection(MCon, "Misc")
-GUI.CreateToggle(MCon, "Enabled", false, nil, function(v) end)
-
--- Config
-local CCon = TabContents["Config"]
-GUI.CreateSection(CCon, "Config")
-GUI.CreateLabel(CCon, "Pouncing.exe v1.0", false)
-GUI.CreateLabel(CCon, "RightShift to toggle", true)
-
--- Default tab
 window.ActiveTab = "Aimbot"
 if window.Tabs["Aimbot"] then
 	TweenService:Create(window.Tabs["Aimbot"], TweenInfo.new(0.2), {
