@@ -1,27 +1,13 @@
--- Pouncing.exe | Loader v1.3 — Detailed diagnostics + cleanup
+-- Pouncing.exe | Inline Loader — self-contained, no external main.lua
 
--- Kill any existing Pouncing guis
+-- Kill old instances
 local CoreGui = game:GetService("CoreGui")
-for _, child in pairs(CoreGui:GetChildren()) do
-	if child.Name:find("Pouncing") then
-		child:Destroy()
-	end
+for _, c in pairs(CoreGui:GetChildren()) do
+	if c.Name:find("Pouncing") then c:Destroy() end
 end
-if gethui then
-	for _, child in pairs(gethui():GetChildren()) do
-		if child.Name:find("Pouncing") then
-			child:Destroy()
-		end
-	end
-end
-
--- Run-once guard
-if _G._PouncingRunning then
-	return
-end
+if _G._PouncingRunning then return end
 _G._PouncingRunning = true
 
-local TweenService = game:GetService("TweenService")
 local BASE_URL = "https://raw.githubusercontent.com/confessess/pouncing.exe/main/"
 
 local function Fetch(url)
@@ -31,17 +17,16 @@ end
 
 local function Load(path)
 	local src = Fetch(BASE_URL..path..".lua")
-	if not src then return nil, "fetch_fail" end
+	if not src then return nil end
 	local fn,err = loadstring(src,path)
-	if not fn then return nil, "loadstring_fail:"..tostring(err) end
+	if not fn then return nil end
 	local ok,res = pcall(fn)
-	if not ok then return nil, "pcall_fail:"..tostring(res) end
-	return res, "ok"
+	return ok and res or nil
 end
 
 -- Visual tracker
 local sg = Instance.new("ScreenGui")
-sg.Name = "PouncingStepsV13"
+sg.Name = "PouncingInline"
 sg.ResetOnSpawn = false
 sg.Parent = CoreGui
 
@@ -66,96 +51,85 @@ local function Step(color, text)
 	stepY = stepY + 28
 end
 
-Step(Color3.fromRGB(80,80,80), "v1.3: Loader started")
+Step(Color3.fromRGB(80,80,80), "Inline Loader started")
 
--- Utils
-Step(Color3.fromRGB(120,120,120), "Loading utils...")
-local Utils, uErr = Load("utils/core")
-if not Utils then
-	Step(Color3.fromRGB(255,0,0), "Utils FAIL: "..tostring(uErr))
-	return
-end
-Step(Color3.fromRGB(0,255,0), "Utils OK (type="..typeof(Utils)..")")
-
--- Framework
+-- Load framework
 Step(Color3.fromRGB(120,120,120), "Loading framework...")
-local GUI, gErr = Load("gui/framework")
+local GUI = Load("gui/framework")
 if not GUI then
-	Step(Color3.fromRGB(255,0,0), "Framework FAIL: "..tostring(gErr))
+	Step(Color3.fromRGB(255,0,0), "Framework FAIL")
 	return
 end
-Step(Color3.fromRGB(0,255,0), "Framework OK (type="..typeof(GUI)..")")
+Step(Color3.fromRGB(0,255,0), "Framework OK")
 
--- Main GUI — DETAILED
-Step(Color3.fromRGB(120,120,120), "Loading main...")
-local Main, mErr = Load("gui/main")
-if not Main then
-	Step(Color3.fromRGB(255,0,0), "Main FAIL: "..tostring(mErr))
-	return
-end
-Step(Color3.fromRGB(0,255,0), "Main OK (type="..typeof(Main)..")")
+-- INLINE main.lua — minimal, no external fetch
+Step(Color3.fromRGB(120,120,120), "Building inline GUI...")
 
--- Check Main.Create
-Step(Color3.fromRGB(120,120,120), "Checking Main.Create...")
-if typeof(Main) ~= "table" then
-	Step(Color3.fromRGB(255,0,0), "Main is not a table! type="..typeof(Main))
-	return
-end
-if not Main.Create then
-	Step(Color3.fromRGB(255,0,0), "Main.Create is nil!")
-	return
-end
-if typeof(Main.Create) ~= "function" then
-	Step(Color3.fromRGB(255,0,0), "Main.Create is not a function! type="..typeof(Main.Create))
-	return
-end
-Step(Color3.fromRGB(0,255,0), "Main.Create is a function")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
--- Build manager
-local Manager = {
-	Modules = {Utils = Utils, Framework = GUI},
-	GetModule = function(self,n) return self.Modules[n] end,
-	Toggle = function(self,name,state)
-		if not self.Modules[name] then
-			local mod, err = Load("modules/"..name:lower())
-			if mod then
-				if mod.Init then pcall(mod.Init) end
-				self.Modules[name] = mod
-			end
-		end
-		local m = self.Modules[name]
-		if m then
-			if state and m.Enable then pcall(m.Enable) end
-			if not state and m.Disable then pcall(m.Disable) end
-		end
-	end,
-	UnloadAll = function() end
+local window = GUI.CreateWindow(sg, "Pouncing.exe", UDim2.new(0, 560, 0, 400))
+
+local Tabs = {
+	{Name = "Aimbot", Icon = "🎯"},
+	{Name = "ESP", Icon = "👁️"},
+	{Name = "Gun", Icon = "🔫"},
+	{Name = "Misc", Icon = "⚙️"},
+	{Name = "Config", Icon = "💾"}
 }
 
--- Build GUI
-Step(Color3.fromRGB(120,120,120), "Calling Main.Create...")
-local ok, win = pcall(function()
-	return Main.Create(sg, Manager)
+local TabContents = {}
+for _, tabInfo in ipairs(Tabs) do
+	TabContents[tabInfo.Name] = GUI.CreateTab(window, tabInfo.Name, tabInfo.Icon)
+end
+
+-- Aimbot
+local ACon = TabContents["Aimbot"]
+GUI.CreateSection(ACon, "Aimbot")
+GUI.CreateToggle(ACon, "Enabled", false, nil, function(v) end)
+
+-- ESP
+local ECon = TabContents["ESP"]
+GUI.CreateSection(ECon, "ESP")
+GUI.CreateToggle(ECon, "Enabled", false, nil, function(v) end)
+
+-- Gun
+local GCon = TabContents["Gun"]
+GUI.CreateSection(GCon, "Gun")
+GUI.CreateToggle(GCon, "Enabled", false, nil, function(v) end)
+
+-- Misc
+local MCon = TabContents["Misc"]
+GUI.CreateSection(MCon, "Misc")
+GUI.CreateToggle(MCon, "Enabled", false, nil, function(v) end)
+
+-- Config
+local CCon = TabContents["Config"]
+GUI.CreateSection(CCon, "Config")
+GUI.CreateLabel(CCon, "Pouncing.exe v1.0", false)
+GUI.CreateLabel(CCon, "RightShift to toggle", true)
+
+-- Default tab
+window.ActiveTab = "Aimbot"
+if window.Tabs["Aimbot"] then
+	TweenService:Create(window.Tabs["Aimbot"], TweenInfo.new(0.2), {
+		BackgroundColor3 = GUI.Theme.Primary,
+		TextColor3 = GUI.Theme.White
+	}):Play()
+end
+if window.Contents["Aimbot"] then
+	window.Contents["Aimbot"].Visible = true
+end
+
+UserInputService.InputBegan:Connect(function(input, gp)
+	if not gp and input.KeyCode == Enum.KeyCode.RightShift then
+		window.MainFrame.Visible = not window.MainFrame.Visible
+	end
 end)
-if not ok then
-	Step(Color3.fromRGB(255,0,0), "Main.Create CRASHED: "..tostring(win))
-	return
-end
-if not win then
-	Step(Color3.fromRGB(255,0,0), "Main.Create returned nil!")
-	return
-end
-Step(Color3.fromRGB(0,255,0), "GUI built! type="..typeof(win))
 
--- Check window
-if typeof(win) == "table" and win.MainFrame then
-	Step(Color3.fromRGB(0,255,0), "MainFrame exists, Visible="..tostring(win.MainFrame.Visible))
-else
-	Step(Color3.fromRGB(255,100,0), "Warning: no MainFrame in window")
-end
-
--- Done
-Step(Color3.fromRGB(255,255,0), "DONE! RightShift to toggle")
+Step(Color3.fromRGB(0,255,0), "Inline GUI built!")
+Step(Color3.fromRGB(255,255,0), "DONE! All 5 tabs ready")
 
 -- Notification
 local NF = Instance.new("Frame")
