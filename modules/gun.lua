@@ -1,13 +1,4 @@
-
-import os
-
-output_dir = "/mnt/agents/output/pouncing.exe"
-os.makedirs(f"{output_dir}/modules", exist_ok=True)
-
-# ============================================================
-# 7. MODULES/GUN.LUA - Gun Modifications Module
-# ============================================================
-gun = '''-- ============================================================
+-- ============================================================
 -- Pouncing.exe | Gun Module
 -- Weapon modifications and firing logic
 -- ============================================================
@@ -33,7 +24,7 @@ local Config = {
     RapidFire = false,
     FireRate = 50,
     DamageMult = 1,
-    
+
     -- Internal
     OriginalValues = {},
     Connections = {}
@@ -69,7 +60,7 @@ local function SaveOriginal(tool)
     if not tool or Config.OriginalValues[tool] then return end
     local cfg = GetToolConfig(tool)
     if not cfg then return end
-    
+
     local saved = {}
     for _, child in pairs(cfg:GetChildren()) do
         if child:IsA("NumberValue") or child:IsA("IntValue") then
@@ -83,7 +74,7 @@ local function RestoreOriginal(tool)
     if not tool or not Config.OriginalValues[tool] then return end
     local cfg = GetToolConfig(tool)
     if not cfg then return end
-    
+
     for name, value in pairs(Config.OriginalValues[tool]) do
         local child = cfg:FindFirstChild(name)
         if child and (child:IsA("NumberValue") or child:IsA("IntValue")) then
@@ -101,9 +92,9 @@ local function ApplyGunMods(tool)
     if not tool then return end
     local cfg = GetToolConfig(tool)
     if not cfg then return end
-    
+
     SaveOriginal(tool)
-    
+
     -- Common stat names across games
     local statMap = {
         Recoil = "NoRecoil",
@@ -116,7 +107,7 @@ local function ApplyGunMods(tool)
         FireSpeed = "RapidFire",
         Damage = "DamageMult"
     }
-    
+
     for _, child in pairs(cfg:GetChildren()) do
         if child:IsA("NumberValue") or child:IsA("IntValue") then
             local modName = statMap[child.Name]
@@ -155,7 +146,7 @@ local function OnAutoFire()
     if not Config.AutoFire or not MouseDown then return end
     local tool = GetCurrentTool()
     if not tool then return end
-    
+
     -- Trigger tool activation
     pcall(function()
         if tool:FindFirstChild("RemoteEvent") then
@@ -202,22 +193,22 @@ end
 local function SetupToolEvents()
     local char = LocalPlayer.Character
     if not char then return end
-    
+
     if ToolEquippedConn then ToolEquippedConn:Disconnect() end
     if ToolUnequippedConn then ToolUnequippedConn:Disconnect() end
-    
+
     ToolEquippedConn = char.ChildAdded:Connect(function(child)
         if child:IsA("Tool") then
             OnToolEquipped(child)
         end
     end)
-    
+
     ToolUnequippedConn = char.ChildRemoved:Connect(function(child)
         if child:IsA("Tool") then
             OnToolUnequipped(child)
         end
     end)
-    
+
     -- Apply to currently equipped tool
     local current = GetCurrentTool()
     if current then
@@ -236,7 +227,7 @@ function Module.Init()
     if LocalPlayer.Character then
         SetupToolEvents()
     end
-    
+
     LocalPlayer.CharacterAdded:Connect(function()
         task.wait(0.5)
         SetupToolEvents()
@@ -245,18 +236,18 @@ end
 
 function Module.Enable()
     Config.Enabled = true
-    
+
     -- Apply to current tool
     local tool = GetCurrentTool()
     if tool then
         ApplyGunMods(tool)
     end
-    
+
     -- Auto fire
     if Config.AutoFire and not AutoFireConn then
         AutoFireConn = RunService.RenderStepped:Connect(OnAutoFire)
     end
-    
+
     -- Input handling
     if not Config.Connections.InputBegan then
         Config.Connections.InputBegan = UserInputService.InputBegan:Connect(OnInputBegan)
@@ -267,18 +258,18 @@ end
 function Module.Disable()
     Config.Enabled = false
     MouseDown = false
-    
+
     -- Reset all tools
     for tool, _ in pairs(Config.OriginalValues) do
         ResetGunMods(tool)
     end
-    
+
     -- Disconnect auto fire
     if AutoFireConn then
         AutoFireConn:Disconnect()
         AutoFireConn = nil
     end
-    
+
     -- Disconnect inputs
     for name, conn in pairs(Config.Connections) do
         conn:Disconnect()
@@ -310,7 +301,7 @@ function Module.SetConfig(key, value)
     elseif key == "DamageMult" then
         Config.DamageMult = value
     end
-    
+
     -- Re-apply if enabled
     if Config.Enabled then
         local tool = GetCurrentTool()
@@ -325,9 +316,3 @@ function Module.GetConfig()
 end
 
 return Module
-'''
-
-with open(f"{output_dir}/modules/gun.lua", "w") as f:
-    f.write(gun)
-
-print("modules/gun.lua written")
