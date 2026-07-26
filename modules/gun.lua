@@ -1,9 +1,4 @@
 
-import os
-
-output_dir = "/mnt/agents/output/pouncing.exe"
-os.makedirs(f"{output_dir}/modules", exist_ok=True)
-
 # ============================================================
 # 7. MODULES/GUN.LUA - Gun Modifications Module
 # ============================================================
