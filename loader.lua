@@ -1,5 +1,4 @@
--- Pouncing.exe | Inline Framework Loader
--- No external fetches — everything needed is inline
+-- Pouncing.exe | Inline Loader — FIXED tab counting
 
 local CoreGui = game:GetService("CoreGui")
 local UserInputService = game:GetService("UserInputService")
@@ -11,9 +10,6 @@ end
 if _G._PouncingRunning then return end
 _G._PouncingRunning = true
 
--- ============================================================
--- INLINE THEME
--- ============================================================
 local Theme = {
 	BG = Color3.fromRGB(22, 12, 20),
 	TabBG = Color3.fromRGB(30, 18, 28),
@@ -33,9 +29,6 @@ local Theme = {
 	White = Color3.fromRGB(255, 255, 255),
 }
 
--- ============================================================
--- INLINE FRAMEWORK
--- ============================================================
 local GUI = {}
 GUI.Theme = Theme
 
@@ -96,12 +89,13 @@ function GUI.CreateWindow(parent, title, size)
 		ContentContainer = CCon,
 		Tabs = {},
 		Contents = {},
-		ActiveTab = nil
+		ActiveTab = nil,
+		TabCount = 0  -- FIXED: numeric counter
 	}
 end
 
 function GUI.CreateTab(window, name, icon)
-	local order = #window.Tabs
+	local order = window.TabCount  -- FIXED: use counter instead of #window.Tabs
 	local B = Instance.new("TextButton")
 	B.Name = name .. "Tab"
 	B.Size = UDim2.new(1, -14, 0, 36)
@@ -150,6 +144,7 @@ function GUI.CreateTab(window, name, icon)
 
 	window.Tabs[name] = B
 	window.Contents[name] = F
+	window.TabCount = window.TabCount + 1  -- FIXED: increment counter
 
 	B.MouseButton1Click:Connect(function()
 		if window.ActiveTab == name then return end
@@ -277,7 +272,7 @@ end
 -- BUILD GUI
 -- ============================================================
 local sg = Instance.new("ScreenGui")
-sg.Name = "PouncingInlineFW"
+sg.Name = "PouncingFixed"
 sg.ResetOnSpawn = false
 sg.Parent = CoreGui
 
@@ -357,7 +352,7 @@ local NT = Instance.new("TextLabel")
 NT.Size = UDim2.new(1, -10, 1, 0)
 NT.Position = UDim2.new(0, 5, 0, 0)
 NT.BackgroundTransparency = 1
-NT.Text = "🐾 Pouncing.exe loaded! Tabs=" .. tostring(#window.Tabs) .. "/5"
+NT.Text = "🐾 Pouncing.exe loaded! Tabs=" .. tostring(window.TabCount) .. "/5"
 NT.TextColor3 = Color3.fromRGB(255, 182, 193)
 NT.TextSize = 12
 NT.Font = Enum.Font.GothamSemibold
