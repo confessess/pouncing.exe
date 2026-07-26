@@ -1,6 +1,5 @@
--- Pouncing.exe | Inline Loader — self-contained, no external main.lua
+-- Pouncing.exe | Inline Loader v2 — with tab debug
 
--- Kill old instances
 local CoreGui = game:GetService("CoreGui")
 for _, c in pairs(CoreGui:GetChildren()) do
 	if c.Name:find("Pouncing") then c:Destroy() end
@@ -24,9 +23,8 @@ local function Load(path)
 	return ok and res or nil
 end
 
--- Visual tracker
 local sg = Instance.new("ScreenGui")
-sg.Name = "PouncingInline"
+sg.Name = "PouncingInlineV2"
 sg.ResetOnSpawn = false
 sg.Parent = CoreGui
 
@@ -51,10 +49,8 @@ local function Step(color, text)
 	stepY = stepY + 28
 end
 
-Step(Color3.fromRGB(80,80,80), "Inline Loader started")
+Step(Color3.fromRGB(80,80,80), "v2: Inline Loader started")
 
--- Load framework
-Step(Color3.fromRGB(120,120,120), "Loading framework...")
 local GUI = Load("gui/framework")
 if not GUI then
 	Step(Color3.fromRGB(255,0,0), "Framework FAIL")
@@ -62,14 +58,12 @@ if not GUI then
 end
 Step(Color3.fromRGB(0,255,0), "Framework OK")
 
--- INLINE main.lua — minimal, no external fetch
-Step(Color3.fromRGB(120,120,120), "Building inline GUI...")
-
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
-
+Step(Color3.fromRGB(120,120,120), "Creating window...")
 local window = GUI.CreateWindow(sg, "Pouncing.exe", UDim2.new(0, 560, 0, 400))
+Step(Color3.fromRGB(0,255,0), "Window created")
+
+-- DEBUG: show how many tabs exist before creating
+Step(Color3.fromRGB(150,150,150), "Before loop: Tabs count="..tostring(#window.Tabs))
 
 local Tabs = {
 	{Name = "Aimbot", Icon = "🎯"},
@@ -79,36 +73,78 @@ local Tabs = {
 	{Name = "Config", Icon = "💾"}
 }
 
+local createdCount = 0
 local TabContents = {}
-for _, tabInfo in ipairs(Tabs) do
-	TabContents[tabInfo.Name] = GUI.CreateTab(window, tabInfo.Name, tabInfo.Icon)
+for i, tabInfo in ipairs(Tabs) do
+	local ok, result = pcall(function()
+		return GUI.CreateTab(window, tabInfo.Name, tabInfo.Icon)
+	end)
+	if ok and result then
+		TabContents[tabInfo.Name] = result
+		createdCount = createdCount + 1
+	else
+		Step(Color3.fromRGB(255,100,0), "Tab "..tabInfo.Name.." FAILED: "..tostring(result))
+	end
 end
 
--- Aimbot
-local ACon = TabContents["Aimbot"]
-GUI.CreateSection(ACon, "Aimbot")
-GUI.CreateToggle(ACon, "Enabled", false, nil, function(v) end)
+Step(Color3.fromRGB(0,255,0), "After loop: Created "..createdCount.."/"..#Tabs.." tabs")
+Step(Color3.fromRGB(150,150,150), "window.Tabs count="..tostring(#window.Tabs))
 
--- ESP
-local ECon = TabContents["ESP"]
-GUI.CreateSection(ECon, "ESP")
-GUI.CreateToggle(ECon, "Enabled", false, nil, function(v) end)
+-- List all tab names
+local tabNames = {}
+for name, _ in pairs(window.Tabs) do
+	table.insert(tabNames, name)
+end
+Step(Color3.fromRGB(0,200,0), "Tab names: "..table.concat(tabNames, ", "))
 
--- Gun
-local GCon = TabContents["Gun"]
-GUI.CreateSection(GCon, "Gun")
-GUI.CreateToggle(GCon, "Enabled", false, nil, function(v) end)
+-- Build content for each tab
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
--- Misc
-local MCon = TabContents["Misc"]
-GUI.CreateSection(MCon, "Misc")
-GUI.CreateToggle(MCon, "Enabled", false, nil, function(v) end)
+local function BuildTab(name, contentFunc)
+	local ok, err = pcall(contentFunc)
+	if not ok then
+		Step(Color3.fromRGB(255,100,0), name.." content FAIL: "..tostring(err))
+	end
+end
 
--- Config
-local CCon = TabContents["Config"]
-GUI.CreateSection(CCon, "Config")
-GUI.CreateLabel(CCon, "Pouncing.exe v1.0", false)
-GUI.CreateLabel(CCon, "RightShift to toggle", true)
+BuildTab("Aimbot", function()
+	local ACon = TabContents["Aimbot"]
+	if not ACon then return end
+	GUI.CreateSection(ACon, "Aimbot")
+	GUI.CreateToggle(ACon, "Enabled", false, nil, function(v) end)
+end)
+
+BuildTab("ESP", function()
+	local ECon = TabContents["ESP"]
+	if not ECon then return end
+	GUI.CreateSection(ECon, "ESP")
+	GUI.CreateToggle(ECon, "Enabled", false, nil, function(v) end)
+end)
+
+BuildTab("Gun", function()
+	local GCon = TabContents["Gun"]
+	if not GCon then return end
+	GUI.CreateSection(GCon, "Gun")
+	GUI.CreateToggle(GCon, "Enabled", false, nil, function(v) end)
+end)
+
+BuildTab("Misc", function()
+	local MCon = TabContents["Misc"]
+	if not MCon then return end
+	GUI.CreateSection(MCon, "Misc")
+	GUI.CreateToggle(MCon, "Enabled", false, nil, function(v) end)
+end)
+
+BuildTab("Config", function()
+	local CCon = TabContents["Config"]
+	if not CCon then return end
+	GUI.CreateSection(CCon, "Config")
+	GUI.CreateLabel(CCon, "Pouncing.exe v1.0", false)
+	GUI.CreateLabel(CCon, "RightShift to toggle", true)
+end)
+
+Step(Color3.fromRGB(0,255,0), "All content built")
 
 -- Default tab
 window.ActiveTab = "Aimbot"
@@ -128,8 +164,7 @@ UserInputService.InputBegan:Connect(function(input, gp)
 	end
 end)
 
-Step(Color3.fromRGB(0,255,0), "Inline GUI built!")
-Step(Color3.fromRGB(255,255,0), "DONE! All 5 tabs ready")
+Step(Color3.fromRGB(255,255,0), "DONE! Check the window for tabs")
 
 -- Notification
 local NF = Instance.new("Frame")
