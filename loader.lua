@@ -1,13 +1,27 @@
--- Pouncing.exe | Loader v1.2 — Run Once Guard + Visual Steps
+-- Pouncing.exe | Loader v1.3 — Detailed diagnostics + cleanup
 
-if getfenv()["_PouncingRunning"] then
+-- Kill any existing Pouncing guis
+local CoreGui = game:GetService("CoreGui")
+for _, child in pairs(CoreGui:GetChildren()) do
+	if child.Name:find("Pouncing") then
+		child:Destroy()
+	end
+end
+if gethui then
+	for _, child in pairs(gethui():GetChildren()) do
+		if child.Name:find("Pouncing") then
+			child:Destroy()
+		end
+	end
+end
+
+-- Run-once guard
+if _G._PouncingRunning then
 	return
 end
-getfenv()["_PouncingRunning"] = true
+_G._PouncingRunning = true
 
-local CoreGui = game:GetService("CoreGui")
 local TweenService = game:GetService("TweenService")
-
 local BASE_URL = "https://raw.githubusercontent.com/confessess/pouncing.exe/main/"
 
 local function Fetch(url)
@@ -17,25 +31,24 @@ end
 
 local function Load(path)
 	local src = Fetch(BASE_URL..path..".lua")
-	if not src then return nil end
+	if not src then return nil, "fetch_fail" end
 	local fn,err = loadstring(src,path)
-	if not fn then return nil end
+	if not fn then return nil, "loadstring_fail:"..tostring(err) end
 	local ok,res = pcall(fn)
-	return ok and res or nil
+	if not ok then return nil, "pcall_fail:"..tostring(res) end
+	return res, "ok"
 end
 
--- Visual step tracker
+-- Visual tracker
 local sg = Instance.new("ScreenGui")
-sg.Name = "PouncingSteps"
+sg.Name = "PouncingStepsV13"
 sg.ResetOnSpawn = false
-if syn and syn.protect_gui then syn.protect_gui(sg) sg.Parent = CoreGui
-elseif gethui then sg.Parent = gethui()
-else sg.Parent = CoreGui end
+sg.Parent = CoreGui
 
 local stepY = 20
 local function Step(color, text)
 	local f = Instance.new("Frame")
-	f.Size = UDim2.new(0, 500, 0, 24)
+	f.Size = UDim2.new(0, 550, 0, 24)
 	f.Position = UDim2.new(0, 20, 0, stepY)
 	f.BackgroundColor3 = color
 	f.BorderSizePixel = 0
@@ -53,34 +66,50 @@ local function Step(color, text)
 	stepY = stepY + 28
 end
 
-Step(Color3.fromRGB(100,100,100), "STEP 0: Loader started")
+Step(Color3.fromRGB(80,80,80), "v1.3: Loader started")
 
--- Load utils
-Step(Color3.fromRGB(150,150,150), "STEP 1: Loading utils...")
-local Utils = Load("utils/core")
+-- Utils
+Step(Color3.fromRGB(120,120,120), "Loading utils...")
+local Utils, uErr = Load("utils/core")
 if not Utils then
-	Step(Color3.fromRGB(255,0,0), "STEP 1 FAIL: Utils")
+	Step(Color3.fromRGB(255,0,0), "Utils FAIL: "..tostring(uErr))
 	return
 end
-Step(Color3.fromRGB(0,255,0), "STEP 1: Utils OK")
+Step(Color3.fromRGB(0,255,0), "Utils OK (type="..typeof(Utils)..")")
 
--- Load framework
-Step(Color3.fromRGB(150,150,150), "STEP 2: Loading framework...")
-local GUI = Load("gui/framework")
+-- Framework
+Step(Color3.fromRGB(120,120,120), "Loading framework...")
+local GUI, gErr = Load("gui/framework")
 if not GUI then
-	Step(Color3.fromRGB(255,0,0), "STEP 2 FAIL: Framework")
+	Step(Color3.fromRGB(255,0,0), "Framework FAIL: "..tostring(gErr))
 	return
 end
-Step(Color3.fromRGB(0,255,0), "STEP 2: Framework OK")
+Step(Color3.fromRGB(0,255,0), "Framework OK (type="..typeof(GUI)..")")
 
--- Load main
-Step(Color3.fromRGB(150,150,150), "STEP 3: Loading main...")
-local Main = Load("gui/main")
+-- Main GUI — DETAILED
+Step(Color3.fromRGB(120,120,120), "Loading main...")
+local Main, mErr = Load("gui/main")
 if not Main then
-	Step(Color3.fromRGB(255,0,0), "STEP 3 FAIL: Main")
+	Step(Color3.fromRGB(255,0,0), "Main FAIL: "..tostring(mErr))
 	return
 end
-Step(Color3.fromRGB(0,255,0), "STEP 3: Main OK")
+Step(Color3.fromRGB(0,255,0), "Main OK (type="..typeof(Main)..")")
+
+-- Check Main.Create
+Step(Color3.fromRGB(120,120,120), "Checking Main.Create...")
+if typeof(Main) ~= "table" then
+	Step(Color3.fromRGB(255,0,0), "Main is not a table! type="..typeof(Main))
+	return
+end
+if not Main.Create then
+	Step(Color3.fromRGB(255,0,0), "Main.Create is nil!")
+	return
+end
+if typeof(Main.Create) ~= "function" then
+	Step(Color3.fromRGB(255,0,0), "Main.Create is not a function! type="..typeof(Main.Create))
+	return
+end
+Step(Color3.fromRGB(0,255,0), "Main.Create is a function")
 
 -- Build manager
 local Manager = {
@@ -88,7 +117,7 @@ local Manager = {
 	GetModule = function(self,n) return self.Modules[n] end,
 	Toggle = function(self,name,state)
 		if not self.Modules[name] then
-			local mod = Load("modules/"..name:lower())
+			local mod, err = Load("modules/"..name:lower())
 			if mod then
 				if mod.Init then pcall(mod.Init) end
 				self.Modules[name] = mod
@@ -104,17 +133,26 @@ local Manager = {
 }
 
 -- Build GUI
-Step(Color3.fromRGB(150,150,150), "STEP 4: Building GUI...")
-local ok, win = pcall(function() return Main.Create(sg, Manager) end)
+Step(Color3.fromRGB(120,120,120), "Calling Main.Create...")
+local ok, win = pcall(function()
+	return Main.Create(sg, Manager)
+end)
 if not ok then
-	Step(Color3.fromRGB(255,0,0), "STEP 4 FAIL: Crash: "..tostring(win))
+	Step(Color3.fromRGB(255,0,0), "Main.Create CRASHED: "..tostring(win))
 	return
 end
 if not win then
-	Step(Color3.fromRGB(255,0,0), "STEP 4 FAIL: Returned nil")
+	Step(Color3.fromRGB(255,0,0), "Main.Create returned nil!")
 	return
 end
-Step(Color3.fromRGB(0,255,0), "STEP 4: GUI built!")
+Step(Color3.fromRGB(0,255,0), "GUI built! type="..typeof(win))
+
+-- Check window
+if typeof(win) == "table" and win.MainFrame then
+	Step(Color3.fromRGB(0,255,0), "MainFrame exists, Visible="..tostring(win.MainFrame.Visible))
+else
+	Step(Color3.fromRGB(255,100,0), "Warning: no MainFrame in window")
+end
 
 -- Done
 Step(Color3.fromRGB(255,255,0), "DONE! RightShift to toggle")
