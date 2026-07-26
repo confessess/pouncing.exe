@@ -1,4 +1,3 @@
--- ============================================================
 -- Pouncing.exe | GUI Framework
 -- Cute Pink Neon UI Components
 -- ============================================================
@@ -6,6 +5,13 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+
+-- ============================================================
+-- Color Palette — Cute Pink Neon
+-- ============================================================
 
 local Theme = {
     BG = Color3.fromRGB(22, 12, 20),
@@ -32,6 +38,10 @@ local Theme = {
 
 local GUI = {}
 GUI.Theme = Theme
+
+-- ============================================================
+-- CreateWindow — Main Draggable Window
+-- ============================================================
 
 function GUI.CreateWindow(parent, title, size)
     size = size or UDim2.new(0, 540, 0, 380)
@@ -231,12 +241,17 @@ function GUI.CreateWindow(parent, title, size)
         ContentContainer = CCon,
         Tabs = {},
         Contents = {},
-        ActiveTab = nil
+        ActiveTab = nil,
+        TabCount = 0
     }
 end
 
+-- ============================================================
+-- CreateTab — FIXED: uses TabCount instead of #window.Tabs
+-- ============================================================
+
 function GUI.CreateTab(window, name, icon)
-    local order = #window.Tabs
+    local order = window.TabCount
     local B = Instance.new("TextButton")
     B.Name = name .. "Tab"
     B.Size = UDim2.new(1, -14, 0, 36)
@@ -287,6 +302,7 @@ function GUI.CreateTab(window, name, icon)
 
     window.Tabs[name] = B
     window.Contents[name] = F
+    window.TabCount = window.TabCount + 1
 
     B.MouseButton1Click:Connect(function()
         if window.ActiveTab == name then return end
@@ -308,6 +324,10 @@ function GUI.CreateTab(window, name, icon)
 
     return F
 end
+
+-- ============================================================
+-- CreateToggle
+-- ============================================================
 
 function GUI.CreateToggle(parent, text, default, colorKey, callback)
     local F = Instance.new("Frame")
@@ -417,6 +437,10 @@ function GUI.CreateToggle(parent, text, default, colorKey, callback)
 
     return F, function() return State end, CBtn
 end
+
+-- ============================================================
+-- CreateSlider
+-- ============================================================
 
 function GUI.CreateSlider(parent, text, min, max, default, callback)
     local F = Instance.new("Frame")
@@ -531,6 +555,10 @@ function GUI.CreateSlider(parent, text, min, max, default, callback)
     return F
 end
 
+-- ============================================================
+-- CreateButton
+-- ============================================================
+
 function GUI.CreateButton(parent, text, callback)
     local F = Instance.new("TextButton")
     F.Size = UDim2.new(1, -10, 0, 36)
@@ -572,6 +600,10 @@ function GUI.CreateButton(parent, text, callback)
     return F
 end
 
+-- ============================================================
+-- CreateLabel
+-- ============================================================
+
 function GUI.CreateLabel(parent, text, isSub)
     local L = Instance.new("TextLabel")
     L.Size = UDim2.new(1, -10, 0, 22)
@@ -585,6 +617,462 @@ function GUI.CreateLabel(parent, text, isSub)
     return L
 end
 
+-- ============================================================
+-- CreateDropdown
+-- ============================================================
+
+function GUI.CreateDropdown(parent, text, options, callback)
+    local F = Instance.new("Frame")
+    F.Size = UDim2.new(1, -10, 0, 38)
+    F.BackgroundColor3 = Theme.ElementBG
+    F.BorderSizePixel = 0
+    F.Parent = parent
+
+    local FC = Instance.new("UICorner")
+    FC.CornerRadius = UDim.new(0, 8)
+    FC.Parent = F
+
+    local fStroke = Instance.new("UIStroke")
+    fStroke.Color = Theme.Border
+    fStroke.Thickness = 1
+    fStroke.Transparency = 0.5
+    fStroke.Parent = F
+
+    local L = Instance.new("TextLabel")
+    L.Size = UDim2.new(1, -130, 1, 0)
+    L.Position = UDim2.new(0, 14, 0, 0)
+    L.BackgroundTransparency = 1
+    L.Text = text
+    L.TextColor3 = Theme.Text
+    L.TextSize = 12
+    L.Font = Enum.Font.Gotham
+    L.TextXAlignment = Enum.TextXAlignment.Left
+    L.Parent = F
+
+    local selected = options[1] or "None"
+
+    local DBtn = Instance.new("TextButton")
+    DBtn.Size = UDim2.new(0, 100, 0, 26)
+    DBtn.Position = UDim2.new(1, -110, 0.5, -13)
+    DBtn.BackgroundColor3 = Theme.BG
+    DBtn.BorderSizePixel = 0
+    DBtn.Text = selected
+    DBtn.TextColor3 = Theme.Primary
+    DBtn.TextSize = 11
+    DBtn.Font = Enum.Font.GothamSemibold
+    DBtn.AutoButtonColor = false
+    DBtn.Parent = F
+
+    local DBC = Instance.new("UICorner")
+    DBC.CornerRadius = UDim.new(0, 6)
+    DBC.Parent = DBtn
+
+    local DBS = Instance.new("UIStroke")
+    DBS.Color = Theme.BorderGlow
+    DBS.Thickness = 1
+    DBS.Transparency = 0.5
+    DBS.Parent = DBtn
+
+    local open = false
+    local dropFrame = nil
+
+    DBtn.MouseButton1Click:Connect(function()
+        open = not open
+        if open then
+            if dropFrame then dropFrame:Destroy() end
+            dropFrame = Instance.new("Frame")
+            dropFrame.Size = UDim2.new(0, 100, 0, math.min(#options * 28, 140))
+            dropFrame.Position = UDim2.new(0, 0, 1, 4)
+            dropFrame.BackgroundColor3 = Theme.BG
+            dropFrame.BorderSizePixel = 0
+            dropFrame.ZIndex = 50
+            dropFrame.Parent = DBtn
+
+            local dropC = Instance.new("UICorner")
+            dropC.CornerRadius = UDim.new(0, 6)
+            dropC.Parent = dropFrame
+
+            local dropS = Instance.new("UIStroke")
+            dropS.Color = Theme.BorderGlow
+            dropS.Thickness = 1
+            dropS.Parent = dropFrame
+
+            local scroll = Instance.new("ScrollingFrame")
+            scroll.Size = UDim2.new(1, -4, 1, -4)
+            scroll.Position = UDim2.new(0, 2, 0, 2)
+            scroll.BackgroundTransparency = 1
+            scroll.BorderSizePixel = 0
+            scroll.ScrollBarThickness = 2
+            scroll.ScrollBarImageColor3 = Theme.Primary
+            scroll.CanvasSize = UDim2.new(0, 0, 0, #options * 28)
+            scroll.ZIndex = 51
+            scroll.Parent = dropFrame
+
+            for i, opt in ipairs(options) do
+                local optBtn = Instance.new("TextButton")
+                optBtn.Size = UDim2.new(1, 0, 0, 26)
+                optBtn.Position = UDim2.new(0, 0, 0, (i - 1) * 28)
+                optBtn.BackgroundColor3 = Theme.BG
+                optBtn.BorderSizePixel = 0
+                optBtn.Text = opt
+                optBtn.TextColor3 = Theme.Text
+                optBtn.TextSize = 11
+                optBtn.Font = Enum.Font.Gotham
+                optBtn.ZIndex = 52
+                optBtn.Parent = scroll
+
+                optBtn.MouseEnter:Connect(function()
+                    TweenService:Create(optBtn, TweenInfo.new(0.15), {BackgroundColor3 = Theme.HoverBG}):Play()
+                end)
+                optBtn.MouseLeave:Connect(function()
+                    TweenService:Create(optBtn, TweenInfo.new(0.15), {BackgroundColor3 = Theme.BG}):Play()
+                end)
+                optBtn.MouseButton1Click:Connect(function()
+                    selected = opt
+                    DBtn.Text = opt
+                    open = false
+                    dropFrame:Destroy()
+                    dropFrame = nil
+                    if callback then callback(opt) end
+                end)
+            end
+        else
+            if dropFrame then dropFrame:Destroy() dropFrame = nil end
+        end
+    end)
+
+    return F, function() return selected end
+end
+
+-- ============================================================
+-- CreateColorPicker — Pink Themed HSV Wheel
+-- ============================================================
+
+function GUI.CreateColorPicker(parent, callback)
+    local CWFrame = Instance.new("Frame")
+    CWFrame.Name = "ColorPicker"
+    CWFrame.Size = UDim2.new(0, 260, 0, 300)
+    CWFrame.BackgroundColor3 = Theme.BG
+    CWFrame.BorderSizePixel = 0
+    CWFrame.Visible = false
+    CWFrame.ZIndex = 200
+    CWFrame.Parent = parent
+
+    local CWC = Instance.new("UICorner")
+    CWC.CornerRadius = UDim.new(0, 12)
+    CWC.Parent = CWFrame
+
+    local CWS = Instance.new("UIStroke")
+    CWS.Color = Theme.BorderGlow
+    CWS.Thickness = 1.5
+    CWS.Parent = CWFrame
+
+    local CWTitle = Instance.new("TextLabel")
+    CWTitle.Size = UDim2.new(1, -40, 0, 28)
+    CWTitle.Position = UDim2.new(0, 14, 0, 8)
+    CWTitle.BackgroundTransparency = 1
+    CWTitle.Text = "🎨 Color Picker"
+    CWTitle.TextColor3 = Theme.Text
+    CWTitle.TextSize = 13
+    CWTitle.Font = Enum.Font.GothamBold
+    CWTitle.TextXAlignment = Enum.TextXAlignment.Left
+    CWTitle.ZIndex = 201
+    CWTitle.Parent = CWFrame
+
+    local CWClose = Instance.new("TextButton")
+    CWClose.Size = UDim2.new(0, 26, 0, 26)
+    CWClose.Position = UDim2.new(1, -32, 0, 8)
+    CWClose.BackgroundTransparency = 1
+    CWClose.Text = "×"
+    CWClose.TextColor3 = Theme.SubText
+    CWClose.TextSize = 20
+    CWClose.Font = Enum.Font.GothamBold
+    CWClose.ZIndex = 201
+    CWClose.Parent = CWFrame
+
+    local WheelContainer = Instance.new("TextButton")
+    WheelContainer.Name = "WheelContainer"
+    WheelContainer.Size = UDim2.new(0, 170, 0, 170)
+    WheelContainer.Position = UDim2.new(0.5, -85, 0, 38)
+    WheelContainer.BackgroundColor3 = Color3.fromRGB(20, 12, 18)
+    WheelContainer.BorderSizePixel = 0
+    WheelContainer.Text = ""
+    WheelContainer.AutoButtonColor = false
+    WheelContainer.ZIndex = 201
+    WheelContainer.Parent = CWFrame
+
+    local WheelOC = Instance.new("UICorner")
+    WheelOC.CornerRadius = UDim.new(1, 0)
+    WheelOC.Parent = WheelContainer
+
+    local WheelBorder = Instance.new("UIStroke")
+    WheelBorder.Color = Theme.BorderGlow
+    WheelBorder.Thickness = 2
+    WheelBorder.Parent = WheelContainer
+
+    local ringConfig = {
+        {count = 1,  sat = 0.0, size = 14, radius = 0.00},
+        {count = 14, sat = 0.18, size = 11, radius = 0.08},
+        {count = 28, sat = 0.35, size = 10, radius = 0.15},
+        {count = 42, sat = 0.50, size = 9,  radius = 0.22},
+        {count = 56, sat = 0.65, size = 8,  radius = 0.29},
+        {count = 70, sat = 0.80, size = 7,  radius = 0.36},
+        {count = 84, sat = 0.92, size = 6,  radius = 0.43},
+        {count = 96, sat = 1.0,  size = 5,  radius = 0.50},
+    }
+
+    for _, cfg in ipairs(ringConfig) do
+        for i = 0, cfg.count - 1 do
+            local angle = (i / cfg.count) * math.pi * 2 - math.pi / 2
+            local dot = Instance.new("Frame")
+            dot.Size = UDim2.new(0, cfg.size, 0, cfg.size)
+            dot.Position = UDim2.new(
+                0.5 + math.cos(angle) * cfg.radius - cfg.size / 340,
+                0,
+                0.5 + math.sin(angle) * cfg.radius - cfg.size / 340,
+                0
+            )
+            dot.BackgroundColor3 = Color3.fromHSV(i / cfg.count, cfg.sat, 1)
+            dot.BorderSizePixel = 0
+            dot.ZIndex = 202
+            dot.Parent = WheelContainer
+            local dotC = Instance.new("UICorner")
+            dotC.CornerRadius = UDim.new(1, 0)
+            dotC.Parent = dot
+        end
+    end
+
+    local SelDot = Instance.new("Frame")
+    SelDot.Name = "SelDot"
+    SelDot.Size = UDim2.new(0, 14, 0, 14)
+    SelDot.Position = UDim2.new(0.5, -7, 0.5, -7)
+    SelDot.BackgroundColor3 = Theme.White
+    SelDot.BorderSizePixel = 0
+    SelDot.ZIndex = 203
+    SelDot.Parent = WheelContainer
+
+    local SelDotC = Instance.new("UICorner")
+    SelDotC.CornerRadius = UDim.new(1, 0)
+    SelDotC.Parent = SelDot
+
+    local SelDotStroke = Instance.new("UIStroke")
+    SelDotStroke.Color = Theme.Black
+    SelDotStroke.Thickness = 2
+    SelDotStroke.Parent = SelDot
+
+    local BrightLabel = Instance.new("TextLabel")
+    BrightLabel.Size = UDim2.new(0, 80, 0, 16)
+    BrightLabel.Position = UDim2.new(0, 14, 0, 216)
+    BrightLabel.BackgroundTransparency = 1
+    BrightLabel.Text = "Brightness"
+    BrightLabel.TextColor3 = Theme.SubText
+    BrightLabel.TextSize = 10
+    BrightLabel.Font = Enum.Font.Gotham
+    BrightLabel.ZIndex = 201
+    BrightLabel.Parent = CWFrame
+
+    local BTrack = Instance.new("Frame")
+    BTrack.Size = UDim2.new(1, -28, 0, 8)
+    BTrack.Position = UDim2.new(0, 14, 0, 234)
+    BTrack.BackgroundColor3 = Theme.Border
+    BTrack.BorderSizePixel = 0
+    BTrack.ZIndex = 201
+    BTrack.Parent = CWFrame
+
+    local BTC = Instance.new("UICorner")
+    BTC.CornerRadius = UDim.new(1, 0)
+    BTC.Parent = BTrack
+
+    local BFill = Instance.new("Frame")
+    BFill.Size = UDim2.new(1, 0, 1, 0)
+    BFill.BackgroundColor3 = Theme.White
+    BFill.BorderSizePixel = 0
+    BFill.ZIndex = 201
+    BFill.Parent = BTrack
+
+    local BFC = Instance.new("UICorner")
+    BFC.CornerRadius = UDim.new(1, 0)
+    BFC.Parent = BFill
+
+    local BKnob = Instance.new("TextButton")
+    BKnob.Size = UDim2.new(0, 16, 0, 16)
+    BKnob.Position = UDim2.new(1, -8, 0.5, -8)
+    BKnob.BackgroundColor3 = Theme.White
+    BKnob.BorderSizePixel = 2
+    BKnob.BorderColor3 = Theme.Black
+    BKnob.Text = ""
+    BKnob.AutoButtonColor = false
+    BKnob.ZIndex = 202
+    BKnob.Parent = BTrack
+
+    local BKC = Instance.new("UICorner")
+    BKC.CornerRadius = UDim.new(1, 0)
+    BKC.Parent = BKnob
+
+    local BKnobGlow = Instance.new("UIStroke")
+    BKnobGlow.Color = Theme.Primary
+    BKnobGlow.Thickness = 2
+    BKnobGlow.Parent = BKnob
+
+    local PLabel = Instance.new("TextLabel")
+    PLabel.Size = UDim2.new(0, 60, 0, 16)
+    PLabel.Position = UDim2.new(0, 14, 0, 250)
+    PLabel.BackgroundTransparency = 1
+    PLabel.Text = "Preview"
+    PLabel.TextColor3 = Theme.SubText
+    PLabel.TextSize = 10
+    PLabel.Font = Enum.Font.Gotham
+    PLabel.ZIndex = 201
+    PLabel.Parent = CWFrame
+
+    local PBox = Instance.new("Frame")
+    PBox.Size = UDim2.new(0, 60, 0, 22)
+    PBox.Position = UDim2.new(0, 14, 0, 266)
+    PBox.BackgroundColor3 = Theme.White
+    PBox.BorderSizePixel = 0
+    PBox.ZIndex = 201
+    PBox.Parent = CWFrame
+
+    local PBC = Instance.new("UICorner")
+    PBC.CornerRadius = UDim.new(0, 6)
+    PBC.Parent = PBox
+
+    local PBS = Instance.new("UIStroke")
+    PBS.Color = Theme.BorderGlow
+    PBS.Thickness = 1.5
+    PBS.Parent = PBox
+
+    local CWHue, CWSat, CWVal = 0, 1, 1
+    local CWCallback = nil
+    local CWOpen = false
+
+    local function GetWheelLocalMouse()
+        local mousePos = UserInputService:GetMouseLocation()
+        local absPos = WheelContainer.AbsolutePosition
+        return mousePos.X - absPos.X, mousePos.Y - absPos.Y
+    end
+
+    local function UpdateWheel(localX, localY)
+        local cx, cy = 85, 85
+        local relX = localX - cx
+        local relY = localY - cy
+        local maxDist = 82
+        local dotRadius = 7
+        local effectiveMaxDist = maxDist - dotRadius - 2
+        local dist = math.sqrt(relX^2 + relY^2)
+
+        if dist > effectiveMaxDist then
+            local scale = effectiveMaxDist / dist
+            relX = relX * scale
+            relY = relY * scale
+            dist = effectiveMaxDist
+        end
+
+        local angle = math.atan2(relY, relX) + math.pi / 2
+        if angle < 0 then angle = angle + 2 * math.pi end
+        CWHue = angle / (2 * math.pi)
+        CWSat = math.clamp(dist / effectiveMaxDist, 0, 1)
+
+        SelDot.Position = UDim2.new(0.5, relX - 7, 0.5, relY - 7)
+
+        local color = Color3.fromHSV(CWHue, CWSat, CWVal)
+        SelDot.BackgroundColor3 = color
+        PBox.BackgroundColor3 = color
+        if CWCallback then CWCallback(color) end
+    end
+
+    local function UpdateBright(input)
+        local trackAbsPos = BTrack.AbsolutePosition
+        local trackAbsSize = BTrack.AbsoluteSize
+        local pos = math.clamp((input.Position.X - trackAbsPos.X) / trackAbsSize.X, 0, 1)
+        CWVal = pos
+        BFill.Size = UDim2.new(pos, 0, 1, 0)
+        BKnob.Position = UDim2.new(pos, -8, 0.5, -8)
+
+        local color = Color3.fromHSV(CWHue, CWSat, CWVal)
+        PBox.BackgroundColor3 = color
+        SelDot.BackgroundColor3 = color
+        if CWCallback then CWCallback(color) end
+    end
+
+    local WDrag = false
+    local BDrag = false
+
+    WheelContainer.MouseButton1Down:Connect(function()
+        WDrag = true
+        local lx, ly = GetWheelLocalMouse()
+        UpdateWheel(lx, ly)
+    end)
+
+    BTrack.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            BDrag = true
+            UpdateBright(input)
+        end
+    end)
+
+    BKnob.MouseButton1Down:Connect(function()
+        BDrag = true
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            WDrag = false
+            BDrag = false
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if WDrag and input.UserInputType == Enum.UserInputType.MouseMovement then
+            local lx, ly = GetWheelLocalMouse()
+            UpdateWheel(lx, ly)
+        end
+        if BDrag and input.UserInputType == Enum.UserInputType.MouseMovement then
+            UpdateBright(input)
+        end
+    end)
+
+    CWClose.MouseButton1Click:Connect(function()
+        CWFrame.Visible = false
+        CWOpen = false
+    end)
+
+    local Picker = {}
+
+    function Picker:Open(setCallback, defaultColor)
+        CWCallback = setCallback
+        if defaultColor then
+            local h, s, v = Color3.toHSV(defaultColor)
+            CWHue, CWSat, CWVal = h, s, v
+            SelDot.BackgroundColor3 = defaultColor
+            PBox.BackgroundColor3 = defaultColor
+            BFill.Size = UDim2.new(v, 0, 1, 0)
+            BKnob.Position = UDim2.new(v, -8, 0.5, -8)
+        end
+        CWFrame.Visible = true
+        CWOpen = true
+    end
+
+    function Picker:Close()
+        CWFrame.Visible = false
+        CWOpen = false
+    end
+
+    function Picker:IsOpen()
+        return CWOpen
+    end
+
+    function Picker:GetFrame()
+        return CWFrame
+    end
+
+    return Picker
+end
+
+-- ============================================================
+-- CreateSeparator
+-- ============================================================
+
 function GUI.CreateSeparator(parent)
     local F = Instance.new("Frame")
     F.Size = UDim2.new(1, -20, 0, 1)
@@ -595,6 +1083,10 @@ function GUI.CreateSeparator(parent)
     F.Parent = parent
     return F
 end
+
+-- ============================================================
+-- CreateSection
+-- ============================================================
 
 function GUI.CreateSection(parent, title)
     local F = Instance.new("Frame")
