@@ -168,7 +168,7 @@ function GUI.CreateWindow(parent, title, size)
     -- Version
     local VT = Instance.new("TextLabel")
     VT.Size = UDim2.new(0, 60, 0, 20)
-    VT.Position = UDim2.new(1, -75, 0, 10)
+    VT.Position = UDim2.new(1, -45, 0, 10)
     VT.BackgroundTransparency = 1
     VT.Text = "v1.0"
     VT.TextColor3 = Theme.SubText

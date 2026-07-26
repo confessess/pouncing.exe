@@ -389,8 +389,7 @@ function GUIMain.Create(screenGui, moduleManager)
     GUI.CreateSection(CCon, "Info")
     
     GUI.CreateLabel(CCon, "Pouncing.exe v1.0", false)
-    GUI.CreateLabel(CCon, "Modular HvH Script", true)
-    GUI.CreateLabel(CCon, "Built with 💗 by ENI for LO", true)
+    GUI.CreateLabel(CCon, "Made by pouncing ;3", true)
     GUI.CreateLabel(CCon, "RightShift to toggle GUI", true)
     
     -- ============================================================
