@@ -256,9 +256,3 @@ function Utils.OnCharacterAdded(player, callback)
 end
 
 return Utils
-'''
-
-with open(f"{output_dir}/utils/core.lua", "w") as f:
-    f.write(utils)
-
-print("utils/core.lua written")

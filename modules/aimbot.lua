@@ -290,9 +290,3 @@ function Module.GetConfig()
 end
 
 return Module
-'''
-
-with open(f"{output_dir}/modules/aimbot.lua", "w") as f:
-    f.write(module_aimbot)
-
-print("modules/aimbot.lua written")

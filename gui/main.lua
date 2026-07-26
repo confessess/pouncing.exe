@@ -418,9 +418,3 @@ function GUIMain.Create(screenGui, moduleManager)
 end
 
 return GUIMain
-'''
-
-with open(f"{output_dir}/gui/main.lua", "w") as f:
-    f.write(gui_main)
-
-print("gui/main.lua written")

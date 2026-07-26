@@ -470,9 +470,3 @@ function Module.GetConfig()
 end
 
 return Module
-'''
-
-with open(f"{output_dir}/modules/esp.lua", "w") as f:
-    f.write(module_esp)
-
-print("modules/esp.lua written")

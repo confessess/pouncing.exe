@@ -1173,9 +1173,3 @@ function GUI.CreateSection(parent, title)
 end
 
 return GUI
-'''
-
-with open(f"{output_dir}/gui/framework.lua", "w") as f:
-    f.write(framework)
-
-print("gui/framework.lua written")
