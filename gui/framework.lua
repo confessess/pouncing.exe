@@ -859,19 +859,21 @@ function GUI.CreateKeybind(parent, text, defaultKey, callback)
 end
 
 -- ============================================================
--- CreateColorPicker — Accurate HSV Wheel + Brightness
+-- CreateColorPicker — Rainbow Sliders + Hex Input
+-- No wheel, no mouse offset issues. Clean and accurate.
 -- ============================================================
 
 function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
+    -- callback param is legacy; live callback set via :Open
     local CWFrame = Instance.new("Frame")
     CWFrame.Name = "ColorPicker"
-    CWFrame.Size = UDim2.new(0, 280, 0, 320)
+    CWFrame.Size = UDim2.new(0, 260, 0, 260)
+    CWFrame.Position = UDim2.new(0.5, -130, 0.5, -130)
     CWFrame.BackgroundColor3 = Theme.BG
     CWFrame.BorderSizePixel = 0
     CWFrame.Visible = false
     CWFrame.ZIndex = 200
     CWFrame.Parent = parent.Parent
-    CWFrame.Position = UDim2.new(0.5, -140, 0.5, -160)
 
     local CWC = Instance.new("UICorner")
     CWC.CornerRadius = UDim.new(0, 12)
@@ -883,10 +885,10 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     CWS.Parent = CWFrame
 
     local CWTitle = Instance.new("TextLabel")
-    CWTitle.Size = UDim2.new(1, -40, 0, 28)
-    CWTitle.Position = UDim2.new(0, 14, 0, 8)
+    CWTitle.Size = UDim2.new(1, -40, 0, 26)
+    CWTitle.Position = UDim2.new(0, 14, 0, 6)
     CWTitle.BackgroundTransparency = 1
-    CWTitle.Text = "🎨 " .. (titleText or "Color Picker")
+    CWTitle.Text = "🎨 " .. (titleText or "Color")
     CWTitle.TextColor3 = Theme.Text
     CWTitle.TextSize = 13
     CWTitle.Font = Enum.Font.GothamBold
@@ -896,7 +898,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
 
     local CWClose = Instance.new("TextButton")
     CWClose.Size = UDim2.new(0, 26, 0, 26)
-    CWClose.Position = UDim2.new(1, -32, 0, 8)
+    CWClose.Position = UDim2.new(1, -32, 0, 6)
     CWClose.BackgroundTransparency = 1
     CWClose.Text = "×"
     CWClose.TextColor3 = Theme.SubText
@@ -905,256 +907,228 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     CWClose.ZIndex = 201
     CWClose.Parent = CWFrame
 
-    -- Wheel container: 200x200 for clean math
-    local WheelContainer = Instance.new("TextButton")
-    WheelContainer.Name = "WheelContainer"
-    WheelContainer.Size = UDim2.new(0, 200, 0, 200)
-    WheelContainer.Position = UDim2.new(0.5, -100, 0, 38)
-    WheelContainer.BackgroundColor3 = Color3.fromRGB(20, 12, 18)
-    WheelContainer.BorderSizePixel = 0
-    WheelContainer.Text = ""
-    WheelContainer.AutoButtonColor = false
-    WheelContainer.ZIndex = 201
-    WheelContainer.Parent = CWFrame
-
-    local WheelOC = Instance.new("UICorner")
-    WheelOC.CornerRadius = UDim.new(1, 0)
-    WheelOC.Parent = WheelContainer
-
-    local WheelBorder = Instance.new("UIStroke")
-    WheelBorder.Color = Theme.BorderGlow
-    WheelBorder.Thickness = 2
-    WheelBorder.Parent = WheelContainer
-
-    -- Dense dot ring configuration
-    -- Container is 200px, center at 100,100
-    -- maxDist = 95, dotRadius = 3, effectiveMaxDist = 90
-    -- cfg.radius is fraction of full width (200px), so max = 90/200 = 0.45
-    local ringConfig = {
-        {count = 1,   sat = 0.0,  size = 6, radius = 0.000},
-        {count = 12,  sat = 0.09, size = 5, radius = 0.040},
-        {count = 20,  sat = 0.18, size = 5, radius = 0.081},
-        {count = 28,  sat = 0.27, size = 4, radius = 0.122},
-        {count = 36,  sat = 0.36, size = 4, radius = 0.162},
-        {count = 44,  sat = 0.45, size = 4, radius = 0.203},
-        {count = 52,  sat = 0.54, size = 4, radius = 0.243},
-        {count = 60,  sat = 0.63, size = 3, radius = 0.284},
-        {count = 68,  sat = 0.72, size = 3, radius = 0.324},
-        {count = 76,  sat = 0.81, size = 3, radius = 0.365},
-        {count = 84,  sat = 0.90, size = 3, radius = 0.405},
-        {count = 92,  sat = 1.0,  size = 3, radius = 0.450},
-    }
-
-    for _, cfg in ipairs(ringConfig) do
-        for i = 0, cfg.count - 1 do
-            local angle = (i / cfg.count) * math.pi * 2 - math.pi / 2
-            local dot = Instance.new("Frame")
-            dot.Size = UDim2.new(0, cfg.size, 0, cfg.size)
-            dot.Position = UDim2.new(
-                0.5 + math.cos(angle) * cfg.radius - cfg.size / 400,
-                0,
-                0.5 + math.sin(angle) * cfg.radius - cfg.size / 400,
-                0
-            )
-            dot.BackgroundColor3 = Color3.fromHSV(i / cfg.count, cfg.sat, 1)
-            dot.BorderSizePixel = 0
-            dot.ZIndex = 202
-            dot.Parent = WheelContainer
-            local dotC = Instance.new("UICorner")
-            dotC.CornerRadius = UDim.new(1, 0)
-            dotC.Parent = dot
-        end
-    end
-
-    local SelDot = Instance.new("Frame")
-    SelDot.Name = "SelDot"
-    SelDot.Size = UDim2.new(0, 14, 0, 14)
-    SelDot.Position = UDim2.new(0.5, -7, 0.5, -7)
-    SelDot.BackgroundColor3 = Theme.White
-    SelDot.BorderSizePixel = 0
-    SelDot.ZIndex = 203
-    SelDot.Parent = WheelContainer
-
-    local SelDotC = Instance.new("UICorner")
-    SelDotC.CornerRadius = UDim.new(1, 0)
-    SelDotC.Parent = SelDot
-
-    local SelDotStroke = Instance.new("UIStroke")
-    SelDotStroke.Color = Theme.Black
-    SelDotStroke.Thickness = 2
-    SelDotStroke.Parent = SelDot
-
-    local BrightLabel = Instance.new("TextLabel")
-    BrightLabel.Size = UDim2.new(0, 80, 0, 16)
-    BrightLabel.Position = UDim2.new(0, 14, 0, 244)
-    BrightLabel.BackgroundTransparency = 1
-    BrightLabel.Text = "Brightness"
-    BrightLabel.TextColor3 = Theme.SubText
-    BrightLabel.TextSize = 10
-    BrightLabel.Font = Enum.Font.Gotham
-    BrightLabel.ZIndex = 201
-    BrightLabel.Parent = CWFrame
-
-    local BTrack = Instance.new("Frame")
-    BTrack.Size = UDim2.new(1, -28, 0, 8)
-    BTrack.Position = UDim2.new(0, 14, 0, 262)
-    BTrack.BackgroundColor3 = Theme.Border
-    BTrack.BorderSizePixel = 0
-    BTrack.ZIndex = 201
-    BTrack.Parent = CWFrame
-
-    local BTC = Instance.new("UICorner")
-    BTC.CornerRadius = UDim.new(1, 0)
-    BTC.Parent = BTrack
-
-    local BFill = Instance.new("Frame")
-    BFill.Size = UDim2.new(1, 0, 1, 0)
-    BFill.BackgroundColor3 = Theme.White
-    BFill.BorderSizePixel = 0
-    BFill.ZIndex = 201
-    BFill.Parent = BTrack
-
-    local BFC = Instance.new("UICorner")
-    BFC.CornerRadius = UDim.new(1, 0)
-    BFC.Parent = BFill
-
-    local BKnob = Instance.new("TextButton")
-    BKnob.Size = UDim2.new(0, 16, 0, 16)
-    BKnob.Position = UDim2.new(1, -8, 0.5, -8)
-    BKnob.BackgroundColor3 = Theme.White
-    BKnob.BorderSizePixel = 2
-    BKnob.BorderColor3 = Theme.Black
-    BKnob.Text = ""
-    BKnob.AutoButtonColor = false
-    BKnob.ZIndex = 202
-    BKnob.Parent = BTrack
-
-    local BKC = Instance.new("UICorner")
-    BKC.CornerRadius = UDim.new(1, 0)
-    BKC.Parent = BKnob
-
-    local BKnobGlow = Instance.new("UIStroke")
-    BKnobGlow.Color = Theme.Primary
-    BKnobGlow.Thickness = 2
-    BKnobGlow.Parent = BKnob
-
-    local PLabel = Instance.new("TextLabel")
-    PLabel.Size = UDim2.new(0, 60, 0, 16)
-    PLabel.Position = UDim2.new(0, 14, 0, 278)
-    PLabel.BackgroundTransparency = 1
-    PLabel.Text = "Preview"
-    PLabel.TextColor3 = Theme.SubText
-    PLabel.TextSize = 10
-    PLabel.Font = Enum.Font.Gotham
-    PLabel.ZIndex = 201
-    PLabel.Parent = CWFrame
-
-    local PBox = Instance.new("Frame")
-    PBox.Size = UDim2.new(0, 60, 0, 22)
-    PBox.Position = UDim2.new(0, 14, 0, 294)
-    PBox.BackgroundColor3 = Theme.White
-    PBox.BorderSizePixel = 0
-    PBox.ZIndex = 201
-    PBox.Parent = CWFrame
-
-    local PBC = Instance.new("UICorner")
-    PBC.CornerRadius = UDim.new(0, 6)
-    PBC.Parent = PBox
-
-    local PBS = Instance.new("UIStroke")
-    PBS.Color = Theme.BorderGlow
-    PBS.Thickness = 1.5
-    PBS.Parent = PBox
-
     local CWHue, CWSat, CWVal = 0, 1, 1
     local CWCallback = nil
     local CWOpen = false
+    local ActiveSlider = nil
 
-    -- Wheel math constants (must match dot ring radii)
-    local WHEEL_CX, WHEEL_CY = 100, 100
-    local WHEEL_MAX_DIST = 95
-    local WHEEL_DOT_RADIUS = 7  -- SelDot is 14x14
-    local WHEEL_EFFECTIVE_MAX = WHEEL_MAX_DIST - WHEEL_DOT_RADIUS - 2  -- = 86
+    local function MakeSlider(y, labelText, initVal, onChange)
+        local label = Instance.new("TextLabel")
+        label.Size = UDim2.new(0, 100, 0, 14)
+        label.Position = UDim2.new(0, 14, 0, y)
+        label.BackgroundTransparency = 1
+        label.Text = labelText
+        label.TextColor3 = Theme.SubText
+        label.TextSize = 10
+        label.Font = Enum.Font.Gotham
+        label.ZIndex = 201
+        label.Parent = CWFrame
 
-    local function GetWheelLocalMouse()
-        local mousePos = UserInputService:GetMouseLocation()
-        local absPos = WheelContainer.AbsolutePosition
-        return mousePos.X - absPos.X, mousePos.Y - absPos.Y
-    end
+        local track = Instance.new("Frame")
+        track.Size = UDim2.new(1, -28, 0, 5)
+        track.Position = UDim2.new(0, 14, 0, y + 16)
+        track.BackgroundColor3 = Theme.Border
+        track.BorderSizePixel = 0
+        track.ZIndex = 201
+        track.Parent = CWFrame
 
-    local function UpdateWheel(localX, localY)
-        local relX = localX - WHEEL_CX
-        local relY = localY - WHEEL_CY
-        local dist = math.sqrt(relX^2 + relY^2)
+        local trackC = Instance.new("UICorner")
+        trackC.CornerRadius = UDim.new(1, 0)
+        trackC.Parent = track
 
-        if dist > WHEEL_EFFECTIVE_MAX then
-            local scale = WHEEL_EFFECTIVE_MAX / dist
-            relX = relX * scale
-            relY = relY * scale
-            dist = WHEEL_EFFECTIVE_MAX
+        local gradient = Instance.new("UIGradient")
+        gradient.Parent = track
+
+        local knob = Instance.new("TextButton")
+        knob.Size = UDim2.new(0, 14, 0, 14)
+        knob.Position = UDim2.new(initVal, -7, 0.5, -7)
+        knob.BackgroundColor3 = Theme.White
+        knob.BorderSizePixel = 0
+        knob.Text = ""
+        knob.AutoButtonColor = false
+        knob.ZIndex = 203
+        knob.Parent = track
+
+        local knobC = Instance.new("UICorner")
+        knobC.CornerRadius = UDim.new(1, 0)
+        knobC.Parent = knob
+
+        local knobS = Instance.new("UIStroke")
+        knobS.Color = Theme.Primary
+        knobS.Thickness = 2
+        knobS.Parent = knob
+
+        local function Upd(input)
+            local pos = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+            knob.Position = UDim2.new(pos, -7, 0.5, -7)
+            if onChange then onChange(pos) end
         end
 
-        local angle = math.atan2(relY, relX) + math.pi / 2
-        if angle < 0 then angle = angle + 2 * math.pi end
-        CWHue = angle / (2 * math.pi)
-        CWSat = math.clamp(dist / WHEEL_EFFECTIVE_MAX, 0, 1)
+        knob.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                ActiveSlider = Upd
+            end
+        end)
 
-        SelDot.Position = UDim2.new(0.5, relX - 7, 0.5, relY - 7)
+        track.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                ActiveSlider = Upd
+                Upd(input)
+            end
+        end)
 
-        local color = Color3.fromHSV(CWHue, CWSat, CWVal)
-        SelDot.BackgroundColor3 = color
-        PBox.BackgroundColor3 = color
-        if CWCallback then CWCallback(color) end
-    end
-
-    local function UpdateBright(input)
-        local trackAbsPos = BTrack.AbsolutePosition
-        local trackAbsSize = BTrack.AbsoluteSize
-        local pos = math.clamp((input.Position.X - trackAbsPos.X) / trackAbsSize.X, 0, 1)
-        CWVal = pos
-        BFill.Size = UDim2.new(pos, 0, 1, 0)
-        BKnob.Position = UDim2.new(pos, -8, 0.5, -8)
-
-        local color = Color3.fromHSV(CWHue, CWSat, CWVal)
-        PBox.BackgroundColor3 = color
-        SelDot.BackgroundColor3 = color
-        if CWCallback then CWCallback(color) end
-    end
-
-    local WDrag = false
-    local BDrag = false
-
-    WheelContainer.MouseButton1Down:Connect(function()
-        WDrag = true
-        local lx, ly = GetWheelLocalMouse()
-        UpdateWheel(lx, ly)
-    end)
-
-    BTrack.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            BDrag = true
-            UpdateBright(input)
+        local function SetValue(v)
+            knob.Position = UDim2.new(v, -7, 0.5, -7)
         end
+
+        return gradient, SetValue
+    end
+
+    local hueSequence = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+        ColorSequenceKeypoint.new(0.1667, Color3.fromRGB(255, 255, 0)),
+        ColorSequenceKeypoint.new(0.3333, Color3.fromRGB(0, 255, 0)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 255)),
+        ColorSequenceKeypoint.new(0.6667, Color3.fromRGB(0, 0, 255)),
+        ColorSequenceKeypoint.new(0.8333, Color3.fromRGB(255, 0, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
+    })
+
+    local hueGrad, SetHue = MakeSlider(38, "Hue", 0, function(v)
+        CWHue = v
+        UpdateColor()
+    end)
+    hueGrad.ColorSequence = hueSequence
+
+    local satGrad, SetSat = MakeSlider(78, "Saturation", 1, function(v)
+        CWSat = v
+        UpdateColor()
     end)
 
-    BKnob.MouseButton1Down:Connect(function()
-        BDrag = true
+    local valGrad, SetVal = MakeSlider(118, "Brightness", 1, function(v)
+        CWVal = v
+        UpdateColor()
+    end)
+
+    local previewLabel = Instance.new("TextLabel")
+    previewLabel.Size = UDim2.new(0, 60, 0, 14)
+    previewLabel.Position = UDim2.new(0, 14, 0, 158)
+    previewLabel.BackgroundTransparency = 1
+    previewLabel.Text = "Preview"
+    previewLabel.TextColor3 = Theme.SubText
+    previewLabel.TextSize = 10
+    previewLabel.Font = Enum.Font.Gotham
+    previewLabel.ZIndex = 201
+    previewLabel.Parent = CWFrame
+
+    local previewBox = Instance.new("Frame")
+    previewBox.Size = UDim2.new(0, 50, 0, 24)
+    previewBox.Position = UDim2.new(0, 14, 0, 174)
+    previewBox.BackgroundColor3 = Color3.fromHSV(0, 1, 1)
+    previewBox.BorderSizePixel = 0
+    previewBox.ZIndex = 201
+    previewBox.Parent = CWFrame
+
+    local previewBoxC = Instance.new("UICorner")
+    previewBoxC.CornerRadius = UDim.new(0, 6)
+    previewBoxC.Parent = previewBox
+
+    local previewBoxS = Instance.new("UIStroke")
+    previewBoxS.Color = Theme.BorderGlow
+    previewBoxS.Thickness = 1.5
+    previewBoxS.Parent = previewBox
+
+    local hexLabel = Instance.new("TextLabel")
+    hexLabel.Size = UDim2.new(0, 60, 0, 14)
+    hexLabel.Position = UDim2.new(0, 80, 0, 158)
+    hexLabel.BackgroundTransparency = 1
+    hexLabel.Text = "Hex"
+    hexLabel.TextColor3 = Theme.SubText
+    hexLabel.TextSize = 10
+    hexLabel.Font = Enum.Font.Gotham
+    hexLabel.ZIndex = 201
+    hexLabel.Parent = CWFrame
+
+    local hexBox = Instance.new("TextBox")
+    hexBox.Size = UDim2.new(0, 120, 0, 24)
+    hexBox.Position = UDim2.new(0, 80, 0, 174)
+    hexBox.BackgroundColor3 = Theme.ElementBG
+    hexBox.BorderSizePixel = 0
+    hexBox.Text = "#FF69B4"
+    hexBox.TextColor3 = Theme.Text
+    hexBox.TextSize = 11
+    hexBox.Font = Enum.Font.Gotham
+    hexBox.ClearTextOnFocus = false
+    hexBox.ZIndex = 201
+    hexBox.Parent = CWFrame
+
+    local hexBoxC = Instance.new("UICorner")
+    hexBoxC.CornerRadius = UDim.new(0, 6)
+    hexBoxC.Parent = hexBox
+
+    local hexBoxS = Instance.new("UIStroke")
+    hexBoxS.Color = Theme.Border
+    hexBoxS.Thickness = 1
+    hexBoxS.Parent = hexBox
+
+    local function UpdateColor()
+        local color = Color3.fromHSV(CWHue, CWSat, CWVal)
+        previewBox.BackgroundColor3 = color
+        if CWCallback then CWCallback(color) end
+
+        satGrad.ColorSequence = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromHSV(CWHue, 0, CWVal)),
+            ColorSequenceKeypoint.new(1, Color3.fromHSV(CWHue, 1, CWVal))
+        })
+        valGrad.ColorSequence = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromHSV(CWHue, CWSat, 0)),
+            ColorSequenceKeypoint.new(1, Color3.fromHSV(CWHue, CWSat, 1))
+        })
+
+        local r = math.floor(color.R * 255)
+        local g = math.floor(color.G * 255)
+        local b = math.floor(color.B * 255)
+        hexBox.Text = string.format("#%02X%02X%02X", r, g, b)
+    end
+
+    hexBox.FocusLost:Connect(function()
+        local text = hexBox.Text:gsub("#", ""):upper()
+        if #text == 3 then
+            text = text:sub(1,1):rep(2) .. text:sub(2,2):rep(2) .. text:sub(3,3):rep(2)
+        end
+        if #text ~= 6 then
+            hexBoxS.Color = Color3.fromRGB(255, 80, 80)
+            task.delay(0.3, function() hexBoxS.Color = Theme.Border end)
+            return
+        end
+        local r = tonumber(text:sub(1,2), 16)
+        local g = tonumber(text:sub(3,4), 16)
+        local b = tonumber(text:sub(5,6), 16)
+        if not r or not g or not b then
+            hexBoxS.Color = Color3.fromRGB(255, 80, 80)
+            task.delay(0.3, function() hexBoxS.Color = Theme.Border end)
+            return
+        end
+        local color = Color3.fromRGB(r, g, b)
+        local h, s, v = Color3.toHSV(color)
+        CWHue, CWSat, CWVal = h, s, v
+        SetHue(h)
+        SetSat(s)
+        SetVal(v)
+        UpdateColor()
+        hexBoxS.Color = Color3.fromRGB(80, 255, 80)
+        task.delay(0.3, function() hexBoxS.Color = Theme.Border end)
     end)
 
     UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            WDrag = false
-            BDrag = false
+            ActiveSlider = nil
         end
     end)
 
     UserInputService.InputChanged:Connect(function(input)
-        if WDrag and input.UserInputType == Enum.UserInputType.MouseMovement then
-            local lx, ly = GetWheelLocalMouse()
-            UpdateWheel(lx, ly)
-        end
-        if BDrag and input.UserInputType == Enum.UserInputType.MouseMovement then
-            UpdateBright(input)
+        if ActiveSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+            ActiveSlider(input)
         end
     end)
 
@@ -1170,19 +1144,11 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         if setDefaultColor then
             local h, s, v = Color3.toHSV(setDefaultColor)
             CWHue, CWSat, CWVal = h, s, v
-
-            -- Reverse-calculate SelDot position from HSV
-            local angle = h * 2 * math.pi - math.pi / 2
-            local dist = s * WHEEL_EFFECTIVE_MAX
-            local relX = math.cos(angle) * dist
-            local relY = math.sin(angle) * dist
-
-            SelDot.Position = UDim2.new(0.5, relX - 7, 0.5, relY - 7)
-            SelDot.BackgroundColor3 = setDefaultColor
-            PBox.BackgroundColor3 = setDefaultColor
-            BFill.Size = UDim2.new(v, 0, 1, 0)
-            BKnob.Position = UDim2.new(v, -8, 0.5, -8)
         end
+        SetHue(CWHue)
+        SetSat(CWSat)
+        SetVal(CWVal)
+        UpdateColor()
         CWFrame.Visible = true
         CWOpen = true
     end
@@ -1202,7 +1168,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
 
     return Picker
 end
-
 -- ============================================================
 -- CreateSeparator
 -- ============================================================
