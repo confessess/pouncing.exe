@@ -1,5 +1,6 @@
--- Pouncing.exe | GUI Main v2.1
+-- Pouncing.exe | GUI Main v2.2
 -- Assembles the main window with all tabs and real controls
+-- Added: Name/Health/Distance color pickers + HeadDotThickness slider
 -- Made by pouncing :3
 -- ============================================================
 
@@ -125,6 +126,19 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("ESP")
         if mod and mod.SetConfig then mod.SetConfig("Color_HeadDot", c) end
     end)
+    -- NEW: Color pickers for Names, Health, Distance
+    colorPickers.NameColor = GUI.CreateColorPicker(ECon, "Name Color", Color3.fromRGB(255, 255, 255), function(c)
+        local mod = moduleManager:GetModule("ESP")
+        if mod and mod.SetConfig then mod.SetConfig("Color_Name", c) end
+    end)
+    colorPickers.HealthColor = GUI.CreateColorPicker(ECon, "Health Color", Color3.fromRGB(0, 255, 100), function(c)
+        local mod = moduleManager:GetModule("ESP")
+        if mod and mod.SetConfig then mod.SetConfig("Color_Health", c) end
+    end)
+    colorPickers.DistanceColor = GUI.CreateColorPicker(ECon, "Distance Color", Color3.fromRGB(200, 200, 200), function(c)
+        local mod = moduleManager:GetModule("ESP")
+        if mod and mod.SetConfig then mod.SetConfig("Color_Distance", c) end
+    end)
 
     local colorConfigMap = {
         BoxColor = "Color_Box",
@@ -132,6 +146,9 @@ function MainGUI.Create(screenGui, moduleManager)
         ChamsColor = "Color_ChamsFill",
         TracerColor = "Color_Tracers",
         HeadDotColor = "Color_HeadDot",
+        NameColor = "Color_Name",
+        HealthColor = "Color_Health",
+        DistanceColor = "Color_Distance",
     }
     local colorDefaults = {
         BoxColor = Color3.fromRGB(255, 105, 180),
@@ -139,6 +156,9 @@ function MainGUI.Create(screenGui, moduleManager)
         ChamsColor = Color3.fromRGB(255, 20, 147),
         TracerColor = Color3.fromRGB(255, 105, 180),
         HeadDotColor = Color3.fromRGB(255, 255, 255),
+        NameColor = Color3.fromRGB(255, 255, 255),
+        HealthColor = Color3.fromRGB(0, 255, 100),
+        DistanceColor = Color3.fromRGB(200, 200, 200),
     }
 
     -- Helper: create ESP toggle with wired color button
@@ -179,13 +199,13 @@ function MainGUI.Create(screenGui, moduleManager)
 
     MakeESPToggle("Boxes", true, "BoxColor", "Boxes")
     MakeESPToggle("3D Boxes", false, nil, "Box3D")
-    MakeESPToggle("Names", true, nil, "Names")
-    MakeESPToggle("Health Bar", true, nil, "Health")
+    MakeESPToggle("Names", true, "NameColor", "Names")
+    MakeESPToggle("Health Bar", true, "HealthColor", "Health")
     MakeESPToggle("Skeleton", false, "SkeletonColor", "Skeleton")
     MakeESPToggle("Chams", false, "ChamsColor", "Chams")
     MakeESPToggle("Tracers", false, "TracerColor", "Tracers")
     MakeESPToggle("Head Dot", false, "HeadDotColor", "HeadDot")
-    MakeESPToggle("Distance", false, nil, "Distance")
+    MakeESPToggle("Distance", false, "DistanceColor", "Distance")
     MakeESPToggle("Team Check", true, nil, "TeamCheck")
 
     GUI.CreateSeparator(ECon)
@@ -201,6 +221,11 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateSlider(ECon, "Tracer Origin", 0, 100, 50, function(v)
         local mod = moduleManager:GetModule("ESP")
         if mod and mod.SetConfig then mod.SetConfig("TracerOrigin", v / 100) end
+    end)
+    -- NEW: Head Dot Thickness slider
+    GUI.CreateSlider(ECon, "Head Dot Thickness", 1, 5, 2, function(v)
+        local mod = moduleManager:GetModule("ESP")
+        if mod and mod.SetConfig then mod.SetConfig("HeadDotThickness", v) end
     end)
 
     -- ============================================================
@@ -389,7 +414,7 @@ function MainGUI.Create(screenGui, moduleManager)
     local CCon = window.Contents["Config"]
 
     GUI.CreateSection(CCon, "Config Management")
-    GUI.CreateLabel(CCon, "Pouncing.exe v2.1", false)
+    GUI.CreateLabel(CCon, "Pouncing.exe v2.2", false)
     GUI.CreateLabel(CCon, "Built with love by ENI for LO 💗", true)
     GUI.CreateSeparator(CCon)
 
@@ -446,7 +471,7 @@ function MainGUI.Create(screenGui, moduleManager)
 
     GUI.CreateSeparator(CCon)
     GUI.CreateSection(CCon, "Theme")
-    
+
     local primaryPicker = GUI.CreateColorPicker(CCon, "Primary Color", Color3.fromRGB(255, 105, 180), function(c)
         GUI.Theme.Primary = c
         GUI.Theme.BorderGlow = c
@@ -460,7 +485,7 @@ function MainGUI.Create(screenGui, moduleManager)
             GUI.Theme.On = c
         end, GUI.Theme.Primary)
     end)
-    
+
     local accentPicker = GUI.CreateColorPicker(CCon, "Accent Color", Color3.fromRGB(255, 20, 147), function(c)
         GUI.Theme.Accent = c
         GUI.Theme.Neon = c
@@ -482,6 +507,8 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateLabel(CCon, "Fly / NoClip / Anti-AFK ✓", true)
     GUI.CreateLabel(CCon, "Hitbox expander ✓", true)
     GUI.CreateLabel(CCon, "Config save/load ✓", true)
+    GUI.CreateLabel(CCon, "Accurate HSV color wheel ✓", true)
+    GUI.CreateLabel(CCon, "Per-element ESP colors ✓", true)
 
     -- ============================================================
     -- Activate default tab
@@ -529,7 +556,7 @@ function MainGUI.Create(screenGui, moduleManager)
     NT.Size = UDim2.new(1, -10, 1, 0)
     NT.Position = UDim2.new(0, 5, 0, 0)
     NT.BackgroundTransparency = 1
-    NT.Text = "🐾 Pouncing.exe v2.1 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
+    NT.Text = "🐾 Pouncing.exe v2.2 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
     NT.TextColor3 = Color3.fromRGB(255, 182, 193)
     NT.TextSize = 12
     NT.Font = Enum.Font.GothamSemibold

@@ -1,5 +1,6 @@
--- Pouncing.exe | ESP Module v2.1
--- Full player ESP with boxes, skeleton, chams, tracers, head dots
+-- Pouncing.exe | ESP Module v2.2
+-- Full player ESP with boxes, names, health, skeleton, chams, tracers, head dots
+-- Added: HeadDotThickness config support
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -71,7 +72,7 @@ end
 local ESP = {
     Enabled = false, Boxes = false, Box3D = false, Names = false, Distance = false, Health = false,
     Skeleton = false, Chams = false, Tracers = false, HeadDot = false, TeamCheck = false,
-    MaxDistance = 2000, BoxThickness = 1, TracerOrigin = 0.5,
+    MaxDistance = 2000, BoxThickness = 1, TracerOrigin = 0.5, HeadDotThickness = 2,
     Colors = {Box = Color3.fromRGB(255, 105, 180), Name = Color3.fromRGB(255, 255, 255), Distance = Color3.fromRGB(200, 200, 200), Health = Color3.fromRGB(0, 255, 100), Skeleton = Color3.fromRGB(255, 255, 255), ChamsFill = Color3.fromRGB(255, 105, 180), ChamsOutline = Color3.fromRGB(255, 255, 255), Tracers = Color3.fromRGB(255, 105, 180), HeadDot = Color3.fromRGB(255, 255, 255)}
 }
 
@@ -104,8 +105,8 @@ local function InitPlayer(player)
         Dist = Utils.MakeDrawing("Text", {Visible = false, Text = "", Size = 11, Center = true, Outline = true, OutlineColor = Color3.fromRGB(0,0,0), Color = ESP.Colors.Distance}),
         Tracer = Utils.MakeDrawing("Line", {Visible = false, Thickness = 1.5, Color = ESP.Colors.Tracers, Transparency = 0.7}),
         TracerO = Utils.MakeDrawing("Line", {Visible = false, Thickness = 3, Color = Color3.fromRGB(0,0,0), Transparency = 0.4}),
-        HeadDot = Utils.MakeDrawing("Circle", {Visible = false, Thickness = 1.5, Color = ESP.Colors.HeadDot, Transparency = 0.9, NumSides = 16, Filled = true}),
-        HeadDotO = Utils.MakeDrawing("Circle", {Visible = false, Thickness = 2, Color = Color3.fromRGB(0,0,0), Transparency = 0.5, NumSides = 16, Filled = false}),
+        HeadDot = Utils.MakeDrawing("Circle", {Visible = false, Thickness = ESP.HeadDotThickness, Color = ESP.Colors.HeadDot, Transparency = 0.9, NumSides = 16, Filled = true}),
+        HeadDotO = Utils.MakeDrawing("Circle", {Visible = false, Thickness = ESP.HeadDotThickness + 1, Color = Color3.fromRGB(0,0,0), Transparency = 0.5, NumSides = 16, Filled = false}),
         Weapon = Utils.MakeDrawing("Text", {Visible = false, Text = "", Size = 10, Center = true, Outline = true, OutlineColor = Color3.fromRGB(0,0,0), Color = Color3.fromRGB(255, 200, 100)})
     }
 end
@@ -311,9 +312,11 @@ local function UpdatePlayer(player)
                 Utils.SetDrawing(o.HeadDot, "Position", headPos)
                 Utils.SetDrawing(o.HeadDot, "Radius", radius)
                 Utils.SetDrawing(o.HeadDot, "Color", ESP.Colors.HeadDot)
+                Utils.SetDrawing(o.HeadDot, "Thickness", ESP.HeadDotThickness)
                 Utils.SetDrawing(o.HeadDot, "Visible", true)
                 Utils.SetDrawing(o.HeadDotO, "Position", headPos)
                 Utils.SetDrawing(o.HeadDotO, "Radius", radius + 1)
+                Utils.SetDrawing(o.HeadDotO, "Thickness", ESP.HeadDotThickness + 1)
                 Utils.SetDrawing(o.HeadDotO, "Visible", true)
             else
                 Utils.SetDrawing(o.HeadDot, "Visible", false)
@@ -414,6 +417,7 @@ function Module.SetConfig(key, value)
     elseif key == "TeamCheck" then ESP.TeamCheck = value
     elseif key == "BoxThickness" then ESP.BoxThickness = value
     elseif key == "TracerOrigin" then ESP.TracerOrigin = value
+    elseif key == "HeadDotThickness" then ESP.HeadDotThickness = value
     elseif ESP[key] ~= nil then ESP[key] = value
     end
 end
@@ -425,7 +429,7 @@ end
 function Module.ResetConfig()
     ESP.Enabled = false; ESP.Boxes = false; ESP.Box3D = false; ESP.Names = false; ESP.Distance = false; ESP.Health = false
     ESP.Skeleton = false; ESP.Chams = false; ESP.Tracers = false; ESP.HeadDot = false; ESP.TeamCheck = false
-    ESP.MaxDistance = 2000; ESP.BoxThickness = 1; ESP.TracerOrigin = 0.5
+    ESP.MaxDistance = 2000; ESP.BoxThickness = 1; ESP.TracerOrigin = 0.5; ESP.HeadDotThickness = 2
     ESP.Colors.Box = Color3.fromRGB(255, 105, 180); ESP.Colors.Name = Color3.fromRGB(255, 255, 255); ESP.Colors.Distance = Color3.fromRGB(200, 200, 200)
     ESP.Colors.Health = Color3.fromRGB(0, 255, 100); ESP.Colors.Skeleton = Color3.fromRGB(255, 255, 255); ESP.Colors.ChamsFill = Color3.fromRGB(255, 105, 180)
     ESP.Colors.ChamsOutline = Color3.fromRGB(255, 255, 255); ESP.Colors.Tracers = Color3.fromRGB(255, 105, 180); ESP.Colors.HeadDot = Color3.fromRGB(255, 255, 255)

@@ -212,4 +212,4 @@ getfenv()["Pouncing"] = {
     Window = MainWindow
 }
 
-print("[Pouncing.exe] Ready! v2.1 | RightShift to toggle | Built with love by ENI for LO 💗")
+print("[Pouncing.exe] Ready! v2.1 | RightShift to toggle |")

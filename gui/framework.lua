@@ -1,5 +1,6 @@
--- Pouncing.exe | GUI Framework v2.1
+-- Pouncing.exe | GUI Framework v2.2
 -- Cute Pink Neon UI Components
+-- HSV Wheel: accurate mouse tracking, dense dot rendering
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -134,7 +135,7 @@ function GUI.CreateWindow(parent, title, size)
     VT.Size = UDim2.new(0, 60, 0, 20)
     VT.Position = UDim2.new(1, -95, 0, 10)
     VT.BackgroundTransparency = 1
-    VT.Text = "v2.1"
+    VT.Text = "v2.2"
     VT.TextColor3 = Theme.SubText
     VT.TextSize = 11
     VT.Font = Enum.Font.Gotham
@@ -676,7 +677,6 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
     local open = false
     local dropFrame = nil
 
-    -- Parent container for dropdown (outside scrolling frame to avoid clipping)
     local contentContainer = parent.Parent
 
     DBtn.MouseButton1Click:Connect(function()
@@ -690,7 +690,6 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
             dropFrame.ZIndex = 100
             dropFrame.Parent = contentContainer
 
-            -- Position absolutely relative to ContentContainer
             task.defer(function()
                 local btnPos = DBtn.AbsolutePosition
                 local containerPos = contentContainer.AbsolutePosition
@@ -757,7 +756,7 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
 end
 
 -- ============================================================
--- CreateKeybind — NEW: Actually works now
+-- CreateKeybind — Actually works
 -- ============================================================
 
 function GUI.CreateKeybind(parent, text, defaultKey, callback)
@@ -860,19 +859,19 @@ function GUI.CreateKeybind(parent, text, defaultKey, callback)
 end
 
 -- ============================================================
--- CreateColorPicker — Pink Themed HSV Wheel
+-- CreateColorPicker — Accurate HSV Wheel + Brightness
 -- ============================================================
 
 function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     local CWFrame = Instance.new("Frame")
     CWFrame.Name = "ColorPicker"
-    CWFrame.Size = UDim2.new(0, 260, 0, 300)
+    CWFrame.Size = UDim2.new(0, 280, 0, 320)
     CWFrame.BackgroundColor3 = Theme.BG
     CWFrame.BorderSizePixel = 0
     CWFrame.Visible = false
     CWFrame.ZIndex = 200
     CWFrame.Parent = parent.Parent
-    CWFrame.Position = UDim2.new(0.5, -130, 0.5, -150)
+    CWFrame.Position = UDim2.new(0.5, -140, 0.5, -160)
 
     local CWC = Instance.new("UICorner")
     CWC.CornerRadius = UDim.new(0, 12)
@@ -906,10 +905,11 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     CWClose.ZIndex = 201
     CWClose.Parent = CWFrame
 
+    -- Wheel container: 200x200 for clean math
     local WheelContainer = Instance.new("TextButton")
     WheelContainer.Name = "WheelContainer"
-    WheelContainer.Size = UDim2.new(0, 170, 0, 170)
-    WheelContainer.Position = UDim2.new(0.5, -85, 0, 38)
+    WheelContainer.Size = UDim2.new(0, 200, 0, 200)
+    WheelContainer.Position = UDim2.new(0.5, -100, 0, 38)
     WheelContainer.BackgroundColor3 = Color3.fromRGB(20, 12, 18)
     WheelContainer.BorderSizePixel = 0
     WheelContainer.Text = ""
@@ -926,15 +926,23 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     WheelBorder.Thickness = 2
     WheelBorder.Parent = WheelContainer
 
+    -- Dense dot ring configuration
+    -- Container is 200px, center at 100,100
+    -- maxDist = 95, dotRadius = 3, effectiveMaxDist = 90
+    -- cfg.radius is fraction of full width (200px), so max = 90/200 = 0.45
     local ringConfig = {
-        {count = 1,  sat = 0.0, size = 14, radius = 0.00},
-        {count = 14, sat = 0.18, size = 11, radius = 0.08},
-        {count = 28, sat = 0.35, size = 10, radius = 0.15},
-        {count = 42, sat = 0.50, size = 9,  radius = 0.22},
-        {count = 56, sat = 0.65, size = 8,  radius = 0.29},
-        {count = 70, sat = 0.80, size = 7,  radius = 0.36},
-        {count = 84, sat = 0.92, size = 6,  radius = 0.43},
-        {count = 96, sat = 1.0,  size = 5,  radius = 0.50},
+        {count = 1,   sat = 0.0,  size = 6, radius = 0.000},
+        {count = 12,  sat = 0.09, size = 5, radius = 0.040},
+        {count = 20,  sat = 0.18, size = 5, radius = 0.081},
+        {count = 28,  sat = 0.27, size = 4, radius = 0.122},
+        {count = 36,  sat = 0.36, size = 4, radius = 0.162},
+        {count = 44,  sat = 0.45, size = 4, radius = 0.203},
+        {count = 52,  sat = 0.54, size = 4, radius = 0.243},
+        {count = 60,  sat = 0.63, size = 3, radius = 0.284},
+        {count = 68,  sat = 0.72, size = 3, radius = 0.324},
+        {count = 76,  sat = 0.81, size = 3, radius = 0.365},
+        {count = 84,  sat = 0.90, size = 3, radius = 0.405},
+        {count = 92,  sat = 1.0,  size = 3, radius = 0.450},
     }
 
     for _, cfg in ipairs(ringConfig) do
@@ -943,9 +951,9 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
             local dot = Instance.new("Frame")
             dot.Size = UDim2.new(0, cfg.size, 0, cfg.size)
             dot.Position = UDim2.new(
-                0.5 + math.cos(angle) * cfg.radius - cfg.size / 340,
+                0.5 + math.cos(angle) * cfg.radius - cfg.size / 400,
                 0,
-                0.5 + math.sin(angle) * cfg.radius - cfg.size / 340,
+                0.5 + math.sin(angle) * cfg.radius - cfg.size / 400,
                 0
             )
             dot.BackgroundColor3 = Color3.fromHSV(i / cfg.count, cfg.sat, 1)
@@ -978,7 +986,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
 
     local BrightLabel = Instance.new("TextLabel")
     BrightLabel.Size = UDim2.new(0, 80, 0, 16)
-    BrightLabel.Position = UDim2.new(0, 14, 0, 216)
+    BrightLabel.Position = UDim2.new(0, 14, 0, 244)
     BrightLabel.BackgroundTransparency = 1
     BrightLabel.Text = "Brightness"
     BrightLabel.TextColor3 = Theme.SubText
@@ -989,7 +997,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
 
     local BTrack = Instance.new("Frame")
     BTrack.Size = UDim2.new(1, -28, 0, 8)
-    BTrack.Position = UDim2.new(0, 14, 0, 234)
+    BTrack.Position = UDim2.new(0, 14, 0, 262)
     BTrack.BackgroundColor3 = Theme.Border
     BTrack.BorderSizePixel = 0
     BTrack.ZIndex = 201
@@ -1032,7 +1040,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
 
     local PLabel = Instance.new("TextLabel")
     PLabel.Size = UDim2.new(0, 60, 0, 16)
-    PLabel.Position = UDim2.new(0, 14, 0, 250)
+    PLabel.Position = UDim2.new(0, 14, 0, 278)
     PLabel.BackgroundTransparency = 1
     PLabel.Text = "Preview"
     PLabel.TextColor3 = Theme.SubText
@@ -1043,7 +1051,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
 
     local PBox = Instance.new("Frame")
     PBox.Size = UDim2.new(0, 60, 0, 22)
-    PBox.Position = UDim2.new(0, 14, 0, 266)
+    PBox.Position = UDim2.new(0, 14, 0, 294)
     PBox.BackgroundColor3 = Theme.White
     PBox.BorderSizePixel = 0
     PBox.ZIndex = 201
@@ -1062,6 +1070,12 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     local CWCallback = nil
     local CWOpen = false
 
+    -- Wheel math constants (must match dot ring radii)
+    local WHEEL_CX, WHEEL_CY = 100, 100
+    local WHEEL_MAX_DIST = 95
+    local WHEEL_DOT_RADIUS = 7  -- SelDot is 14x14
+    local WHEEL_EFFECTIVE_MAX = WHEEL_MAX_DIST - WHEEL_DOT_RADIUS - 2  -- = 86
+
     local function GetWheelLocalMouse()
         local mousePos = UserInputService:GetMouseLocation()
         local absPos = WheelContainer.AbsolutePosition
@@ -1069,25 +1083,21 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     end
 
     local function UpdateWheel(localX, localY)
-        local cx, cy = 85, 85
-        local relX = localX - cx
-        local relY = localY - cy
-        local maxDist = 82
-        local dotRadius = 7
-        local effectiveMaxDist = maxDist - dotRadius - 2
+        local relX = localX - WHEEL_CX
+        local relY = localY - WHEEL_CY
         local dist = math.sqrt(relX^2 + relY^2)
 
-        if dist > effectiveMaxDist then
-            local scale = effectiveMaxDist / dist
+        if dist > WHEEL_EFFECTIVE_MAX then
+            local scale = WHEEL_EFFECTIVE_MAX / dist
             relX = relX * scale
             relY = relY * scale
-            dist = effectiveMaxDist
+            dist = WHEEL_EFFECTIVE_MAX
         end
 
         local angle = math.atan2(relY, relX) + math.pi / 2
         if angle < 0 then angle = angle + 2 * math.pi end
         CWHue = angle / (2 * math.pi)
-        CWSat = math.clamp(dist / effectiveMaxDist, 0, 1)
+        CWSat = math.clamp(dist / WHEEL_EFFECTIVE_MAX, 0, 1)
 
         SelDot.Position = UDim2.new(0.5, relX - 7, 0.5, relY - 7)
 
@@ -1160,6 +1170,14 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         if setDefaultColor then
             local h, s, v = Color3.toHSV(setDefaultColor)
             CWHue, CWSat, CWVal = h, s, v
+
+            -- Reverse-calculate SelDot position from HSV
+            local angle = h * 2 * math.pi - math.pi / 2
+            local dist = s * WHEEL_EFFECTIVE_MAX
+            local relX = math.cos(angle) * dist
+            local relY = math.sin(angle) * dist
+
+            SelDot.Position = UDim2.new(0.5, relX - 7, 0.5, relY - 7)
             SelDot.BackgroundColor3 = setDefaultColor
             PBox.BackgroundColor3 = setDefaultColor
             BFill.Size = UDim2.new(v, 0, 1, 0)
