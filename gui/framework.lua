@@ -676,17 +676,29 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
     local open = false
     local dropFrame = nil
 
+    -- Parent container for dropdown (outside scrolling frame to avoid clipping)
+    local contentContainer = parent.Parent
+
     DBtn.MouseButton1Click:Connect(function()
         open = not open
         if open then
             if dropFrame then dropFrame:Destroy() end
             dropFrame = Instance.new("Frame")
             dropFrame.Size = UDim2.new(0, 100, 0, math.min(#options * 28, 140))
-            dropFrame.Position = UDim2.new(0, 0, 1, 4)
             dropFrame.BackgroundColor3 = Theme.BG
             dropFrame.BorderSizePixel = 0
-            dropFrame.ZIndex = 50
-            dropFrame.Parent = DBtn
+            dropFrame.ZIndex = 100
+            dropFrame.Parent = contentContainer
+
+            -- Position absolutely relative to ContentContainer
+            task.defer(function()
+                local btnPos = DBtn.AbsolutePosition
+                local containerPos = contentContainer.AbsolutePosition
+                dropFrame.Position = UDim2.new(
+                    0, btnPos.X - containerPos.X,
+                    0, btnPos.Y - containerPos.Y + DBtn.AbsoluteSize.Y + 4
+                )
+            end)
 
             local dropC = Instance.new("UICorner")
             dropC.CornerRadius = UDim.new(0, 6)
@@ -705,7 +717,7 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
             scroll.ScrollBarThickness = 2
             scroll.ScrollBarImageColor3 = Theme.Primary
             scroll.CanvasSize = UDim2.new(0, 0, 0, #options * 28)
-            scroll.ZIndex = 51
+            scroll.ZIndex = 101
             scroll.Parent = dropFrame
 
             for i, opt in ipairs(options) do
@@ -718,7 +730,7 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
                 optBtn.TextColor3 = Theme.Text
                 optBtn.TextSize = 11
                 optBtn.Font = Enum.Font.Gotham
-                optBtn.ZIndex = 52
+                optBtn.ZIndex = 102
                 optBtn.Parent = scroll
 
                 optBtn.MouseEnter:Connect(function()
@@ -859,7 +871,8 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     CWFrame.BorderSizePixel = 0
     CWFrame.Visible = false
     CWFrame.ZIndex = 200
-    CWFrame.Parent = parent
+    CWFrame.Parent = parent.Parent
+    CWFrame.Position = UDim2.new(0.5, -130, 0.5, -150)
 
     local CWC = Instance.new("UICorner")
     CWC.CornerRadius = UDim.new(0, 12)

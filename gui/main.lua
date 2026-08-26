@@ -102,46 +102,91 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateToggle(ECon, "Enabled", false, nil, function(v)
         moduleManager:Toggle("ESP", v)
     end)
-    GUI.CreateToggle(ECon, "Boxes", true, "BoxColor", function(v)
+
+    -- Create color pickers FIRST (invisible by default)
+    local colorPickers = {}
+    colorPickers.BoxColor = GUI.CreateColorPicker(ECon, "Box Color", Color3.fromRGB(255, 105, 180), function(c)
         local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Boxes", v) end
+        if mod and mod.SetConfig then mod.SetConfig("Color_Box", c) end
     end)
-    GUI.CreateToggle(ECon, "3D Boxes", false, nil, function(v)
+    colorPickers.SkeletonColor = GUI.CreateColorPicker(ECon, "Skeleton Color", Color3.fromRGB(255, 0, 255), function(c)
         local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Box3D", v) end
+        if mod and mod.SetConfig then mod.SetConfig("Color_Skeleton", c) end
     end)
-    GUI.CreateToggle(ECon, "Names", true, nil, function(v)
+    colorPickers.ChamsColor = GUI.CreateColorPicker(ECon, "Chams Color", Color3.fromRGB(255, 20, 147), function(c)
         local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Names", v) end
+        if mod and mod.SetConfig then mod.SetConfig("Color_ChamsFill", c) end
     end)
-    GUI.CreateToggle(ECon, "Health Bar", true, nil, function(v)
+    colorPickers.TracerColor = GUI.CreateColorPicker(ECon, "Tracer Color", Color3.fromRGB(255, 105, 180), function(c)
         local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Health", v) end
+        if mod and mod.SetConfig then mod.SetConfig("Color_Tracers", c) end
     end)
-    GUI.CreateToggle(ECon, "Skeleton", false, "SkeletonColor", function(v)
+    colorPickers.HeadDotColor = GUI.CreateColorPicker(ECon, "Head Dot Color", Color3.fromRGB(255, 255, 255), function(c)
         local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Skeleton", v) end
+        if mod and mod.SetConfig then mod.SetConfig("Color_HeadDot", c) end
     end)
-    GUI.CreateToggle(ECon, "Chams", false, "ChamsColor", function(v)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Chams", v) end
-    end)
-    GUI.CreateToggle(ECon, "Tracers", false, "TracerColor", function(v)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Tracers", v) end
-    end)
-    GUI.CreateToggle(ECon, "Head Dot", false, "HeadDotColor", function(v)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("HeadDot", v) end
-    end)
-    GUI.CreateToggle(ECon, "Distance", false, nil, function(v)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Distance", v) end
-    end)
-    GUI.CreateToggle(ECon, "Team Check", true, nil, function(v)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("TeamCheck", v) end
-    end)
+
+    local colorConfigMap = {
+        BoxColor = "Color_Box",
+        SkeletonColor = "Color_Skeleton",
+        ChamsColor = "Color_ChamsFill",
+        TracerColor = "Color_Tracers",
+        HeadDotColor = "Color_HeadDot",
+    }
+    local colorDefaults = {
+        BoxColor = Color3.fromRGB(255, 105, 180),
+        SkeletonColor = Color3.fromRGB(255, 0, 255),
+        ChamsColor = Color3.fromRGB(255, 20, 147),
+        TracerColor = Color3.fromRGB(255, 105, 180),
+        HeadDotColor = Color3.fromRGB(255, 255, 255),
+    }
+
+    -- Helper: create ESP toggle with wired color button
+    local function MakeESPToggle(text, default, colorKey, configKey)
+        local row, _, cbtn = GUI.CreateToggle(ECon, text, default, colorKey, function(v)
+            local mod = moduleManager:GetModule("ESP")
+            if mod and mod.SetConfig then mod.SetConfig(configKey, v) end
+        end)
+        if cbtn then
+            local defaultColor = colorDefaults[colorKey]
+            if defaultColor then
+                cbtn.BackgroundColor3 = defaultColor
+            end
+            if colorKey and colorPickers[colorKey] then
+                cbtn.MouseButton1Click:Connect(function()
+                    local picker = colorPickers[colorKey]
+                    if picker:IsOpen() then
+                        picker:Close()
+                    else
+                        for _, cp in pairs(colorPickers) do
+                            if cp ~= picker and cp:IsOpen() then
+                                cp:Close()
+                            end
+                        end
+                        picker:Open(function(c)
+                            local mod = moduleManager:GetModule("ESP")
+                            if mod and mod.SetConfig then
+                                mod.SetConfig(colorConfigMap[colorKey], c)
+                            end
+                            cbtn.BackgroundColor3 = c
+                        end, cbtn.BackgroundColor3)
+                    end
+                end)
+            end
+        end
+        return row
+    end
+
+    MakeESPToggle("Boxes", true, "BoxColor", "Boxes")
+    MakeESPToggle("3D Boxes", false, nil, "Box3D")
+    MakeESPToggle("Names", true, nil, "Names")
+    MakeESPToggle("Health Bar", true, nil, "Health")
+    MakeESPToggle("Skeleton", false, "SkeletonColor", "Skeleton")
+    MakeESPToggle("Chams", false, "ChamsColor", "Chams")
+    MakeESPToggle("Tracers", false, "TracerColor", "Tracers")
+    MakeESPToggle("Head Dot", false, "HeadDotColor", "HeadDot")
+    MakeESPToggle("Distance", false, nil, "Distance")
+    MakeESPToggle("Team Check", true, nil, "TeamCheck")
 
     GUI.CreateSeparator(ECon)
     GUI.CreateSection(ECon, "ESP Settings")
@@ -157,41 +202,6 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("ESP")
         if mod and mod.SetConfig then mod.SetConfig("TracerOrigin", v / 100) end
     end)
-
-    GUI.CreateSeparator(ECon)
-    GUI.CreateSection(ECon, "Colors")
-
-    local colorPickers = {}
-
-    local boxColorPicker = GUI.CreateColorPicker(ECon, "Box Color", Color3.fromRGB(255, 105, 180), function(c)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Color_Box", c) end
-    end)
-    table.insert(colorPickers, {name = "Box", picker = boxColorPicker})
-
-    local skelColorPicker = GUI.CreateColorPicker(ECon, "Skeleton Color", Color3.fromRGB(255, 0, 255), function(c)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Color_Skeleton", c) end
-    end)
-    table.insert(colorPickers, {name = "Skeleton", picker = skelColorPicker})
-
-    local chamsColorPicker = GUI.CreateColorPicker(ECon, "Chams Color", Color3.fromRGB(255, 20, 147), function(c)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Color_ChamsFill", c) end
-    end)
-    table.insert(colorPickers, {name = "Chams", picker = chamsColorPicker})
-
-    local tracerColorPicker = GUI.CreateColorPicker(ECon, "Tracer Color", Color3.fromRGB(255, 105, 180), function(c)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Color_Tracers", c) end
-    end)
-    table.insert(colorPickers, {name = "Tracer", picker = tracerColorPicker})
-
-    local headDotColorPicker = GUI.CreateColorPicker(ECon, "Head Dot Color", Color3.fromRGB(255, 255, 255), function(c)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Color_HeadDot", c) end
-    end)
-    table.insert(colorPickers, {name = "HeadDot", picker = headDotColorPicker})
 
     -- ============================================================
     -- GUN TAB
@@ -252,8 +262,10 @@ function MainGUI.Create(screenGui, moduleManager)
     local MCon = window.Contents["Misc"]
 
     GUI.CreateSection(MCon, "Movement")
-    GUI.CreateToggle(MCon, "Bunny Hop", false, nil, function(v)
+    GUI.CreateToggle(MCon, "Enabled", false, nil, function(v)
         moduleManager:Toggle("Misc", v)
+    end)
+    GUI.CreateToggle(MCon, "Bunny Hop", false, nil, function(v)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("BunnyHop", v) end
     end)
@@ -434,11 +446,31 @@ function MainGUI.Create(screenGui, moduleManager)
 
     GUI.CreateSeparator(CCon)
     GUI.CreateSection(CCon, "Theme")
-    GUI.CreateColorPicker(CCon, "Primary Color", Color3.fromRGB(255, 105, 180), function(c)
-        print("[Pouncing] Primary color set to", c)
+    
+    local primaryPicker = GUI.CreateColorPicker(CCon, "Primary Color", Color3.fromRGB(255, 105, 180), function(c)
+        GUI.Theme.Primary = c
+        GUI.Theme.BorderGlow = c
+        GUI.Theme.On = c
     end)
-    GUI.CreateColorPicker(CCon, "Accent Color", Color3.fromRGB(255, 20, 147), function(c)
-        print("[Pouncing] Accent color set to", c)
+    local primaryBtn
+    primaryBtn = GUI.CreateButton(CCon, "Set Primary Color", function()
+        primaryPicker:Open(function(c)
+            GUI.Theme.Primary = c
+            GUI.Theme.BorderGlow = c
+            GUI.Theme.On = c
+        end, GUI.Theme.Primary)
+    end)
+    
+    local accentPicker = GUI.CreateColorPicker(CCon, "Accent Color", Color3.fromRGB(255, 20, 147), function(c)
+        GUI.Theme.Accent = c
+        GUI.Theme.Neon = c
+    end)
+    local accentBtn
+    accentBtn = GUI.CreateButton(CCon, "Set Accent Color", function()
+        accentPicker:Open(function(c)
+            GUI.Theme.Accent = c
+            GUI.Theme.Neon = c
+        end, GUI.Theme.Accent)
     end)
 
     GUI.CreateSeparator(CCon)
