@@ -998,7 +998,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         CWHue = v
         UpdateColor()
     end)
-    hueGrad.ColorSequence = hueSequence
+    hueGrad.Color = hueSequence
 
     local satGrad, SetSat = MakeSlider(78, "Saturation", 1, function(v)
         CWSat = v
@@ -1076,11 +1076,11 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         previewBox.BackgroundColor3 = color
         if CWCallback then CWCallback(color) end
 
-        satGrad.ColorSequence = ColorSequence.new({
+        satGrad.Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromHSV(CWHue, 0, CWVal)),
             ColorSequenceKeypoint.new(1, Color3.fromHSV(CWHue, 1, CWVal))
         })
-        valGrad.ColorSequence = ColorSequence.new({
+        valGrad.Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromHSV(CWHue, CWSat, 0)),
             ColorSequenceKeypoint.new(1, Color3.fromHSV(CWHue, CWSat, 1))
         })
