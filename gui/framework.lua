@@ -907,11 +907,48 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     CWClose.ZIndex = 201
     CWClose.Parent = CWFrame
 
+    -- State
     local CWHue, CWSat, CWVal = 0, 1, 1
     local CWCallback = nil
     local CWOpen = false
     local ActiveSlider = nil
 
+    -- References set later
+    local SetHueFunc, SetSatFunc, SetValFunc
+    local previewBox, hexBox, satGrad, valGrad
+
+    -- ============================================================
+    -- UpdateColor: MUST be defined before any slider callbacks
+    -- ============================================================
+    local function UpdateColor()
+        local color = Color3.fromHSV(CWHue, CWSat, CWVal)
+        if previewBox then previewBox.BackgroundColor3 = color end
+        if CWCallback then CWCallback(color) end
+
+        if satGrad then
+            satGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromHSV(CWHue, 0, CWVal)),
+                ColorSequenceKeypoint.new(1, Color3.fromHSV(CWHue, 1, CWVal))
+            })
+        end
+        if valGrad then
+            valGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromHSV(CWHue, CWSat, 0)),
+                ColorSequenceKeypoint.new(1, Color3.fromHSV(CWHue, CWSat, 1))
+            })
+        end
+
+        if hexBox then
+            local r = math.floor(color.R * 255)
+            local g = math.floor(color.G * 255)
+            local b = math.floor(color.B * 255)
+            hexBox.Text = string.format("#%02X%02X%02X", r, g, b)
+        end
+    end
+
+    -- ============================================================
+    -- MakeSlider
+    -- ============================================================
     local function MakeSlider(y, labelText, initVal, onChange)
         local label = Instance.new("TextLabel")
         label.Size = UDim2.new(0, 100, 0, 14)
@@ -984,6 +1021,9 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         return gradient, SetValue
     end
 
+    -- ============================================================
+    -- Create sliders — callbacks now properly reference UpdateColor
+    -- ============================================================
     local hueSequence = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
         ColorSequenceKeypoint.new(0.1667, Color3.fromRGB(255, 255, 0)),
@@ -994,22 +1034,26 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
     })
 
-    local hueGrad, SetHue = MakeSlider(38, "Hue", 0, function(v)
+    local hueGrad
+    hueGrad, SetHueFunc = MakeSlider(38, "Hue", 0, function(v)
         CWHue = v
         UpdateColor()
     end)
     hueGrad.Color = hueSequence
 
-    local satGrad, SetSat = MakeSlider(78, "Saturation", 1, function(v)
+    satGrad, SetSatFunc = MakeSlider(78, "Saturation", 1, function(v)
         CWSat = v
         UpdateColor()
     end)
 
-    local valGrad, SetVal = MakeSlider(118, "Brightness", 1, function(v)
+    valGrad, SetValFunc = MakeSlider(118, "Brightness", 1, function(v)
         CWVal = v
         UpdateColor()
     end)
 
+    -- ============================================================
+    -- Preview box
+    -- ============================================================
     local previewLabel = Instance.new("TextLabel")
     previewLabel.Size = UDim2.new(0, 60, 0, 14)
     previewLabel.Position = UDim2.new(0, 14, 0, 158)
@@ -1021,7 +1065,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     previewLabel.ZIndex = 201
     previewLabel.Parent = CWFrame
 
-    local previewBox = Instance.new("Frame")
+    previewBox = Instance.new("Frame")
     previewBox.Size = UDim2.new(0, 50, 0, 24)
     previewBox.Position = UDim2.new(0, 14, 0, 174)
     previewBox.BackgroundColor3 = Color3.fromHSV(0, 1, 1)
@@ -1038,6 +1082,9 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     previewBoxS.Thickness = 1.5
     previewBoxS.Parent = previewBox
 
+    -- ============================================================
+    -- Hex input
+    -- ============================================================
     local hexLabel = Instance.new("TextLabel")
     hexLabel.Size = UDim2.new(0, 60, 0, 14)
     hexLabel.Position = UDim2.new(0, 80, 0, 158)
@@ -1049,7 +1096,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     hexLabel.ZIndex = 201
     hexLabel.Parent = CWFrame
 
-    local hexBox = Instance.new("TextBox")
+    hexBox = Instance.new("TextBox")
     hexBox.Size = UDim2.new(0, 120, 0, 24)
     hexBox.Position = UDim2.new(0, 80, 0, 174)
     hexBox.BackgroundColor3 = Theme.ElementBG
@@ -1071,26 +1118,9 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     hexBoxS.Thickness = 1
     hexBoxS.Parent = hexBox
 
-    local function UpdateColor()
-        local color = Color3.fromHSV(CWHue, CWSat, CWVal)
-        previewBox.BackgroundColor3 = color
-        if CWCallback then CWCallback(color) end
-
-        satGrad.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromHSV(CWHue, 0, CWVal)),
-            ColorSequenceKeypoint.new(1, Color3.fromHSV(CWHue, 1, CWVal))
-        })
-        valGrad.Color = ColorSequence.new({
-            ColorSequenceKeypoint.new(0, Color3.fromHSV(CWHue, CWSat, 0)),
-            ColorSequenceKeypoint.new(1, Color3.fromHSV(CWHue, CWSat, 1))
-        })
-
-        local r = math.floor(color.R * 255)
-        local g = math.floor(color.G * 255)
-        local b = math.floor(color.B * 255)
-        hexBox.Text = string.format("#%02X%02X%02X", r, g, b)
-    end
-
+    -- ============================================================
+    -- Hex → Sliders (bidirectional)
+    -- ============================================================
     hexBox.FocusLost:Connect(function()
         local text = hexBox.Text:gsub("#", ""):upper()
         if #text == 3 then
@@ -1112,14 +1142,17 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         local color = Color3.fromRGB(r, g, b)
         local h, s, v = Color3.toHSV(color)
         CWHue, CWSat, CWVal = h, s, v
-        SetHue(h)
-        SetSat(s)
-        SetVal(v)
+        SetHueFunc(h)
+        SetSatFunc(s)
+        SetValFunc(v)
         UpdateColor()
         hexBoxS.Color = Color3.fromRGB(80, 255, 80)
         task.delay(0.3, function() hexBoxS.Color = Theme.Border end)
     end)
 
+    -- ============================================================
+    -- Global input handlers for drag + close
+    -- ============================================================
     UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             ActiveSlider = nil
@@ -1161,6 +1194,9 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         end
     end)
 
+    -- ============================================================
+    -- Picker API
+    -- ============================================================
     local Picker = {}
 
     function Picker:Open(setCallback, setDefaultColor)
@@ -1169,9 +1205,9 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
             local h, s, v = Color3.toHSV(setDefaultColor)
             CWHue, CWSat, CWVal = h, s, v
         end
-        SetHue(CWHue)
-        SetSat(CWSat)
-        SetVal(CWVal)
+        SetHueFunc(CWHue)
+        SetSatFunc(CWSat)
+        SetValFunc(CWVal)
         UpdateColor()
         CWFrame.Visible = true
         CWOpen = true
@@ -1192,11 +1228,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
 
     return Picker
 end
-
--- ============================================================
--- CreateSeparator
--- ============================================================
-
 function GUI.CreateSeparator(parent)
     local F = Instance.new("Frame")
     F.Size = UDim2.new(1, -20, 0, 1)
