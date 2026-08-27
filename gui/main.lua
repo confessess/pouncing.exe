@@ -306,6 +306,10 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("Fly", v) end
     end)
+    GUI.CreateDropdown(MCon, "Fly Method", {"Tween", "Humanoid", "Velocity", "LinearVelocity"}, "Tween", function(v)
+        local mod = moduleManager:GetModule("Misc")
+        if mod and mod.SetConfig then mod.SetConfig("FlyMethod", v) end
+    end)
     GUI.CreateToggle(MCon, "Infinite Jump", false, nil, function(v)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("InfiniteJump", v) end
