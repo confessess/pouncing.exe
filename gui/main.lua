@@ -205,9 +205,13 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("ESP")
         if mod and mod.SetConfig then mod.SetConfig("TracerOrigin", v / 100) end
     end)
-    GUI.CreateSlider(ECon, "Head Dot Thickness", 1, 5, 2, function(v)
+    GUI.CreateSlider(ECon, "Head Dot Thickness", 1, 8, 1, function(v)
         local mod = moduleManager:GetModule("ESP")
         if mod and mod.SetConfig then mod.SetConfig("HeadDotThickness", v) end
+    end)
+    GUI.CreateSlider(ECon, "Head Dot Size", 20, 200, 50, function(v)
+        local mod = moduleManager:GetModule("ESP")
+        if mod and mod.SetConfig then mod.SetConfig("HeadDotSize", v / 100) end
     end)
 
     -- ============================================================

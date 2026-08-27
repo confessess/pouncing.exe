@@ -72,7 +72,7 @@ end
 local ESP = {
     Enabled = false, Boxes = false, Box3D = false, Names = false, Distance = false, Health = false,
     Skeleton = false, Chams = false, Tracers = false, HeadDot = false, TeamCheck = false,
-    MaxDistance = 2000, BoxThickness = 1, TracerOrigin = 0.5, HeadDotThickness = 2,
+    MaxDistance = 2000, BoxThickness = 1, TracerOrigin = 0.5, HeadDotThickness = 1, HeadDotSize = 0.5,
     Colors = {Box = Color3.fromRGB(255, 105, 180), Name = Color3.fromRGB(255, 255, 255), Distance = Color3.fromRGB(200, 200, 200), Health = Color3.fromRGB(0, 255, 100), Skeleton = Color3.fromRGB(255, 255, 255), ChamsFill = Color3.fromRGB(255, 105, 180), ChamsOutline = Color3.fromRGB(255, 255, 255), Tracers = Color3.fromRGB(255, 105, 180), HeadDot = Color3.fromRGB(255, 255, 255)}
 }
 
@@ -334,7 +334,7 @@ local function UpdatePlayer(player)
         if head then
             local headPos, onScreen = Utils.W2S(head.Position)
             if onScreen then
-                local radius = math.clamp(3000 / dist, 3, 12)
+                local radius = math.clamp(3000 / dist, 3, 12) * ESP.HeadDotSize
                 Utils.SetDrawing(o.HeadDot, "Position", headPos)
                 Utils.SetDrawing(o.HeadDot, "Radius", radius)
                 Utils.SetDrawing(o.HeadDot, "Color", ESP.Colors.HeadDot)
@@ -447,6 +447,7 @@ function Module.SetConfig(key, value)
     elseif key == "BoxThickness" then ESP.BoxThickness = value
     elseif key == "TracerOrigin" then ESP.TracerOrigin = value
     elseif key == "HeadDotThickness" then ESP.HeadDotThickness = value
+    elseif key == "HeadDotSize" then ESP.HeadDotSize = value
     elseif ESP[key] ~= nil then ESP[key] = value
     end
 end
@@ -458,7 +459,7 @@ end
 function Module.ResetConfig()
     ESP.Enabled = false; ESP.Boxes = false; ESP.Box3D = false; ESP.Names = false; ESP.Distance = false; ESP.Health = false
     ESP.Skeleton = false; ESP.Chams = false; ESP.Tracers = false; ESP.HeadDot = false; ESP.TeamCheck = false
-    ESP.MaxDistance = 2000; ESP.BoxThickness = 1; ESP.TracerOrigin = 0.5; ESP.HeadDotThickness = 2
+    ESP.MaxDistance = 2000; ESP.BoxThickness = 1; ESP.TracerOrigin = 0.5; ESP.HeadDotThickness = 1; ESP.HeadDotSize = 0.5
     ESP.Colors.Box = Color3.fromRGB(255, 105, 180); ESP.Colors.Name = Color3.fromRGB(255, 255, 255); ESP.Colors.Distance = Color3.fromRGB(200, 200, 200)
     ESP.Colors.Health = Color3.fromRGB(0, 255, 100); ESP.Colors.Skeleton = Color3.fromRGB(255, 255, 255); ESP.Colors.ChamsFill = Color3.fromRGB(255, 105, 180)
     ESP.Colors.ChamsOutline = Color3.fromRGB(255, 255, 255); ESP.Colors.Tracers = Color3.fromRGB(255, 105, 180); ESP.Colors.HeadDot = Color3.fromRGB(255, 255, 255)
