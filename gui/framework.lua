@@ -1,6 +1,7 @@
--- Pouncing.exe | GUI Framework v2.2
+-- Pouncing.exe | GUI Framework v2.3
 -- Cute Pink Neon UI Components
 -- HSV Wheel: accurate mouse tracking, dense dot rendering
+-- Added: Click-outside-to-close + Escape-to-close + better picker positioning
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -135,7 +136,7 @@ function GUI.CreateWindow(parent, title, size)
     VT.Size = UDim2.new(0, 60, 0, 20)
     VT.Position = UDim2.new(1, -95, 0, 10)
     VT.BackgroundTransparency = 1
-    VT.Text = "v2.2"
+    VT.Text = "v2.3"
     VT.TextColor3 = Theme.SubText
     VT.TextSize = 11
     VT.Font = Enum.Font.Gotham
@@ -864,7 +865,6 @@ end
 -- ============================================================
 
 function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
-    -- callback param is legacy; live callback set via :Open
     local CWFrame = Instance.new("Frame")
     CWFrame.Name = "ColorPicker"
     CWFrame.Size = UDim2.new(0, 260, 0, 260)
@@ -1137,6 +1137,30 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         CWOpen = false
     end)
 
+    -- Click outside to close
+    UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 and CWOpen then
+            local mousePos = UserInputService:GetMouseLocation()
+            local framePos = CWFrame.AbsolutePosition
+            local frameSize = CWFrame.AbsoluteSize
+            if mousePos.X < framePos.X or mousePos.X > framePos.X + frameSize.X or
+               mousePos.Y < framePos.Y or mousePos.Y > framePos.Y + frameSize.Y then
+                CWFrame.Visible = false
+                CWOpen = false
+            end
+        end
+    end)
+
+    -- Escape to close
+    UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == Enum.KeyCode.Escape and CWOpen then
+            CWFrame.Visible = false
+            CWOpen = false
+        end
+    end)
+
     local Picker = {}
 
     function Picker:Open(setCallback, setDefaultColor)
@@ -1168,6 +1192,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
 
     return Picker
 end
+
 -- ============================================================
 -- CreateSeparator
 -- ============================================================

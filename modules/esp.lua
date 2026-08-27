@@ -1,6 +1,6 @@
--- Pouncing.exe | ESP Module v2.2
+-- Pouncing.exe | ESP Module v2.3
 -- Full player ESP with boxes, names, health, skeleton, chams, tracers, head dots
--- Added: HeadDotThickness config support
+-- Added: HeadDotThickness config support + Live color refresh
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -145,6 +145,37 @@ local function GetPlayerWeapon(player)
     local tool = char:FindFirstChildOfClass("Tool")
     if tool then return tool.Name end
     return nil
+end
+
+-- ============================================================
+-- RefreshColors: Immediately apply current colors to all objects
+-- ============================================================
+local function RefreshColors()
+    for player, o in pairs(DrawingObjects) do
+        if o.Box then Utils.SetDrawing(o.Box, "Color", ESP.Colors.Box) end
+        if o.Name then Utils.SetDrawing(o.Name, "Color", ESP.Colors.Name) end
+        if o.Dist then Utils.SetDrawing(o.Dist, "Color", ESP.Colors.Distance) end
+        if o.Tracer then Utils.SetDrawing(o.Tracer, "Color", ESP.Colors.Tracers) end
+        if o.HeadDot then Utils.SetDrawing(o.HeadDot, "Color", ESP.Colors.HeadDot) end
+        if o.Skel then
+            for i = 1, #o.Skel, 2 do
+                if o.Skel[i] then Utils.SetDrawing(o.Skel[i], "Color", ESP.Colors.Skeleton) end
+            end
+        end
+        if o.B3D then
+            for _, line in pairs(o.B3D) do
+                if line then Utils.SetDrawing(line, "Color", ESP.Colors.Box) end
+            end
+        end
+        local char = player.Character
+        if char then
+            local hl = char:FindFirstChild("Pouncing_Highlight")
+            if hl then
+                hl.FillColor = ESP.Colors.ChamsFill
+                hl.OutlineColor = ESP.Colors.ChamsOutline
+            end
+        end
+    end
 end
 
 local function UpdatePlayer(player)
@@ -412,7 +443,10 @@ end
 function Module.SetConfig(key, value)
     if key:sub(1, 6) == "Color_" then
         local colorKey = key:sub(7)
-        if ESP.Colors[colorKey] then ESP.Colors[colorKey] = value end
+        if ESP.Colors[colorKey] then
+            ESP.Colors[colorKey] = value
+            RefreshColors()
+        end
     elseif key == "MaxDistance" then ESP.MaxDistance = value
     elseif key == "TeamCheck" then ESP.TeamCheck = value
     elseif key == "BoxThickness" then ESP.BoxThickness = value
@@ -433,6 +467,7 @@ function Module.ResetConfig()
     ESP.Colors.Box = Color3.fromRGB(255, 105, 180); ESP.Colors.Name = Color3.fromRGB(255, 255, 255); ESP.Colors.Distance = Color3.fromRGB(200, 200, 200)
     ESP.Colors.Health = Color3.fromRGB(0, 255, 100); ESP.Colors.Skeleton = Color3.fromRGB(255, 255, 255); ESP.Colors.ChamsFill = Color3.fromRGB(255, 105, 180)
     ESP.Colors.ChamsOutline = Color3.fromRGB(255, 255, 255); ESP.Colors.Tracers = Color3.fromRGB(255, 105, 180); ESP.Colors.HeadDot = Color3.fromRGB(255, 255, 255)
+    RefreshColors()
 end
 
 return Module

@@ -1,6 +1,6 @@
--- Pouncing.exe | GUI Main v2.2
+-- Pouncing.exe | GUI Main v2.3
 -- Assembles the main window with all tabs and real controls
--- Added: Name/Health/Distance color pickers + HeadDotThickness slider
+-- Added: Live ESP color updates + module pre-load
 -- Made by pouncing :3
 -- ============================================================
 
@@ -104,41 +104,21 @@ function MainGUI.Create(screenGui, moduleManager)
         moduleManager:Toggle("ESP", v)
     end)
 
+    -- Pre-load ESP module so colors can be set before enabling
+    task.defer(function()
+        moduleManager:Load("ESP")
+    end)
+
     -- Create color pickers FIRST (invisible by default)
     local colorPickers = {}
-    colorPickers.BoxColor = GUI.CreateColorPicker(ECon, "Box Color", Color3.fromRGB(255, 105, 180), function(c)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Color_Box", c) end
-    end)
-    colorPickers.SkeletonColor = GUI.CreateColorPicker(ECon, "Skeleton Color", Color3.fromRGB(255, 0, 255), function(c)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Color_Skeleton", c) end
-    end)
-    colorPickers.ChamsColor = GUI.CreateColorPicker(ECon, "Chams Color", Color3.fromRGB(255, 20, 147), function(c)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Color_ChamsFill", c) end
-    end)
-    colorPickers.TracerColor = GUI.CreateColorPicker(ECon, "Tracer Color", Color3.fromRGB(255, 105, 180), function(c)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Color_Tracers", c) end
-    end)
-    colorPickers.HeadDotColor = GUI.CreateColorPicker(ECon, "Head Dot Color", Color3.fromRGB(255, 255, 255), function(c)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Color_HeadDot", c) end
-    end)
-    -- NEW: Color pickers for Names, Health, Distance
-    colorPickers.NameColor = GUI.CreateColorPicker(ECon, "Name Color", Color3.fromRGB(255, 255, 255), function(c)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Color_Name", c) end
-    end)
-    colorPickers.HealthColor = GUI.CreateColorPicker(ECon, "Health Color", Color3.fromRGB(0, 255, 100), function(c)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Color_Health", c) end
-    end)
-    colorPickers.DistanceColor = GUI.CreateColorPicker(ECon, "Distance Color", Color3.fromRGB(200, 200, 200), function(c)
-        local mod = moduleManager:GetModule("ESP")
-        if mod and mod.SetConfig then mod.SetConfig("Color_Distance", c) end
-    end)
+    colorPickers.BoxColor = GUI.CreateColorPicker(ECon, "Box Color", Color3.fromRGB(255, 105, 180))
+    colorPickers.SkeletonColor = GUI.CreateColorPicker(ECon, "Skeleton Color", Color3.fromRGB(255, 0, 255))
+    colorPickers.ChamsColor = GUI.CreateColorPicker(ECon, "Chams Color", Color3.fromRGB(255, 20, 147))
+    colorPickers.TracerColor = GUI.CreateColorPicker(ECon, "Tracer Color", Color3.fromRGB(255, 105, 180))
+    colorPickers.HeadDotColor = GUI.CreateColorPicker(ECon, "Head Dot Color", Color3.fromRGB(255, 255, 255))
+    colorPickers.NameColor = GUI.CreateColorPicker(ECon, "Name Color", Color3.fromRGB(255, 255, 255))
+    colorPickers.HealthColor = GUI.CreateColorPicker(ECon, "Health Color", Color3.fromRGB(0, 255, 100))
+    colorPickers.DistanceColor = GUI.CreateColorPicker(ECon, "Distance Color", Color3.fromRGB(200, 200, 200))
 
     local colorConfigMap = {
         BoxColor = "Color_Box",
@@ -185,6 +165,9 @@ function MainGUI.Create(screenGui, moduleManager)
                         end
                         picker:Open(function(c)
                             local mod = moduleManager:GetModule("ESP")
+                            if not mod then
+                                mod = moduleManager:Load("ESP")
+                            end
                             if mod and mod.SetConfig then
                                 mod.SetConfig(colorConfigMap[colorKey], c)
                             end
@@ -222,7 +205,6 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("ESP")
         if mod and mod.SetConfig then mod.SetConfig("TracerOrigin", v / 100) end
     end)
-    -- NEW: Head Dot Thickness slider
     GUI.CreateSlider(ECon, "Head Dot Thickness", 1, 5, 2, function(v)
         local mod = moduleManager:GetModule("ESP")
         if mod and mod.SetConfig then mod.SetConfig("HeadDotThickness", v) end
@@ -414,7 +396,7 @@ function MainGUI.Create(screenGui, moduleManager)
     local CCon = window.Contents["Config"]
 
     GUI.CreateSection(CCon, "Config Management")
-    GUI.CreateLabel(CCon, "Pouncing.exe v2.2", false)
+    GUI.CreateLabel(CCon, "Pouncing.exe v2.3", false)
     GUI.CreateLabel(CCon, "Built with love by ENI for LO 💗", true)
     GUI.CreateSeparator(CCon)
 
@@ -472,11 +454,7 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateSeparator(CCon)
     GUI.CreateSection(CCon, "Theme")
 
-    local primaryPicker = GUI.CreateColorPicker(CCon, "Primary Color", Color3.fromRGB(255, 105, 180), function(c)
-        GUI.Theme.Primary = c
-        GUI.Theme.BorderGlow = c
-        GUI.Theme.On = c
-    end)
+    local primaryPicker = GUI.CreateColorPicker(CCon, "Primary Color", Color3.fromRGB(255, 105, 180))
     local primaryBtn
     primaryBtn = GUI.CreateButton(CCon, "Set Primary Color", function()
         primaryPicker:Open(function(c)
@@ -486,10 +464,7 @@ function MainGUI.Create(screenGui, moduleManager)
         end, GUI.Theme.Primary)
     end)
 
-    local accentPicker = GUI.CreateColorPicker(CCon, "Accent Color", Color3.fromRGB(255, 20, 147), function(c)
-        GUI.Theme.Accent = c
-        GUI.Theme.Neon = c
-    end)
+    local accentPicker = GUI.CreateColorPicker(CCon, "Accent Color", Color3.fromRGB(255, 20, 147))
     local accentBtn
     accentBtn = GUI.CreateButton(CCon, "Set Accent Color", function()
         accentPicker:Open(function(c)
@@ -509,6 +484,7 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateLabel(CCon, "Config save/load ✓", true)
     GUI.CreateLabel(CCon, "Accurate HSV color wheel ✓", true)
     GUI.CreateLabel(CCon, "Per-element ESP colors ✓", true)
+    GUI.CreateLabel(CCon, "Live color refresh ✓", true)
 
     -- ============================================================
     -- Activate default tab
@@ -556,7 +532,7 @@ function MainGUI.Create(screenGui, moduleManager)
     NT.Size = UDim2.new(1, -10, 1, 0)
     NT.Position = UDim2.new(0, 5, 0, 0)
     NT.BackgroundTransparency = 1
-    NT.Text = "🐾 Pouncing.exe v2.2 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
+    NT.Text = "🐾 Pouncing.exe v2.3 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
     NT.TextColor3 = Color3.fromRGB(255, 182, 193)
     NT.TextSize = 12
     NT.Font = Enum.Font.GothamSemibold
