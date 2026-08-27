@@ -62,11 +62,11 @@ function MainGUI.Create(screenGui, moduleManager)
 
     GUI.CreateSeparator(ACon)
     GUI.CreateSection(ACon, "Aimbot Settings")
-    GUI.CreateSlider(ACon, "FOV", 10, 500, 120, function(v)
+    GUI.CreateSlider(ACon, "FOV", 10, 360, 120, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("FOV", v) end
     end)
-    GUI.CreateSlider(ACon, "Smoothness", 1, 100, 15, function(v)
+    GUI.CreateSlider(ACon, "Smoothness", 0, 100, 15, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("Smoothness", v) end
     end)
@@ -77,6 +77,13 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateSlider(ACon, "Trigger Delay (ms)", 0, 500, 50, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("TriggerDelay", v) end
+    end)
+
+    GUI.CreateSeparator(ACon)
+    GUI.CreateSection(ACon, "Aimbot Extras")
+    GUI.CreateToggle(ACon, "Prediction", false, nil, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("Prediction", v) end
     end)
 
     GUI.CreateSeparator(ACon)
@@ -92,6 +99,17 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateKeybind(ACon, "Aim Key", Enum.KeyCode.Q, function(k)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("AimKey", k) end
+    end)
+
+    GUI.CreateSeparator(ACon)
+    GUI.CreateSection(ACon, "Aimbot Behavior")
+    GUI.CreateToggle(ACon, "Toggle Mode", false, nil, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("ToggleMode", v) end
+    end)
+    GUI.CreateToggle(ACon, "Sticky Target", false, nil, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("StickyTarget", v) end
     end)
 
     -- ============================================================

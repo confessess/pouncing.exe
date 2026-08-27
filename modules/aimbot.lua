@@ -1,6 +1,5 @@
--- Pouncing.exe | Aimbot Module v2.4
--- Lock-on, silent aim, triggerbot, prediction, proper FOV
--- Silent aim: multi-layer (Raycast + FindPartOnRay* + __namecall with table scanning)
+-- Pouncing.exe | Aimbot Module v2.5
+-- Lock-on, silent aim, triggerbot, prediction, toggle mode, sticky target
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -18,17 +17,20 @@ local Config = {
     TeamCheck = false,
     WallCheck = false,
     FOV = 120,
-    Smoothness = 50,
+    Smoothness = 15,
     MaxDistance = 1000,
     TriggerDelay = 50,
     TargetPart = "Head",
     Priority = "Closest",
     AimKey = Enum.KeyCode.Q,
     Prediction = false,
+    ToggleMode = false,
+    StickyTarget = false,
     CurrentTarget = nil,
     LastTriggerTime = 0,
     Aiming = false,
     SilentAimHooked = false,
+    SilentAimAvailable = false,
 }
 
 local SilentAimHooks = {}
@@ -114,7 +116,7 @@ local function GetTargetPart(character)
 end
 
 -- ============================================================
--- Prediction: simple velocity compensation
+-- Prediction
 -- ============================================================
 
 local function PredictPosition(target)
@@ -132,7 +134,32 @@ end
 -- Target selection
 -- ============================================================
 
+local function IsTargetValid(target)
+    if not target then return false end
+    if not target.Player or not target.Character then return false end
+    if not IsAlive(target.Character) then return false end
+    if Config.TeamCheck and IsTeammate(target.Player) then return false end
+    local part = target.Character:FindFirstChild(target.Part.Name)
+    if not part then return false end
+    local dist = GetDistance(part.Position)
+    if dist > Config.MaxDistance then return false end
+    local inFOV = IsInFOV(part.Position)
+    if not inFOV then return false end
+    if not CanSee(part.Position, target.Character) then return false end
+    return true
+end
+
 local function GetBestTarget()
+    -- Sticky target: keep current if still valid
+    if Config.StickyTarget and IsTargetValid(Config.CurrentTarget) then
+        local part = Config.CurrentTarget.Character:FindFirstChild(Config.CurrentTarget.Part.Name)
+        if part then
+            Config.CurrentTarget.Part = part
+            Config.CurrentTarget.Position = part.Position
+            return Config.CurrentTarget
+        end
+    end
+
     local bestTarget = nil
     local bestScore = math.huge
 
@@ -189,20 +216,24 @@ local function GetBestTarget()
 end
 
 -- ============================================================
--- Aiming
+-- Aiming — 0 smoothness = instant snap
 -- ============================================================
 
 local function AimAt(target)
     if not target or not target.Part then return end
     local aimPos = PredictPosition(target)
     local targetCF = CFrame.new(Camera.CFrame.Position, aimPos)
-    local alpha = (101 - Config.Smoothness) / 500
-    alpha = math.clamp(alpha, 0.001, 0.5)
-    Camera.CFrame = Camera.CFrame:Lerp(targetCF, alpha)
+
+    if Config.Smoothness <= 0 then
+        Camera.CFrame = targetCF
+    else
+        local alpha = math.clamp((101 - Config.Smoothness) / 100, 0.005, 1.0)
+        Camera.CFrame = Camera.CFrame:Lerp(targetCF, alpha)
+    end
 end
 
 -- ============================================================
--- Silent Aim — Multi-layer
+-- Silent Aim
 -- ============================================================
 
 local function SetupSilentAim()
@@ -210,15 +241,20 @@ local function SetupSilentAim()
     Config.SilentAimHooked = true
 
     -- ── Layer 1: Workspace.Raycast ──
+    -- Only redirect rays that originate from the camera (weapon rays)
     local oldRaycast = Workspace.Raycast
     SilentAimHooks.Raycast = oldRaycast
     Workspace.Raycast = function(self, origin, direction, params, ...)
         if Config.Enabled and Config.SilentAim and Config.CurrentTarget then
             local t = Config.CurrentTarget
             if t and t.Part then
-                local aimPos = PredictPosition(t)
-                local newDir = (aimPos - origin)
-                return oldRaycast(self, origin, newDir, params, ...)
+                -- Only weapon rays originate from camera
+                local camPos = Camera.CFrame.Position
+                if (origin - camPos).Magnitude < 5 then
+                    local aimPos = PredictPosition(t)
+                    local newDir = (aimPos - origin)
+                    return oldRaycast(self, origin, newDir, params, ...)
+                end
             end
         end
         return oldRaycast(self, origin, direction, params, ...)
@@ -232,10 +268,13 @@ local function SetupSilentAim()
             if Config.Enabled and Config.SilentAim and Config.CurrentTarget then
                 local t = Config.CurrentTarget
                 if t and t.Part then
-                    local aimPos = PredictPosition(t)
-                    local newDir = (aimPos - ray.Origin)
-                    local newRay = Ray.new(ray.Origin, newDir)
-                    return oldFindPartOnRay(self, newRay, ...)
+                    local camPos = Camera.CFrame.Position
+                    if (ray.Origin - camPos).Magnitude < 5 then
+                        local aimPos = PredictPosition(t)
+                        local newDir = (aimPos - ray.Origin)
+                        local newRay = Ray.new(ray.Origin, newDir)
+                        return oldFindPartOnRay(self, newRay, ...)
+                    end
                 end
             end
             return oldFindPartOnRay(self, ray, ...)
@@ -249,10 +288,13 @@ local function SetupSilentAim()
             if Config.Enabled and Config.SilentAim and Config.CurrentTarget then
                 local t = Config.CurrentTarget
                 if t and t.Part then
-                    local aimPos = PredictPosition(t)
-                    local newDir = (aimPos - ray.Origin)
-                    local newRay = Ray.new(ray.Origin, newDir)
-                    return oldFindPartOnRayWithIgnoreList(self, newRay, ignoreList, ...)
+                    local camPos = Camera.CFrame.Position
+                    if (ray.Origin - camPos).Magnitude < 5 then
+                        local aimPos = PredictPosition(t)
+                        local newDir = (aimPos - ray.Origin)
+                        local newRay = Ray.new(ray.Origin, newDir)
+                        return oldFindPartOnRayWithIgnoreList(self, newRay, ignoreList, ...)
+                    end
                 end
             end
             return oldFindPartOnRayWithIgnoreList(self, ray, ignoreList, ...)
@@ -266,94 +308,122 @@ local function SetupSilentAim()
             if Config.Enabled and Config.SilentAim and Config.CurrentTarget then
                 local t = Config.CurrentTarget
                 if t and t.Part then
-                    local aimPos = PredictPosition(t)
-                    local newDir = (aimPos - ray.Origin)
-                    local newRay = Ray.new(ray.Origin, newDir)
-                    return oldFindPartOnRayWithWhitelist(self, newRay, whitelist, ...)
+                    local camPos = Camera.CFrame.Position
+                    if (ray.Origin - camPos).Magnitude < 5 then
+                        local aimPos = PredictPosition(t)
+                        local newDir = (aimPos - ray.Origin)
+                        local newRay = Ray.new(ray.Origin, newDir)
+                        return oldFindPartOnRayWithWhitelist(self, newRay, whitelist, ...)
+                    end
                 end
             end
             return oldFindPartOnRayWithWhitelist(self, ray, whitelist, ...)
         end
     end
 
-    -- ── Layer 3: __namecall (broad, scans tables, no name filter) ──
-    local success, mt = pcall(getrawmetatable, game)
-    if success and mt then
-        local oldNamecall = mt.__namecall
-        if oldNamecall then
-            SilentAimHooks.Namecall = oldNamecall
-            setreadonly(mt, false)
+    -- ── Layer 3: __namecall ──
+    local hasNewcclosure = typeof(newcclosure) == "function"
+    local hasGetnamecallmethod = typeof(getnamecallmethod) == "function"
+    local hasGetrawmetatable = typeof(getrawmetatable) == "function"
+    local hasSetreadonly = typeof(setreadonly) == "function"
 
-            mt.__namecall = newcclosure(function(self, ...)
-                local method = getnamecallmethod()
-                if Config.Enabled and Config.SilentAim and Config.CurrentTarget then
-                    if method == "FireServer" or method == "InvokeServer" then
-                        local args = {...}
-                        local modified = false
-                        local t = Config.CurrentTarget
+    if hasGetrawmetatable and hasSetreadonly then
+        local success, mt = pcall(getrawmetatable, game)
+        if success and mt then
+            local oldNamecall = mt.__namecall
+            if oldNamecall then
+                SilentAimHooks.Namecall = oldNamecall
+                setreadonly(mt, false)
 
-                        if t and t.Part then
-                            local aimPos = PredictPosition(t)
-                            local camPos = Camera.CFrame.Position
+                local function ProcessArg(arg, parentTbl, key, depth)
+                    depth = depth or 0
+                    if depth > 3 then return arg, false end
 
-                            local function IsLikelyAimPos(pos)
-                                local dist = (pos - camPos).Magnitude
-                                return dist > 1 and dist < Config.MaxDistance * 2
-                            end
+                    local argType = typeof(arg)
+                    local t = Config.CurrentTarget
+                    if not t or not t.Part then return arg, false end
+                    local aimPos = PredictPosition(t)
+                    local camPos = Camera.CFrame.Position
 
-                            local function ProcessArg(arg, parentTbl, key)
-                                local argType = typeof(arg)
-
-                                if argType == "Vector3" then
-                                    if IsLikelyAimPos(arg) then
-                                        if parentTbl then parentTbl[key] = aimPos end
-                                        return aimPos, true
-                                    end
-                                elseif argType == "CFrame" then
-                                    if IsLikelyAimPos(arg.Position) then
-                                        local newCF = CFrame.new(aimPos)
-                                        if parentTbl then parentTbl[key] = newCF end
-                                        return newCF, true
-                                    end
-                                elseif argType == "Instance" then
-                                    if arg:IsA("BasePart") then
-                                        -- Only replace if it's the player's own character part
-                                        -- (some games send the shooter's arm as arg)
-                                        local model = arg:FindFirstAncestorOfClass("Model")
-                                        if model and model ~= t.Character then
-                                            if parentTbl then parentTbl[key] = t.Part end
-                                            return t.Part, true
-                                        end
-                                    end
-                                elseif argType == "Ray" then
-                                    local newDir = (aimPos - arg.Origin)
-                                    local newRay = Ray.new(arg.Origin, newDir)
-                                    if parentTbl then parentTbl[key] = newRay end
-                                    return newRay, true
-                                elseif argType == "table" then
-                                    for k, v in pairs(arg) do
-                                        local newV, didMod = ProcessArg(v, arg, k)
-                                        if didMod then modified = true end
-                                    end
-                                end
-                                return arg, false
-                            end
-
-                            for i = 1, #args do
-                                local newArg, didMod = ProcessArg(args[i], args, i)
-                                if didMod then modified = true end
-                            end
-
-                            if modified then
-                                return oldNamecall(self, unpack(args))
+                    if argType == "Vector3" then
+                        local dist = (arg - camPos).Magnitude
+                        if dist > 1 and dist < Config.MaxDistance * 3 then
+                            if parentTbl then parentTbl[key] = aimPos end
+                            return aimPos, true
+                        end
+                    elseif argType == "CFrame" then
+                        local dist = (arg.Position - camPos).Magnitude
+                        if dist > 1 and dist < Config.MaxDistance * 3 then
+                            local newCF = CFrame.new(aimPos)
+                            if parentTbl then parentTbl[key] = newCF end
+                            return newCF, true
+                        end
+                    elseif argType == "Instance" then
+                        if arg:IsA("BasePart") then
+                            local model = arg:FindFirstAncestorOfClass("Model")
+                            if model and model ~= t.Character and model ~= LocalPlayer.Character then
+                                if parentTbl then parentTbl[key] = t.Part end
+                                return t.Part, true
                             end
                         end
+                    elseif argType == "Ray" then
+                        local newDir = (aimPos - arg.Origin)
+                        local newRay = Ray.new(arg.Origin, newDir)
+                        if parentTbl then parentTbl[key] = newRay end
+                        return newRay, true
+                    elseif argType == "table" then
+                        local modified = false
+                        for k, v in pairs(arg) do
+                            local newV, didMod = ProcessArg(v, arg, k, depth + 1)
+                            if didMod then modified = true end
+                        end
+                        return arg, modified
+                    end
+                    return arg, false
+                end
+
+                if hasNewcclosure and hasGetnamecallmethod then
+                    mt.__namecall = newcclosure(function(self, ...)
+                        local method = getnamecallmethod()
+                        if Config.Enabled and Config.SilentAim and Config.CurrentTarget then
+                            if method == "FireServer" or method == "InvokeServer" then
+                                local args = {...}
+                                local modified = false
+                                for i = 1, #args do
+                                    local _, didMod = ProcessArg(args[i], args, i, 0)
+                                    if didMod then modified = true end
+                                end
+                                if modified then
+                                    return oldNamecall(self, unpack(args))
+                                end
+                            end
+                        end
+                        return oldNamecall(self, ...)
+                    end)
+                else
+                    -- Fallback: raw hook without newcclosure
+                    mt.__namecall = function(self, ...)
+                        local method = getnamecallmethod()
+                        if Config.Enabled and Config.SilentAim and Config.CurrentTarget then
+                            if method == "FireServer" or method == "InvokeServer" then
+                                local args = {...}
+                                local modified = false
+                                for i = 1, #args do
+                                    local _, didMod = ProcessArg(args[i], args, i, 0)
+                                    if didMod then modified = true end
+                                end
+                                if modified then
+                                    return oldNamecall(self, unpack(args))
+                                end
+                            end
+                        end
+                        return oldNamecall(self, ...)
                     end
                 end
-                return oldNamecall(self, ...)
-            end)
 
-            setreadonly(mt, true)
+                setreadonly(mt, true)
+                Config.SilentAimAvailable = true
+            end
         end
     end
 end
@@ -384,6 +454,7 @@ local function RemoveSilentAim()
 
     SilentAimHooks = {}
     Config.SilentAimHooked = false
+    Config.SilentAimAvailable = false
 end
 
 -- ============================================================
@@ -434,7 +505,7 @@ local function DoTriggerbot()
 end
 
 -- ============================================================
--- Visuals: FOV + Target circles
+-- Visuals
 -- ============================================================
 
 local FOVCircle = nil
@@ -442,7 +513,7 @@ local TargetCircle = nil
 
 local function UpdateFOVCircle()
     if not FOVCircle then return end
-    if Config.Enabled and Config.FOV < 360 then
+    if Config.Enabled then
         local radius = GetFOVRadiusPixels()
         FOVCircle.Visible = true
         FOVCircle.Radius = radius
@@ -505,14 +576,20 @@ end
 local function OnInputBegan(input, gp)
     if gp then return end
     if input.UserInputType == Config.AimKey or input.KeyCode == Config.AimKey then
-        Config.Aiming = true
+        if Config.ToggleMode then
+            Config.Aiming = not Config.Aiming
+        else
+            Config.Aiming = true
+        end
     end
 end
 
 local function OnInputEnded(input, gp)
     if gp then return end
-    if input.UserInputType == Config.AimKey or input.KeyCode == Config.AimKey then
-        Config.Aiming = false
+    if not Config.ToggleMode then
+        if input.UserInputType == Config.AimKey or input.KeyCode == Config.AimKey then
+            Config.Aiming = false
+        end
     end
 end
 
@@ -582,6 +659,10 @@ function Module.SetConfig(key, value)
     elseif key == "Priority" then Config.Priority = value
     elseif key == "AimKey" then Config.AimKey = value
     elseif key == "Prediction" then Config.Prediction = value
+    elseif key == "ToggleMode" then
+        Config.ToggleMode = value
+        if not value then Config.Aiming = false end
+    elseif key == "StickyTarget" then Config.StickyTarget = value
     end
 end
 
@@ -596,13 +677,15 @@ function Module.ResetConfig()
     Config.TeamCheck = false
     Config.WallCheck = false
     Config.FOV = 120
-    Config.Smoothness = 50
+    Config.Smoothness = 15
     Config.MaxDistance = 1000
     Config.TriggerDelay = 50
     Config.TargetPart = "Head"
     Config.Priority = "Closest"
     Config.AimKey = Enum.KeyCode.Q
     Config.Prediction = false
+    Config.ToggleMode = false
+    Config.StickyTarget = false
     Config.CurrentTarget = nil
     Config.Aiming = false
     RemoveSilentAim()
