@@ -907,50 +907,63 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     CWClose.ZIndex = 201
     CWClose.Parent = CWFrame
 
-    -- State
-    local CWHue, CWSat, CWVal = 0, 1, 1
-    local CWCallback = nil
-    local CWOpen = false
-    local ActiveSlider = nil
-    local JustOpened = false
+    -- ============================================================
+    -- State table (centralized, no closure capture issues)
+    -- ============================================================
+    local State = {
+        Hue = 0,
+        Sat = 1,
+        Val = 1,
+        Callback = nil,
+        Open = false,
+        JustOpened = false,
+        ActiveSlider = nil,
+    }
 
-    -- References set later
-    local SetHueFunc, SetSatFunc, SetValFunc
-    local previewBox, hexBox, satGrad, valGrad
+    -- UI references (filled during creation)
+    local UI = {}
 
     -- ============================================================
-    -- UpdateColor: MUST be defined before any slider callbacks
+    -- UpdateColor: reads State, updates ALL UI + fires callback
     -- ============================================================
-    local function UpdateColor()
-        local color = Color3.fromHSV(CWHue, CWSat, CWVal)
-        if previewBox then previewBox.BackgroundColor3 = color end
-        if CWCallback then CWCallback(color) end
+    local function UpdateColor(skipCallback)
+        local color = Color3.fromHSV(State.Hue, State.Sat, State.Val)
 
-        if satGrad then
-            satGrad.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromHSV(CWHue, 0, CWVal)),
-                ColorSequenceKeypoint.new(1, Color3.fromHSV(CWHue, 1, CWVal))
-            })
-        end
-        if valGrad then
-            valGrad.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, Color3.fromHSV(CWHue, CWSat, 0)),
-                ColorSequenceKeypoint.new(1, Color3.fromHSV(CWHue, CWSat, 1))
-            })
+        if UI.Preview then
+            UI.Preview.BackgroundColor3 = color
         end
 
-        if hexBox then
+        if UI.HexBox then
             local r = math.floor(color.R * 255)
             local g = math.floor(color.G * 255)
             local b = math.floor(color.B * 255)
-            hexBox.Text = string.format("#%02X%02X%02X", r, g, b)
+            UI.HexBox.Text = string.format("#%02X%02X%02X", r, g, b)
+        end
+
+        if UI.SatGrad then
+            UI.SatGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromHSV(State.Hue, 0, State.Val)),
+                ColorSequenceKeypoint.new(1, Color3.fromHSV(State.Hue, 1, State.Val))
+            })
+        end
+
+        if UI.ValGrad then
+            UI.ValGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromHSV(State.Hue, State.Sat, 0)),
+                ColorSequenceKeypoint.new(1, Color3.fromHSV(State.Hue, State.Sat, 1))
+            })
+        end
+
+        if not skipCallback and State.Callback then
+            State.Callback(color)
         end
     end
 
     -- ============================================================
-    -- MakeSlider
+    -- MakeSlider: creates a slider track + knob
+    -- Returns: gradient, SetValue function
     -- ============================================================
-    local function MakeSlider(y, labelText, initVal, onChange)
+    local function MakeSlider(y, labelText)
         local label = Instance.new("TextLabel")
         label.Size = UDim2.new(0, 100, 0, 14)
         label.Position = UDim2.new(0, 14, 0, y)
@@ -979,7 +992,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
 
         local knob = Instance.new("TextButton")
         knob.Size = UDim2.new(0, 14, 0, 14)
-        knob.Position = UDim2.new(initVal, -7, 0.5, -7)
+        knob.Position = UDim2.new(0, -7, 0.5, -7)
         knob.BackgroundColor3 = Theme.White
         knob.BorderSizePixel = 0
         knob.Text = ""
@@ -996,36 +1009,18 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         knobS.Thickness = 2
         knobS.Parent = knob
 
-        local function Upd(input)
-            local pos = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
-            knob.Position = UDim2.new(pos, -7, 0.5, -7)
-            if onChange then onChange(pos) end
-        end
-
-        knob.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                ActiveSlider = Upd
-            end
-        end)
-
-        track.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
-                ActiveSlider = Upd
-                Upd(input)
-            end
-        end)
-
-        local function SetValue(v)
+        local function SetKnobPos(v)
             knob.Position = UDim2.new(v, -7, 0.5, -7)
         end
 
-        return gradient, SetValue
+        return gradient, SetKnobPos, track, knob
     end
 
     -- ============================================================
-    -- Create sliders — callbacks now properly reference UpdateColor
+    -- Create Hue slider
     -- ============================================================
-    local hueSequence = ColorSequence.new({
+    local hueGrad, SetHuePos, hueTrack, hueKnob = MakeSlider(38, "Hue")
+    hueGrad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
         ColorSequenceKeypoint.new(0.1667, Color3.fromRGB(255, 255, 0)),
         ColorSequenceKeypoint.new(0.3333, Color3.fromRGB(0, 255, 0)),
@@ -1035,22 +1030,18 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0))
     })
 
-    local hueGrad
-    hueGrad, SetHueFunc = MakeSlider(38, "Hue", 0, function(v)
-        CWHue = v
-        UpdateColor()
-    end)
-    hueGrad.Color = hueSequence
+    -- ============================================================
+    -- Create Saturation slider
+    -- ============================================================
+    local satGrad, SetSatPos, satTrack, satKnob = MakeSlider(78, "Saturation")
 
-    satGrad, SetSatFunc = MakeSlider(78, "Saturation", 1, function(v)
-        CWSat = v
-        UpdateColor()
-    end)
+    -- ============================================================
+    -- Create Brightness slider
+    -- ============================================================
+    local valGrad, SetValPos, valTrack, valKnob = MakeSlider(118, "Brightness")
 
-    valGrad, SetValFunc = MakeSlider(118, "Brightness", 1, function(v)
-        CWVal = v
-        UpdateColor()
-    end)
+    UI.SatGrad = satGrad
+    UI.ValGrad = valGrad
 
     -- ============================================================
     -- Preview box
@@ -1066,7 +1057,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     previewLabel.ZIndex = 201
     previewLabel.Parent = CWFrame
 
-    previewBox = Instance.new("Frame")
+    local previewBox = Instance.new("Frame")
     previewBox.Size = UDim2.new(0, 50, 0, 24)
     previewBox.Position = UDim2.new(0, 14, 0, 174)
     previewBox.BackgroundColor3 = Color3.fromHSV(0, 1, 1)
@@ -1083,6 +1074,8 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     previewBoxS.Thickness = 1.5
     previewBoxS.Parent = previewBox
 
+    UI.Preview = previewBox
+
     -- ============================================================
     -- Hex input
     -- ============================================================
@@ -1097,7 +1090,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     hexLabel.ZIndex = 201
     hexLabel.Parent = CWFrame
 
-    hexBox = Instance.new("TextBox")
+    local hexBox = Instance.new("TextBox")
     hexBox.Size = UDim2.new(0, 120, 0, 24)
     hexBox.Position = UDim2.new(0, 80, 0, 174)
     hexBox.BackgroundColor3 = Theme.ElementBG
@@ -1119,10 +1112,65 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     hexBoxS.Thickness = 1
     hexBoxS.Parent = hexBox
 
+    UI.HexBox = hexBox
+
+    -- ============================================================
+    -- Slider drag logic (shared, works for all three sliders)
+    -- ============================================================
+    local function HandleSliderDrag(track, setPos, setState)
+        return function(input)
+            local pos = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+            setPos(pos)
+            setState(pos)
+            UpdateColor()
+        end
+    end
+
+    local hueDrag = HandleSliderDrag(hueTrack, SetHuePos, function(v) State.Hue = v end)
+    local satDrag = HandleSliderDrag(satTrack, SetSatPos, function(v) State.Sat = v end)
+    local valDrag = HandleSliderDrag(valTrack, SetValPos, function(v) State.Val = v end)
+
+    -- Wire up knob drag starts
+    hueKnob.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            State.ActiveSlider = hueDrag
+        end
+    end)
+    satKnob.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            State.ActiveSlider = satDrag
+        end
+    end)
+    valKnob.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            State.ActiveSlider = valDrag
+        end
+    end)
+
+    -- Wire up track clicks
+    hueTrack.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            State.ActiveSlider = hueDrag
+            hueDrag(input)
+        end
+    end)
+    satTrack.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            State.ActiveSlider = satDrag
+            satDrag(input)
+        end
+    end)
+    valTrack.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            State.ActiveSlider = valDrag
+            valDrag(input)
+        end
+    end)
+
     -- ============================================================
     -- Hex → Sliders (bidirectional)
     -- ============================================================
-    hexBox.FocusLost:Connect(function()
+    local function ParseHex()
         local text = hexBox.Text:gsub("#", ""):upper()
         if #text == 3 then
             text = text:sub(1,1):rep(2) .. text:sub(2,2):rep(2) .. text:sub(3,3):rep(2)
@@ -1130,7 +1178,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         if #text ~= 6 then
             hexBoxS.Color = Color3.fromRGB(255, 80, 80)
             task.delay(0.3, function() hexBoxS.Color = Theme.Border end)
-            return
+            return nil
         end
         local r = tonumber(text:sub(1,2), 16)
         local g = tonumber(text:sub(3,4), 16)
@@ -1138,17 +1186,34 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         if not r or not g or not b then
             hexBoxS.Color = Color3.fromRGB(255, 80, 80)
             task.delay(0.3, function() hexBoxS.Color = Theme.Border end)
-            return
+            return nil
         end
-        local color = Color3.fromRGB(r, g, b)
+        return Color3.fromRGB(r, g, b)
+    end
+
+    local function ApplyHexColor()
+        local color = ParseHex()
+        if not color then return end
         local h, s, v = Color3.toHSV(color)
-        CWHue, CWSat, CWVal = h, s, v
-        SetHueFunc(h)
-        SetSatFunc(s)
-        SetValFunc(v)
+        State.Hue, State.Sat, State.Val = h, s, v
+        SetHuePos(h)
+        SetSatPos(s)
+        SetValPos(v)
         UpdateColor()
         hexBoxS.Color = Color3.fromRGB(80, 255, 80)
         task.delay(0.3, function() hexBoxS.Color = Theme.Border end)
+    end
+
+    hexBox.FocusLost:Connect(ApplyHexColor)
+
+    -- Real-time hex typing (debounced)
+    local hexTypingConn = nil
+    hexBox:GetPropertyChangedSignal("Text"):Connect(function()
+        if hexTypingConn then hexTypingConn:Disconnect() end
+        hexTypingConn = task.delay(0.4, function()
+            hexTypingConn = nil
+            ApplyHexColor()
+        end)
     end)
 
     -- ============================================================
@@ -1156,33 +1221,33 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     -- ============================================================
     UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            ActiveSlider = nil
+            State.ActiveSlider = nil
         end
     end)
 
     UserInputService.InputChanged:Connect(function(input)
-        if ActiveSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
-            ActiveSlider(input)
+        if State.ActiveSlider and input.UserInputType == Enum.UserInputType.MouseMovement then
+            State.ActiveSlider(input)
         end
     end)
 
     CWClose.MouseButton1Click:Connect(function()
         CWFrame.Visible = false
-        CWOpen = false
+        State.Open = false
     end)
 
     -- Click outside to close
     UserInputService.InputBegan:Connect(function(input, gp)
         if gp then return end
-        if JustOpened then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 and CWOpen then
+        if State.JustOpened then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 and State.Open then
             local mousePos = UserInputService:GetMouseLocation()
             local framePos = CWFrame.AbsolutePosition
             local frameSize = CWFrame.AbsoluteSize
             if mousePos.X < framePos.X or mousePos.X > framePos.X + frameSize.X or
                mousePos.Y < framePos.Y or mousePos.Y > framePos.Y + frameSize.Y then
                 CWFrame.Visible = false
-                CWOpen = false
+                State.Open = false
             end
         end
     end)
@@ -1190,9 +1255,9 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     -- Escape to close
     UserInputService.InputBegan:Connect(function(input, gp)
         if gp then return end
-        if input.KeyCode == Enum.KeyCode.Escape and CWOpen then
+        if input.KeyCode == Enum.KeyCode.Escape and State.Open then
             CWFrame.Visible = false
-            CWOpen = false
+            State.Open = false
         end
     end)
 
@@ -1202,28 +1267,28 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     local Picker = {}
 
     function Picker:Open(setCallback, setDefaultColor)
-        CWCallback = setCallback
+        State.Callback = setCallback
         if setDefaultColor then
             local h, s, v = Color3.toHSV(setDefaultColor)
-            CWHue, CWSat, CWVal = h, s, v
+            State.Hue, State.Sat, State.Val = h, s, v
         end
-        SetHueFunc(CWHue)
-        SetSatFunc(CWSat)
-        SetValFunc(CWVal)
-        UpdateColor()
+        SetHuePos(State.Hue)
+        SetSatPos(State.Sat)
+        SetValPos(State.Val)
+        UpdateColor(true) -- skip callback on init
         CWFrame.Visible = true
-        CWOpen = true
-        JustOpened = true
-        task.delay(0.15, function() JustOpened = false end)
+        State.Open = true
+        State.JustOpened = true
+        task.delay(0.15, function() State.JustOpened = false end)
     end
 
     function Picker:Close()
         CWFrame.Visible = false
-        CWOpen = false
+        State.Open = false
     end
 
     function Picker:IsOpen()
-        return CWOpen
+        return State.Open
     end
 
     function Picker:GetFrame()

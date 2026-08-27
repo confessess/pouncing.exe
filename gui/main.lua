@@ -180,16 +180,16 @@ function MainGUI.Create(screenGui, moduleManager)
         return row
     end
 
-    MakeESPToggle("Boxes", true, "BoxColor", "Boxes")
+    MakeESPToggle("Boxes", false, "BoxColor", "Boxes")
     MakeESPToggle("3D Boxes", false, nil, "Box3D")
-    MakeESPToggle("Names", true, "NameColor", "Names")
-    MakeESPToggle("Health Bar", true, "HealthColor", "Health")
+    MakeESPToggle("Names", false, "NameColor", "Names")
+    MakeESPToggle("Health Bar", false, "HealthColor", "Health")
     MakeESPToggle("Skeleton", false, "SkeletonColor", "Skeleton")
     MakeESPToggle("Chams", false, "ChamsColor", "Chams")
     MakeESPToggle("Tracers", false, "TracerColor", "Tracers")
     MakeESPToggle("Head Dot", false, "HeadDotColor", "HeadDot")
     MakeESPToggle("Distance", false, "DistanceColor", "Distance")
-    MakeESPToggle("Team Check", true, nil, "TeamCheck")
+    MakeESPToggle("Team Check", false, nil, "TeamCheck")
 
     GUI.CreateSeparator(ECon)
     GUI.CreateSection(ECon, "ESP Settings")
