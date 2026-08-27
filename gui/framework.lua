@@ -917,9 +917,10 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         Callback = nil,
         IsOpen = false,
         JustOpened = false,
-        CanDrag = false,
-        Dragging = nil, -- "hue", "sat", or "val"
+        Dragging = nil,
     }
+
+    local UpdatingHex = false
 
     -- UI references
     local UI = {}
@@ -934,11 +935,13 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
             UI.Preview.BackgroundColor3 = color
         end
 
-        if UI.HexBox then
+        if UI.HexBox and not UpdatingHex then
+            UpdatingHex = true
             local r = math.floor(color.R * 255 + 0.5)
             local g = math.floor(color.G * 255 + 0.5)
             local b = math.floor(color.B * 255 + 0.5)
             UI.HexBox.Text = string.format("#%02X%02X%02X", r, g, b)
+            UpdatingHex = false
         end
 
         if UI.SatGrad then
@@ -1106,7 +1109,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     UI.HexBox = hexBox
 
     -- ============================================================
-    -- Drag logic using RunService.RenderStepped (bulletproof)
+    -- Drag logic using RunService.RenderStepped
     -- ============================================================
     local function GetSliderPos(track)
         local size = track.AbsoluteSize.X
@@ -1115,10 +1118,17 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         return math.clamp((mousePos.X - track.AbsolutePosition.X) / size, 0, 1)
     end
 
+    -- Auto-bump saturation so user can see color changes from white/gray
+    local function EnsureVisibleColor()
+        if State.Sat < 0.05 then
+            State.Sat = 0.5
+            SetSatPos(0.5)
+        end
+    end
+
     local dragConn = nil
 
     local function StartDrag(which)
-        if not State.CanDrag then return end
         State.Dragging = which
         if dragConn then dragConn:Disconnect() end
         dragConn = RunService.RenderStepped:Connect(function()
@@ -1127,6 +1137,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
                 if pos then
                     State.Hue = pos
                     SetHuePos(pos)
+                    EnsureVisibleColor()
                     UpdateColor()
                 end
             elseif State.Dragging == "sat" then
@@ -1210,9 +1221,10 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
 
     hexBox.FocusLost:Connect(ApplyHexColor)
 
-    -- Real-time hex typing
+    -- Real-time hex typing (debounced, ignores self-updates)
     local hexTypingConn = nil
     hexBox:GetPropertyChangedSignal("Text"):Connect(function()
+        if UpdatingHex then return end
         if hexTypingConn then hexTypingConn:Disconnect() end
         hexTypingConn = task.delay(0.5, function()
             hexTypingConn = nil
@@ -1226,7 +1238,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     CWClose.MouseButton1Click:Connect(function()
         CWFrame.Visible = false
         State.IsOpen = false
-        State.CanDrag = false
         EndDrag()
     end)
 
@@ -1241,7 +1252,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
                mousePos.Y < framePos.Y or mousePos.Y > framePos.Y + frameSize.Y then
                 CWFrame.Visible = false
                 State.IsOpen = false
-                State.CanDrag = false
                 EndDrag()
             end
         end
@@ -1252,7 +1262,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         if input.KeyCode == Enum.KeyCode.Escape and State.IsOpen then
             CWFrame.Visible = false
             State.IsOpen = false
-            State.CanDrag = false
             EndDrag()
         end
     end)
@@ -1275,11 +1284,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         CWFrame.Visible = true
         State.IsOpen = true
         State.JustOpened = true
-        State.CanDrag = false
-        -- Allow drag after frame has had time to layout
-        task.delay(0.1, function()
-            State.CanDrag = true
-        end)
         task.delay(0.2, function()
             State.JustOpened = false
         end)
@@ -1288,7 +1292,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     function Picker:Close()
         CWFrame.Visible = false
         State.IsOpen = false
-        State.CanDrag = false
         EndDrag()
     end
 
