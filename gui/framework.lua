@@ -912,6 +912,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     local CWCallback = nil
     local CWOpen = false
     local ActiveSlider = nil
+    local JustOpened = false
 
     -- References set later
     local SetHueFunc, SetSatFunc, SetValFunc
@@ -1173,6 +1174,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     -- Click outside to close
     UserInputService.InputBegan:Connect(function(input, gp)
         if gp then return end
+        if JustOpened then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 and CWOpen then
             local mousePos = UserInputService:GetMouseLocation()
             local framePos = CWFrame.AbsolutePosition
@@ -1211,6 +1213,8 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         UpdateColor()
         CWFrame.Visible = true
         CWOpen = true
+        JustOpened = true
+        task.delay(0.15, function() JustOpened = false end)
     end
 
     function Picker:Close()

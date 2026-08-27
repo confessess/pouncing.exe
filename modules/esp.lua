@@ -95,7 +95,6 @@ local function InitPlayer(player)
     end
     DrawingObjects[player] = {
         Box = Utils.MakeDrawing("Square", {Visible = false, Thickness = ESP.BoxThickness, Color = ESP.Colors.Box, Transparency = 0.9, Filled = false}),
-        BoxO = Utils.MakeDrawing("Square", {Visible = false, Thickness = 3, Color = Color3.fromRGB(0,0,0), Transparency = 0.5, Filled = false}),
         B3D = b3d, B3DO = b3do,
         Name = Utils.MakeDrawing("Text", {Visible = false, Text = player.Name, Size = 13, Center = true, Outline = true, OutlineColor = Color3.fromRGB(0,0,0), Color = ESP.Colors.Name}),
         HB = Utils.MakeDrawing("Square", {Visible = false, Thickness = 1, Filled = true, Color = ESP.Colors.Health}),
@@ -123,7 +122,6 @@ end
 
 local function HideAll(o)
     Utils.SetDrawing(o.Box, "Visible", false)
-    Utils.SetDrawing(o.BoxO, "Visible", false)
     Utils.SetDrawing(o.Name, "Visible", false)
     Utils.SetDrawing(o.Dist, "Visible", false)
     Utils.SetDrawing(o.HB, "Visible", false)
@@ -152,11 +150,11 @@ end
 -- ============================================================
 local function RefreshColors()
     for player, o in pairs(DrawingObjects) do
-        if o.Box then Utils.SetDrawing(o.Box, "Color", ESP.Colors.Box) end
+        if o.Box then Utils.SetDrawing(o.Box, "Color", ESP.Colors.Box); Utils.SetDrawing(o.Box, "Thickness", ESP.BoxThickness) end
         if o.Name then Utils.SetDrawing(o.Name, "Color", ESP.Colors.Name) end
         if o.Dist then Utils.SetDrawing(o.Dist, "Color", ESP.Colors.Distance) end
         if o.Tracer then Utils.SetDrawing(o.Tracer, "Color", ESP.Colors.Tracers) end
-        if o.HeadDot then Utils.SetDrawing(o.HeadDot, "Color", ESP.Colors.HeadDot) end
+        if o.HeadDot then Utils.SetDrawing(o.HeadDot, "Color", ESP.Colors.HeadDot); Utils.SetDrawing(o.HeadDot, "Thickness", ESP.HeadDotThickness) end
         if o.Skel then
             for i = 1, #o.Skel, 2 do
                 if o.Skel[i] then Utils.SetDrawing(o.Skel[i], "Color", ESP.Colors.Skeleton) end
@@ -197,13 +195,10 @@ local function UpdatePlayer(player)
         Utils.SetDrawing(o.Box, "Size", box.Size)
         Utils.SetDrawing(o.Box, "Position", box.TL)
         Utils.SetDrawing(o.Box, "Color", ESP.Colors.Box)
+        Utils.SetDrawing(o.Box, "Thickness", ESP.BoxThickness)
         Utils.SetDrawing(o.Box, "Visible", true)
-        Utils.SetDrawing(o.BoxO, "Size", box.Size)
-        Utils.SetDrawing(o.BoxO, "Position", box.TL)
-        Utils.SetDrawing(o.BoxO, "Visible", true)
     else
         Utils.SetDrawing(o.Box, "Visible", false)
-        Utils.SetDrawing(o.BoxO, "Visible", false)
     end
     if ESP.Boxes and ESP.Box3D and ESP.Enabled then
         local c = Utils.Get3DCorners(char)
