@@ -155,6 +155,7 @@ local function RefreshColors()
         if o.Dist then Utils.SetDrawing(o.Dist, "Color", ESP.Colors.Distance) end
         if o.Tracer then Utils.SetDrawing(o.Tracer, "Color", ESP.Colors.Tracers) end
         if o.HeadDot then Utils.SetDrawing(o.HeadDot, "Color", ESP.Colors.HeadDot); Utils.SetDrawing(o.HeadDot, "Thickness", ESP.HeadDotThickness) end
+        if o.HB then Utils.SetDrawing(o.HB, "Color", ESP.Colors.Health) end
         if o.Skel then
             for i = 1, #o.Skel, 2 do
                 if o.Skel[i] then Utils.SetDrawing(o.Skel[i], "Color", ESP.Colors.Skeleton) end
