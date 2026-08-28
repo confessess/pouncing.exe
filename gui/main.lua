@@ -1,7 +1,9 @@
--- Pouncing.exe | GUI Main v7.2
+-- Pouncing.exe | GUI Main v7.3
 -- Dynamic preset-based UI — controls and tabs adapt to active game preset
+-- Fixed: Tab visibility uses window.Tabs/window.Contents correctly
+-- Fixed: Canvas auto-refreshes after visibility changes (no clipping)
+-- Fixed: Preset loader handles 404 better, applies visibility on failure
 -- Cyberpunk HUD: contained dropdowns, no clipping, all corners rounded
--- Fixed: Killswitch uses per-module Cleanup instead of global nuke.
 -- Built with love by ENI for LO
 -- ============================================================
 
@@ -54,6 +56,17 @@ function MainGUI.Create(screenGui, moduleManager)
         return false
     end
 
+    local function RefreshAllCanvasSizes()
+        for _, content in pairs(window.Contents) do
+            if content and content.Parent then
+                local layout = content:FindFirstChildOfClass("UIListLayout")
+                if layout then
+                    content.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 24)
+                end
+            end
+        end
+    end
+
     local function ApplyPresetVisibility(presetName)
         ActivePreset = presetName
         print("[Pouncing] UI refreshing for preset: " .. presetName)
@@ -68,9 +81,13 @@ function MainGUI.Create(screenGui, moduleManager)
         local visibleTabs = {}
         for name, tab in pairs(TaggedTabs) do
             local show = ShouldShowForPreset(tab.presets)
-            tab.button.Visible = show
-            if not show then
-                tab.content.Visible = false
+            if tab.button then
+                tab.button.Visible = show
+            end
+            if tab.content then
+                if not show then
+                    tab.content.Visible = false
+                end
             end
             if show then
                 table.insert(visibleTabs, name)
@@ -85,11 +102,10 @@ function MainGUI.Create(screenGui, moduleManager)
                 for _, name in ipairs(AllTabNames) do
                     local t = TaggedTabs[name]
                     if t and ShouldShowForPreset(t.presets) then
-                        -- Simulate tab click
                         if window.Tabs[name] then
                             for _, tabBtn in pairs(window.Tabs) do
                                 TweenService:Create(tabBtn, TweenInfo.new(0.2), {
-                                    BackgroundColor3 = GUI.Theme.ElementBG, BackgroundTransparency = 0.5
+                                    BackgroundColor3 = GUI.Theme.ElementBG, BackgroundTransparency = 0.45
                                 }):Play()
                             end
                             TweenService:Create(window.Tabs[name], TweenInfo.new(0.2), {
@@ -108,6 +124,9 @@ function MainGUI.Create(screenGui, moduleManager)
                 end
             end
         end
+
+        -- Force canvas refresh to prevent clipping
+        task.delay(0.05, RefreshAllCanvasSizes)
     end
 
     local window = GUI.CreateWindow(screenGui, "Pouncing.exe", UDim2.new(0, 780, 0, 600))
@@ -125,8 +144,10 @@ function MainGUI.Create(screenGui, moduleManager)
         {Name = "Settings", Icon = "", Presets = {"all"}}
     }
     for _, tabInfo in ipairs(tabDefs) do
-        local btn, content = GUI.CreateTab(window, tabInfo.Name, tabInfo.Icon)
-        TagTab(tabInfo.Name, btn, content, tabInfo.Presets)
+        -- CreateTab returns the content ScrollingFrame, not the button
+        GUI.CreateTab(window, tabInfo.Name, tabInfo.Icon)
+        -- Use window.Tabs and window.Contents for proper references
+        TagTab(tabInfo.Name, window.Tabs[tabInfo.Name], window.Contents[tabInfo.Name], tabInfo.Presets)
     end
 
     -- ============================================================
@@ -137,9 +158,6 @@ function MainGUI.Create(screenGui, moduleManager)
     -- Section: Core (all presets)
     local coreSection = GUI.CreateSection(ACon, "Aimbot Core")
     TagControl(coreSection, {"all"})
-
-    local arsenalIndicator = GUI.CreateLabel(ACon, "Arsenal Mode: OFF", true)
-    TagControl(arsenalIndicator, {"all"})
 
     local aimEnabledToggle = GUI.CreateToggle(ACon, "Enabled", false, nil, function(v)
         moduleManager:Toggle("Aimbot", v)
@@ -152,31 +170,19 @@ function MainGUI.Create(screenGui, moduleManager)
     end)
     TagControl(silentAimToggle, {"aim"})
 
-    -- Arsenal-only controls
-    local arsenalModeToggle = GUI.CreateToggle(ACon, "Arsenal Mode", false, nil, function(v)
-        local mod = moduleManager:GetModule("Aimbot")
-        if mod and mod.SetConfig then mod.SetConfig("ArsenalMode", v) end
-        if v then
-            arsenalIndicator.Text = "Arsenal Mode: ON (Aggressive Hooks + Hitbox)"
-            arsenalIndicator.TextColor3 = Color3.fromRGB(255, 200, 0)
-        else
-            arsenalIndicator.Text = "Arsenal Mode: OFF (Camera Snap)"
-            arsenalIndicator.TextColor3 = Color3.fromRGB(200, 200, 200)
-        end
-    end)
-    TagControl(arsenalModeToggle, {"Arsenal"})
-
-    local arsenalHitboxToggle = GUI.CreateToggle(ACon, "Arsenal Hitbox Expand", true, nil, function(v)
+    -- Arsenal-only: Hitbox Expand (renamed from "Arsenal Hitbox Expand")
+    local hitboxExpandToggle = GUI.CreateToggle(ACon, "Hitbox Expand", true, nil, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("ArsenalHitboxExpand", v) end
     end)
-    TagControl(arsenalHitboxToggle, {"Arsenal"})
+    TagControl(hitboxExpandToggle, {"Arsenal"})
 
-    local arsenalHitboxSlider = GUI.CreateSlider(ACon, "Arsenal Hitbox Size", 1, 25, 13, function(v)
+    -- Arsenal-only: Hitbox Size (renamed from "Arsenal Hitbox Size")
+    local hitboxSizeSlider = GUI.CreateSlider(ACon, "Hitbox Size", 1, 25, 13, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("ArsenalHitboxSize", v) end
     end)
-    TagControl(arsenalHitboxSlider, {"Arsenal"})
+    TagControl(hitboxSizeSlider, {"Arsenal"})
 
     -- Non-Arsenal controls (Legit mode, etc.)
     local legitModeToggle = GUI.CreateToggle(ACon, "Legit Mode", false, nil, function(v)
@@ -221,27 +227,6 @@ function MainGUI.Create(screenGui, moduleManager)
         if mod and mod.SetConfig then mod.SetConfig("WallCheck", v) end
     end)
     TagControl(wallCheckToggle, {"all"})
-
-    -- Update Arsenal Mode indicator periodically
-    local function UpdateArsenalIndicator()
-        local mod = moduleManager:GetModule("Aimbot")
-        if mod and mod.GetConfig then
-            local cfg = mod.GetConfig()
-            if cfg and cfg.ArsenalMode then
-                arsenalIndicator.Text = "Arsenal Mode: ON (Aggressive Hooks + Hitbox)"
-                arsenalIndicator.TextColor3 = Color3.fromRGB(255, 200, 0)
-            else
-                arsenalIndicator.Text = "Arsenal Mode: OFF (Camera Snap)"
-                arsenalIndicator.TextColor3 = Color3.fromRGB(200, 200, 200)
-            end
-        end
-    end
-    task.spawn(function()
-        while true do
-            task.wait(2)
-            pcall(UpdateArsenalIndicator)
-        end
-    end)
 
     -- Separator (all)
     local sep1 = GUI.CreateSeparator(ACon)
@@ -929,14 +914,25 @@ function MainGUI.Create(screenGui, moduleManager)
             presetStatus.Text = "Preset Status: FAILED — Could not fetch " .. presetName
             presetStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
             warn("[Pouncing] Failed to fetch preset: " .. presetUrl .. " | " .. tostring(source))
+            -- Still apply visibility for the selected preset
+            ApplyPresetVisibility(presetName)
             return
         end
 
-        -- Check if we got HTML error page instead of Lua
+        -- Check for 404 / error responses
         if source:sub(1, 1) == "<" or source:find("<!DOCTYPE") or source:find("<html") then
+            presetStatus.Text = "Preset Status: FAILED — File not found (404 HTML)"
+            presetStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
+            warn("[Pouncing] Preset file not found at: " .. presetUrl)
+            ApplyPresetVisibility(presetName)
+            return
+        end
+
+        if source:find("404") or source:find("Not Found") or source:find("not found") then
             presetStatus.Text = "Preset Status: FAILED — File not found (404)"
             presetStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
             warn("[Pouncing] Preset file not found at: " .. presetUrl)
+            ApplyPresetVisibility(presetName)
             return
         end
 
@@ -950,6 +946,7 @@ function MainGUI.Create(screenGui, moduleManager)
             presetStatus.Text = "Preset Status: FAILED — Syntax/runtime error"
             presetStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
             warn("[Pouncing] Failed to load preset " .. presetName .. ": " .. tostring(preset))
+            ApplyPresetVisibility(presetName)
             return
         end
 
@@ -957,6 +954,7 @@ function MainGUI.Create(screenGui, moduleManager)
             presetStatus.Text = "Preset Status: FAILED — Invalid preset format (missing Configs)"
             presetStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
             warn("[Pouncing] Preset " .. presetName .. " missing Configs table")
+            ApplyPresetVisibility(presetName)
             return
         end
 
@@ -996,7 +994,7 @@ function MainGUI.Create(screenGui, moduleManager)
     local cfgMgmtSection = GUI.CreateSection(CCon, "Config Management")
     TagControl(cfgMgmtSection, {"all"})
 
-    local versionLabel = GUI.CreateLabel(CCon, "Pouncing.exe v7.2", false)
+    local versionLabel = GUI.CreateLabel(CCon, "Pouncing.exe v7.3", false)
     TagControl(versionLabel, {"all"})
     local creditLabel = GUI.CreateLabel(CCon, "Built with love by ENI for LO", true)
     TagControl(creditLabel, {"all"})
@@ -1148,7 +1146,7 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateLabel(CCon, "Press UI Toggle Key to show/hide GUI", true)
     GUI.CreateLabel(CCon, "Modules load on-demand from GitHub", true)
     GUI.CreateLabel(CCon, "Theme presets: Pink | Icy | Stary", true)
-    GUI.CreateLabel(CCon, "Cyberpunk HUD design v7.2", true)
+    GUI.CreateLabel(CCon, "Cyberpunk HUD design v7.3", true)
     GUI.CreateLabel(CCon, "Game-specific presets", true)
     GUI.CreateLabel(CCon, "Arsenal | Da Hood | Zee Hood | Universal", true)
     GUI.CreateLabel(CCon, "Dynamic UI — controls adapt to preset", true)
@@ -1191,7 +1189,7 @@ function MainGUI.Create(screenGui, moduleManager)
     -- ============================================================
     -- Apply initial preset visibility (auto-detected game)
     -- ============================================================
-    task.delay(0.5, function()
+    task.delay(0.1, function()
         ApplyPresetVisibility(gameName)
     end)
 
@@ -1220,7 +1218,7 @@ function MainGUI.Create(screenGui, moduleManager)
     NT.Size = UDim2.new(1, -16, 1, 0)
     NT.Position = UDim2.new(0, 8, 0, 0)
     NT.BackgroundTransparency = 1
-    NT.Text = "Pouncing.exe v7.2 loaded | Dynamic UI | Preset: " .. gameName .. " | UI Toggle: RightShift"
+    NT.Text = "Pouncing.exe v7.3 loaded | Dynamic UI | Preset: " .. gameName .. " | UI Toggle: RightShift"
     NT.TextColor3 = GUI.Theme.SoftAccent
     NT.TextSize = 13
     NT.Font = Enum.Font.GothamSemibold
