@@ -65,6 +65,11 @@ function MainGUI.Create(screenGui, moduleManager)
     end
 
     local function ApplyPresetVisibility(presetName)
+        if not presetName then return end
+        if not window then
+            warn("[Pouncing] ApplyPresetVisibility: window not initialized yet")
+            return
+        end
         ActivePreset = presetName
         print("[Pouncing] UI refreshing for preset: " .. presetName)
 

@@ -429,30 +429,34 @@ local function HookRemoteDirect(remote)
         originalInvoke = originalInvoke,
     }
 
-    -- Hook FireServer
-    remote.FireServer = function(self_obj, ...)
-        if not Config.SilentAim or not Config.Enabled then
+    -- Hook FireServer (only for RemoteEvent)
+    if remote:IsA("RemoteEvent") and originalFire then
+        remote.FireServer = function(self_obj, ...)
+            if not Config.SilentAim or not Config.Enabled then
+                return originalFire(self_obj, ...)
+            end
+            local args = {...}
+            local newArgs, modified = ProcessRemoteArgs(args, remoteName)
+            if modified then
+                return originalFire(self_obj, unpack(newArgs))
+            end
             return originalFire(self_obj, ...)
         end
-        local args = {...}
-        local newArgs, modified = ProcessRemoteArgs(args, remoteName)
-        if modified then
-            return originalFire(self_obj, unpack(newArgs))
-        end
-        return originalFire(self_obj, ...)
     end
 
-    -- Hook InvokeServer
-    remote.InvokeServer = function(self_obj, ...)
-        if not Config.SilentAim or not Config.Enabled then
+    -- Hook InvokeServer (only for RemoteFunction)
+    if remote:IsA("RemoteFunction") and originalInvoke then
+        remote.InvokeServer = function(self_obj, ...)
+            if not Config.SilentAim or not Config.Enabled then
+                return originalInvoke(self_obj, ...)
+            end
+            local args = {...}
+            local newArgs, modified = ProcessRemoteArgs(args, remoteName)
+            if modified then
+                return originalInvoke(self_obj, unpack(newArgs))
+            end
             return originalInvoke(self_obj, ...)
         end
-        local args = {...}
-        local newArgs, modified = ProcessRemoteArgs(args, remoteName)
-        if modified then
-            return originalInvoke(self_obj, unpack(newArgs))
-        end
-        return originalInvoke(self_obj, ...)
     end
 end
 
@@ -460,8 +464,12 @@ local function UnhookAllRemotesDirect()
     for remote, hooks in pairs(DirectRemoteHooks) do
         if remote and remote.Parent then
             pcall(function()
-                remote.FireServer = hooks.originalFire
-                remote.InvokeServer = hooks.originalInvoke
+                if remote:IsA("RemoteEvent") and hooks.originalFire then
+                    remote.FireServer = hooks.originalFire
+                end
+                if remote:IsA("RemoteFunction") and hooks.originalInvoke then
+                    remote.InvokeServer = hooks.originalInvoke
+                end
             end)
         end
     end
