@@ -1,5 +1,5 @@
--- Pouncing.exe | GUI Framework v6.0
--- Cyberpunk HUD UI, no clipping, contained star VFX, snow VFX, live themes
+-- Pouncing.exe | GUI Framework v6.1
+-- Cyberpunk HUD UI, no clipping, contained VFX, live themes
 -- Built with love by ENI for LO
 -- ============================================================
 
@@ -273,7 +273,7 @@ function GUI.StopSnowVFX()
 end
 
 -- ============================================================
--- WINDOW CREATION (Cyberpunk HUD — NO CLIPPING)
+-- WINDOW CREATION (Cyberpunk HUD — ALL corners rounded)
 -- ============================================================
 
 function GUI.CreateWindow(parent, title, size)
@@ -359,7 +359,7 @@ function GUI.CreateWindow(parent, title, size)
     MC.CornerRadius = UDim.new(0, 18)
     MC.Parent = MF
 
-    -- Scanline overlay (subtle)
+    -- Scanline overlay
     local scanlines = Instance.new("Frame")
     scanlines.Name = "Scanlines"
     scanlines.Size = UDim2.new(1, 0, 1, 0)
@@ -387,7 +387,7 @@ function GUI.CreateWindow(parent, title, size)
     mainStroke.Parent = MF
     GUI.TrackStatic(mainStroke, "Color", "Border")
 
-    -- Title bar
+    -- Title bar — rounded at top, flat at bottom (seamless with content)
     local TB = Instance.new("Frame")
     TB.Name = "TitleBar"
     TB.Size = UDim2.new(1, 0, 0, 54)
@@ -402,6 +402,7 @@ function GUI.CreateWindow(parent, title, size)
     TBC.CornerRadius = UDim.new(0, 18)
     TBC.Parent = TB
 
+    -- Fill the bottom so title bar connects seamlessly to content
     local TBF = Instance.new("Frame")
     TBF.Name = "TitleBarFill"
     TBF.Size = UDim2.new(1, 0, 0, 20)
@@ -464,7 +465,7 @@ function GUI.CreateWindow(parent, title, size)
     VT.Size = UDim2.new(0, 60, 0, 20)
     VT.Position = UDim2.new(1, -130, 0, 17)
     VT.BackgroundTransparency = 1
-    VT.Text = "v6.0"
+    VT.Text = "v6.1"
     VT.TextColor3 = Theme.SubText
     VT.TextSize = 11
     VT.Font = Enum.Font.Gotham
@@ -553,7 +554,7 @@ function GUI.CreateWindow(parent, title, size)
         end
     end)
 
-    -- Tab container
+    -- Tab container — rounded bottom-left to match main frame
     local TCon = Instance.new("Frame")
     TCon.Name = "TabContainer"
     TCon.Size = UDim2.new(0, 180, 1, -54)
@@ -563,6 +564,11 @@ function GUI.CreateWindow(parent, title, size)
     TCon.BorderSizePixel = 0
     TCon.Parent = MF
     GUI.TrackStatic(TCon, "BackgroundColor3", "TabBG")
+
+    -- Bottom-left corner rounder for tab container
+    local tabCorner = Instance.new("UICorner")
+    tabCorner.CornerRadius = UDim.new(0, 18)
+    tabCorner.Parent = TCon
 
     -- Vertical separator
     local tabSep = Instance.new("Frame")
@@ -588,7 +594,7 @@ function GUI.CreateWindow(parent, title, size)
     StarVFX.ParentFrame = CCon
     SnowVFX.ParentFrame = CCon
 
-    -- Bottom deco line
+    -- Bottom deco — thin horizontal glow line
     local DecoLine = Instance.new("Frame")
     DecoLine.Size = UDim2.new(0, 50, 0, 2)
     DecoLine.Position = UDim2.new(0.5, -25, 1, -22)
@@ -602,6 +608,20 @@ function GUI.CreateWindow(parent, title, size)
     DecoLineC.CornerRadius = UDim.new(1, 0)
     DecoLineC.Parent = DecoLine
 
+    -- Side deco — vertical thin glow line on left edge of tab container
+    local sideLine = Instance.new("Frame")
+    sideLine.Size = UDim2.new(0, 1, 0, 120)
+    sideLine.Position = UDim2.new(0, 8, 0.5, -60)
+    sideLine.BackgroundColor3 = Theme.Primary
+    sideLine.BackgroundTransparency = 0.5
+    sideLine.BorderSizePixel = 0
+    sideLine.Parent = TCon
+    GUI.TrackStatic(sideLine, "BackgroundColor3", "Primary")
+
+    local sideLineC = Instance.new("UICorner")
+    sideLineC.CornerRadius = UDim.new(1, 0)
+    sideLineC.Parent = sideLine
+
     return {
         MainFrame = MF, Container = Container, TitleBar = TB,
         TabContainer = TCon, ContentContainer = CCon,
@@ -610,7 +630,7 @@ function GUI.CreateWindow(parent, title, size)
 end
 
 -- ============================================================
--- TAB CREATION (Cyberpunk HUD style)
+-- TAB CREATION (Cyberpunk HUD — no prefix, sleek deco)
 -- ============================================================
 
 function GUI.CreateTab(window, name, icon)
@@ -623,7 +643,7 @@ function GUI.CreateTab(window, name, icon)
     B.BackgroundColor3 = Theme.ElementBG
     B.BackgroundTransparency = 0.45
     B.BorderSizePixel = 0
-    B.Text = "  " .. (icon or "›") .. "  " .. name
+    B.Text = name
     B.TextColor3 = Theme.SubText
     B.TextSize = 13
     B.Font = Enum.Font.GothamSemibold
@@ -1287,7 +1307,7 @@ function GUI.CreateWarning(parent, text)
 end
 
 -- ============================================================
--- SEPARATOR (Cyberpunk HUD)
+-- SEPARATOR (Cyberpunk HUD — sleeker)
 -- ============================================================
 
 function GUI.CreateSeparator(parent)
@@ -1300,6 +1320,7 @@ function GUI.CreateSeparator(parent)
     F.Parent = parent
     GUI.TrackStatic(F, "BackgroundColor3", "Border")
 
+    -- Center glow dot
     local dot = Instance.new("Frame")
     dot.Size = UDim2.new(0, 6, 0, 6)
     dot.Position = UDim2.new(0.5, -3, 0.5, -3)
@@ -1317,7 +1338,7 @@ function GUI.CreateSeparator(parent)
 end
 
 -- ============================================================
--- SECTION (Cyberpunk HUD)
+-- SECTION (Cyberpunk HUD — no prefix, sleeker)
 -- ============================================================
 
 function GUI.CreateSection(parent, title)
@@ -1327,6 +1348,7 @@ function GUI.CreateSection(parent, title)
     F.BorderSizePixel = 0
     F.Parent = parent
 
+    -- Left neon bar
     local accentBar = Instance.new("Frame")
     accentBar.Size = UDim2.new(0, 3, 0, 18)
     accentBar.Position = UDim2.new(0, 0, 0, 10)
@@ -1357,7 +1379,7 @@ function GUI.CreateSection(parent, title)
 end
 
 -- ============================================================
--- DROPDOWN (Cyberpunk HUD)
+-- DROPDOWN (Cyberpunk HUD — scrolls with parent)
 -- ============================================================
 
 function GUI.CreateDropdown(parent, text, options, default, callback)
@@ -1459,12 +1481,11 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
             dropFrame.BackgroundTransparency = 0.05
             dropFrame.BorderSizePixel = 0
             dropFrame.ZIndex = 100
-            dropFrame.Parent = GUI.ScreenGui or parent:FindFirstAncestorOfClass("ScreenGui")
+            -- Parent to the scrolling frame so it moves with scroll
+            dropFrame.Parent = parent
 
-            task.defer(function()
-                local btnPos = DBtn.AbsolutePosition
-                dropFrame.Position = UDim2.new(0, btnPos.X, 0, btnPos.Y + DBtn.AbsoluteSize.Y + 4)
-            end)
+            -- Position relative to the dropdown button within the scrolling frame
+            dropFrame.Position = UDim2.new(0, DBtn.Position.X.Offset, 0, F.LayoutOrder * 62 + 50)
 
             local dropC = Instance.new("UICorner")
             dropC.CornerRadius = UDim.new(0, 12)
