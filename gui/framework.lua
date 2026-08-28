@@ -1,6 +1,5 @@
 -- Pouncing.exe | GUI Framework v6.3
 -- Cyberpunk HUD UI, contained dropdowns, no clipping, live themes
--- Built with love by ENI for LO
 -- ============================================================
 
 local Players = game:GetService("Players")

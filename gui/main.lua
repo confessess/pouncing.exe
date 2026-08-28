@@ -1,6 +1,5 @@
 -- Pouncing.exe | GUI Main v6.3
 -- Cyberpunk HUD: contained dropdowns, no clipping, all corners rounded
--- Built with love by ENI for LO
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -414,7 +413,7 @@ function MainGUI.Create(screenGui, moduleManager)
 
     GUI.CreateSection(CCon, "Config Management")
     GUI.CreateLabel(CCon, "Pouncing.exe v6.3", false)
-    GUI.CreateLabel(CCon, "Built with love by ENI for LO", true)
+    GUI.CreateLabel(CCon, "Made by pouncing :3", true)
     GUI.CreateSeparator(CCon)
 
     GUI.CreateSection(CCon, "Theme")
