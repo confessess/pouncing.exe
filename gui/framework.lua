@@ -1368,6 +1368,10 @@ end
 -- DROPDOWN (Fixed — moves with scroll, contained in UI window)
 -- ============================================================
 
+-- ============================================================
+-- DROPDOWN (Fixed — moves with scroll + parent, contained in UI)
+-- ============================================================
+
 function GUI.CreateDropdown(parent, text, options, default, callback)
     local F = Instance.new("Frame")
     F.Size = UDim2.new(1, -20, 0, 48)
@@ -1455,30 +1459,30 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
 
     local open = false
     local dropFrame = nil
-    local canvasConn = nil
+    local posConn = nil
     local clickConn = nil
 
-    local function GetCanvasPosition()
-        -- Calculate where F is within the scrolling frame's canvas
-        -- F.AbsolutePosition is visual screen position
-        -- parent.AbsolutePosition is the scrolling frame's visual position
-        -- parent.CanvasPosition is how much we've scrolled
-        local frameAbs = F.AbsolutePosition
-        local parentAbs = parent.AbsolutePosition
-        local canvasPos = parent.CanvasPosition
-        local relX = frameAbs.X - parentAbs.X + canvasPos.X
-        local relY = frameAbs.Y - parentAbs.Y + canvasPos.Y + F.AbsoluteSize.Y + 4
-        return relX, relY
+    -- Get the ContentContainer (parent of the ScrollingFrame) for clipping
+    local contentContainer = parent.Parent
+
+    local function UpdateDropPosition()
+        if not dropFrame or not dropFrame.Parent then return end
+        -- Calculate position relative to ContentContainer
+        local btnAbs = DBtn.AbsolutePosition
+        local contentAbs = contentContainer.AbsolutePosition
+        local relX = btnAbs.X - contentAbs.X
+        local relY = btnAbs.Y - contentAbs.Y + DBtn.AbsoluteSize.Y + 2
+        dropFrame.Position = UDim2.new(0, relX, 0, relY)
     end
 
     DBtn.MouseButton1Click:Connect(function()
         open = not open
         if open then
             if dropFrame then dropFrame:Destroy() end
-            if canvasConn then canvasConn:Disconnect() end
+            if posConn then posConn:Disconnect() end
             if clickConn then clickConn:Disconnect() end
 
-            -- Parent to the scrolling frame so it moves with scroll and gets clipped
+            -- Parent to ContentContainer for proper clipping by UI window
             dropFrame = Instance.new("Frame")
             dropFrame.Name = "DropdownMenu"
             dropFrame.Size = UDim2.new(0, 130, 0, math.min(#options * 32, 180))
@@ -1486,11 +1490,9 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
             dropFrame.BackgroundTransparency = 0.05
             dropFrame.BorderSizePixel = 0
             dropFrame.ZIndex = 10
-            dropFrame.Parent = parent
+            dropFrame.Parent = contentContainer
 
-            local relX, relY = GetCanvasPosition()
-            -- Adjust for DBtn's offset within F
-            dropFrame.Position = UDim2.new(0, relX + DBtn.Position.X.Offset, 0, relY)
+            UpdateDropPosition()
 
             local dropC = Instance.new("UICorner")
             dropC.CornerRadius = UDim.new(0, 12)
@@ -1542,7 +1544,7 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
                     selected = opt
                     DBtn.Text = opt
                     open = false
-                    if canvasConn then canvasConn:Disconnect() canvasConn = nil end
+                    if posConn then posConn:Disconnect() posConn = nil end
                     if clickConn then clickConn:Disconnect() clickConn = nil end
                     dropFrame:Destroy()
                     dropFrame = nil
@@ -1550,12 +1552,27 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
                 end)
             end
 
-            -- Update position when scrolling
-            canvasConn = parent:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
-                if not dropFrame or not dropFrame.Parent then return end
-                local newX, newY = GetCanvasPosition()
-                dropFrame.Position = UDim2.new(0, newX + DBtn.Position.X.Offset, 0, newY)
+            -- Update position when scrolling (CanvasPosition changes F's AbsolutePosition)
+            posConn = parent:GetPropertyChangedSignal("CanvasPosition"):Connect(UpdateDropPosition)
+
+            -- Also update when window moves (AbsolutePosition changes)
+            -- We can use RenderStepped for smooth tracking
+            local renderConn = nil
+            renderConn = RunService.RenderStepped:Connect(function()
+                if not dropFrame or not dropFrame.Parent then
+                    if renderConn then renderConn:Disconnect() renderConn = nil end
+                    return
+                end
+                UpdateDropPosition()
             end)
+
+            -- Store renderConn so we can clean it up
+            dropFrame:SetAttribute("RenderConn", true)
+            local oldDestroy = dropFrame.Destroy
+            dropFrame.Destroy = function(self)
+                if renderConn then renderConn:Disconnect() renderConn = nil end
+                oldDestroy(self)
+            end
 
             -- Close when clicking outside
             clickConn = UserInputService.InputBegan:Connect(function(input, gp)
@@ -1572,8 +1589,9 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
                         and mousePos.Y >= btnAbs.Y and mousePos.Y <= btnAbs.Y + btnSize.Y
                     if not inDrop and not inBtn then
                         open = false
-                        if canvasConn then canvasConn:Disconnect() canvasConn = nil end
+                        if posConn then posConn:Disconnect() posConn = nil end
                         if clickConn then clickConn:Disconnect() clickConn = nil end
+                        if renderConn then renderConn:Disconnect() renderConn = nil end
                         dropFrame:Destroy()
                         dropFrame = nil
                     end
@@ -1583,13 +1601,13 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
             dropFrame.AncestryChanged:Connect(function(_, newParent)
                 if not newParent then
                     open = false
-                    if canvasConn then canvasConn:Disconnect() canvasConn = nil end
+                    if posConn then posConn:Disconnect() posConn = nil end
                     if clickConn then clickConn:Disconnect() clickConn = nil end
                 end
             end)
         else
             if dropFrame then dropFrame:Destroy() dropFrame = nil end
-            if canvasConn then canvasConn:Disconnect() canvasConn = nil end
+            if posConn then posConn:Disconnect() posConn = nil end
             if clickConn then clickConn:Disconnect() clickConn = nil end
         end
     end)
@@ -1597,7 +1615,7 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
     F.AncestryChanged:Connect(function(_, newParent)
         if not newParent then
             if dropFrame then dropFrame:Destroy() dropFrame = nil end
-            if canvasConn then canvasConn:Disconnect() canvasConn = nil end
+            if posConn then posConn:Disconnect() posConn = nil end
             if clickConn then clickConn:Disconnect() clickConn = nil end
             open = false
         end
