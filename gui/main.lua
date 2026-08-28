@@ -423,6 +423,17 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("Hitbox")
         if mod and mod.SetConfig then mod.SetConfig("Comprehensive", v) end
     end)
+    GUI.CreateDropdown(HCon, "Visual Style", {"Transparent", "Outline", "Glow", "Wireframe"}, "Transparent", function(v)
+        local mod = moduleManager:GetModule("Hitbox")
+        if mod and mod.SetConfig then mod.SetConfig("VisualStyle", v) end
+    end)
+    local hitboxColorPicker = GUI.CreateColorPicker(HCon, "Visual Color", Color3.fromRGB(255, 105, 180))
+    local hitboxColorBtn = GUI.CreateButton(HCon, "Set Visual Color", function()
+        hitboxColorPicker:Open(function(c)
+            local mod = moduleManager:GetModule("Hitbox")
+            if mod and mod.SetConfig then mod.SetConfig("VisualColor", c) end
+        end, Color3.fromRGB(255, 105, 180))
+    end)
 
     GUI.CreateSeparator(HCon)
     GUI.CreateSection(HCon, "Expansion Settings")

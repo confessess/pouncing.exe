@@ -1,7 +1,6 @@
--- Pouncing.exe | Hitbox Module v4.0
--- Performance-optimized hitbox expander
--- Comprehensive mode now uses caching + throttled updates
--- Robust TeamCheck with multiple fallback methods
+-- Pouncing.exe | Hitbox Module v5.0
+-- Overlay-based hitbox expansion — original parts NEVER modified
+-- No physics desync, no freezing, smooth visuals
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -20,41 +19,25 @@ local Config = {
     LimbSize = 2,
     MaxDistance = 2000,
     Comprehensive = false,
-    UpdateRate = 3, -- frames between updates (higher = less lag)
+    UpdateRate = 3,
+    VisualStyle = "Transparent", -- "Transparent", "Outline", "Glow", "Wireframe"
+    VisualColor = Color3.fromRGB(255, 105, 180),
 
     -- Internal
-    OriginalSizes = {},
+    OverlayMap = {}, -- player -> {partName -> overlayPart}
     Connections = {},
     CharacterMap = {},
-    PartCache = {}, -- character -> {parts} cache
     FrameCounter = 0,
 }
 
 -- ============================================================
--- Team Detection (multiple fallbacks)
+-- Team Detection
 -- ============================================================
 
 local function IsTeammate(player)
     if player == LocalPlayer then return true end
-
-    -- Method 1: Team object comparison
-    if LocalPlayer.Team and player.Team then
-        if LocalPlayer.Team == player.Team then return true end
-    end
-
-    -- Method 2: TeamColor comparison
-    if LocalPlayer.TeamColor and player.TeamColor then
-        if LocalPlayer.TeamColor == player.TeamColor then return true end
-    end
-
-    -- Method 3: Check if both are in the same team group
-    if LocalPlayer:FindFirstChild("Team") and player:FindFirstChild("Team") then
-        local lt = LocalPlayer:FindFirstChild("Team")
-        local pt = player:FindFirstChild("Team")
-        if lt.Value and pt.Value and lt.Value == pt.Value then return true end
-    end
-
-    -- Method 4: Leaderstats team check (some games store team name there)
+    if LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team then return true end
+    if LocalPlayer.TeamColor and player.TeamColor and LocalPlayer.TeamColor == player.TeamColor then return true end
     local myStats = LocalPlayer:FindFirstChild("leaderstats")
     local theirStats = player:FindFirstChild("leaderstats")
     if myStats and theirStats then
@@ -62,21 +45,12 @@ local function IsTeammate(player)
         local theirTeam = theirStats:FindFirstChild("Team") or theirStats:FindFirstChild("team")
         if myTeam and theirTeam and myTeam.Value == theirTeam.Value then return true end
     end
-
     return false
 end
 
 -- ============================================================
--- Part validation
+-- Helpers
 -- ============================================================
-
-local function IsValidPart(part)
-    if not part then return false end
-    if typeof(part) ~= "Instance" then return false end
-    if not part:IsA("BasePart") then return false end
-    local s = pcall(function() return part.Size end)
-    return s
-end
 
 local function GetDistance(pos)
     local cam = workspace.CurrentCamera
@@ -85,53 +59,35 @@ local function GetDistance(pos)
 end
 
 -- ============================================================
--- Part discovery with caching
+-- Part discovery
 -- ============================================================
 
 local function GetAllCharacterParts(character)
-    local cached = Config.PartCache[character]
-    if cached then
-        -- Verify cache is still valid (parts still exist)
-        local valid = true
-        for i = 1, math.min(3, #cached) do
-            if not cached[i] or not cached[i].Parent then
-                valid = false
-                break
-            end
-        end
-        if valid then return cached end
-    end
-
     local parts = {}
     for _, child in pairs(character:GetDescendants()) do
         if child:IsA("BasePart") then
-            -- Skip accessories, tools, effects
             local parent = child.Parent
             local parentName = parent and parent.Name or ""
             local isAccessory = parentName:match("Accessory") or parentName:match("Hat") or parentName:match("Gear")
-            local isTool = parentName:match("Tool") or child.Name:match("Handle") and parent and parent:IsA("Tool")
+            local isTool = parentName:match("Tool") or (child.Name:match("Handle") and parent and parent:IsA("Tool"))
             local isEffect = child.Name:match("Trail") or child.Name:match("Particle") or child.Name:match("Beam")
-
             if not isAccessory and not isTool and not isEffect then
                 table.insert(parts, child)
             end
         end
     end
-
-    Config.PartCache[character] = parts
     return parts
 end
 
 local function GetTargetParts(character)
     local parts = {}
-
     local head = character:FindFirstChild("Head")
-    if head and IsValidPart(head) then parts.Head = head end
+    if head and head:IsA("BasePart") then parts.Head = head end
 
     local torsoNames = {"HumanoidRootPart", "UpperTorso", "Torso", "LowerTorso", "Body"}
     for _, name in ipairs(torsoNames) do
         local part = character:FindFirstChild(name)
-        if part and IsValidPart(part) then
+        if part and part:IsA("BasePart") then
             parts.Torso = part
             break
         end
@@ -148,7 +104,7 @@ local function GetTargetParts(character)
         parts.Limbs = {}
         for _, name in ipairs(limbNames) do
             local part = character:FindFirstChild(name)
-            if part and IsValidPart(part) then
+            if part and part:IsA("BasePart") then
                 table.insert(parts.Limbs, part)
             end
         end
@@ -158,145 +114,206 @@ local function GetTargetParts(character)
 end
 
 -- ============================================================
--- Size save / restore
+-- Overlay creation & management
 -- ============================================================
 
-local function SaveOriginal(part)
-    if not IsValidPart(part) then return end
-    if Config.OriginalSizes[part] then return end
-    local ok, size = pcall(function() return part.Size end)
-    if not ok then return end
-    local ok2, trans = pcall(function() return part.Transparency end)
-    if not ok2 then trans = 0 end
-    local ok3, collide = pcall(function() return part.CanCollide end)
-    if not ok3 then collide = true end
-    local ok4, massless = pcall(function() return part.Massless end)
-    if not ok4 then massless = false end
+local function CreateOverlay(originalPart, multiplier)
+    if not originalPart or not originalPart:IsA("BasePart") then return nil end
+    if not originalPart.Parent then return nil end
 
-    Config.OriginalSizes[part] = {
-        Size = size,
-        Transparency = trans,
-        CanCollide = collide,
-        Massless = massless,
-    }
+    multiplier = math.clamp(multiplier, 1, 25)
+
+    local overlay = Instance.new("Part")
+    overlay.Name = "Pouncing_Hitbox_" .. originalPart.Name
+    overlay.Size = originalPart.Size * multiplier
+    overlay.CFrame = originalPart.CFrame
+    overlay.Anchored = false
+    overlay.CanCollide = false
+    overlay.Massless = true
+    overlay.CastShadow = false
+    overlay.Parent = originalPart.Parent
+
+    -- Weld to original part
+    local weld = Instance.new("Weld")
+    weld.Part0 = originalPart
+    weld.Part1 = overlay
+    weld.C0 = CFrame.new()
+    weld.C1 = CFrame.new()
+    weld.Parent = overlay
+
+    -- Visual styling
+    if Config.VisualStyle == "Transparent" then
+        overlay.Transparency = Config.ShowExpanded and math.clamp(Config.Transparency, 0, 1) or 1
+        overlay.Material = Enum.Material.ForceField
+        overlay.Color = Config.VisualColor
+    elseif Config.VisualStyle == "Outline" then
+        overlay.Transparency = 1
+        overlay.Material = Enum.Material.SmoothPlastic
+        overlay.Color = Config.VisualColor
+        local hl = Instance.new("SelectionBox")
+        hl.Name = "Pouncing_Outline"
+        hl.Adornee = overlay
+        hl.Color3 = Config.VisualColor
+        hl.LineThickness = 0.03
+        hl.Parent = overlay
+    elseif Config.VisualStyle == "Glow" then
+        overlay.Transparency = 0.7
+        overlay.Material = Enum.Material.Neon
+        overlay.Color = Config.VisualColor
+    elseif Config.VisualStyle == "Wireframe" then
+        overlay.Transparency = 1
+        local hl = Instance.new("SelectionBox")
+        hl.Name = "Pouncing_Outline"
+        hl.Adornee = overlay
+        hl.Color3 = Config.VisualColor
+        hl.LineThickness = 0.02
+        hl.Parent = overlay
+    end
+
+    return overlay
 end
 
-local function RestorePart(part)
-    if not IsValidPart(part) then return end
-    local orig = Config.OriginalSizes[part]
-    if not orig then return end
-    pcall(function()
-        part.Size = orig.Size
-        part.Transparency = orig.Transparency
-        part.CanCollide = orig.CanCollide
-        part.Massless = orig.Massless
-    end)
-    Config.OriginalSizes[part] = nil
-end
+local function UpdateOverlayVisual(overlay)
+    if not overlay then return end
 
-local function ClearCharacter(character)
-    Config.PartCache[character] = nil
-    for part, _ in pairs(Config.OriginalSizes) do
-        if typeof(part) == "Instance" then
-            local ok, parent = pcall(function() return part.Parent end)
-            if ok and parent == character then
-                Config.OriginalSizes[part] = nil
-            end
+    if Config.VisualStyle == "Transparent" then
+        overlay.Transparency = Config.ShowExpanded and math.clamp(Config.Transparency, 0, 1) or 1
+        overlay.Material = Enum.Material.ForceField
+        overlay.Color = Config.VisualColor
+    elseif Config.VisualStyle == "Outline" then
+        overlay.Transparency = 1
+        local hl = overlay:FindFirstChild("Pouncing_Outline")
+        if hl then
+            hl.Color3 = Config.VisualColor
+            hl.Visible = Config.ShowExpanded
+        end
+    elseif Config.VisualStyle == "Glow" then
+        overlay.Transparency = Config.ShowExpanded and 0.7 or 1
+        overlay.Material = Enum.Material.Neon
+        overlay.Color = Config.VisualColor
+    elseif Config.VisualStyle == "Wireframe" then
+        overlay.Transparency = 1
+        local hl = overlay:FindFirstChild("Pouncing_Outline")
+        if hl then
+            hl.Color3 = Config.VisualColor
+            hl.Visible = Config.ShowExpanded
         end
     end
 end
 
--- ============================================================
--- Expansion (optimized - skip if already expanded)
--- ============================================================
-
-local ExpandedParts = {} -- part -> true (tracks which parts we've already expanded)
-
-local function ExpandPart(part, multiplier)
-    if not IsValidPart(part) then return end
-
-    -- Skip if already expanded with same multiplier (approximate check)
-    if ExpandedParts[part] then return end
-
-    SaveOriginal(part)
-    local orig = Config.OriginalSizes[part]
-    if not orig then return end
-
-    multiplier = math.clamp(multiplier, 1, 25)
-    local newSize = orig.Size * multiplier
-
-    pcall(function()
-        part.Size = newSize
-        part.Massless = true
-        part.CanCollide = false
-        if Config.ShowExpanded then
-            part.Transparency = math.clamp(Config.Transparency, 0, 1)
-        else
-            part.Transparency = orig.Transparency
-        end
-    end)
-
-    ExpandedParts[part] = true
+local function DestroyOverlay(overlay)
+    if overlay then
+        pcall(function() overlay:Destroy() end)
+    end
 end
+
+local function ClearPlayerOverlays(player)
+    local overlays = Config.OverlayMap[player]
+    if not overlays then return end
+    for _, overlay in pairs(overlays) do
+        DestroyOverlay(overlay)
+    end
+    Config.OverlayMap[player] = nil
+end
+
+-- ============================================================
+-- Update player
+-- ============================================================
 
 local function UpdatePlayer(player)
     if player == LocalPlayer then return end
 
     -- TEAM CHECK
     if Config.TeamCheck and IsTeammate(player) then
-        -- Restore any expanded parts for this teammate
-        if player.Character then
-            local parts = GetAllCharacterParts(player.Character)
-            for _, part in ipairs(parts) do
-                if ExpandedParts[part] then
-                    RestorePart(part)
-                    ExpandedParts[part] = nil
-                end
-            end
-        end
+        ClearPlayerOverlays(player)
         return
     end
 
     local character = player.Character
-    if not character then return end
+    if not character then
+        ClearPlayerOverlays(player)
+        return
+    end
+
     local hum = character:FindFirstChildOfClass("Humanoid")
-    if not hum or hum.Health <= 0 then return end
+    if not hum or hum.Health <= 0 then
+        ClearPlayerOverlays(player)
+        return
+    end
 
     local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
     if root then
         local dist = GetDistance(root.Position)
         if dist > Config.MaxDistance then
-            -- Restore parts for out-of-range players
-            local parts = GetAllCharacterParts(character)
-            for _, part in ipairs(parts) do
-                if ExpandedParts[part] then
-                    RestorePart(part)
-                    ExpandedParts[part] = nil
-                end
-            end
+            ClearPlayerOverlays(player)
             return
         end
+    end
+
+    if not Config.OverlayMap[player] then
+        Config.OverlayMap[player] = {}
+    end
+    local overlays = Config.OverlayMap[player]
+
+    local function EnsureOverlay(originalPart, multiplier)
+        if not originalPart or not originalPart:IsA("BasePart") then return end
+        local key = originalPart
+        if overlays[key] and overlays[key].Parent then
+            -- Update visual only
+            UpdateOverlayVisual(overlays[key])
+            return
+        end
+        -- Create new overlay
+        if overlays[key] then
+            DestroyOverlay(overlays[key])
+        end
+        overlays[key] = CreateOverlay(originalPart, multiplier)
     end
 
     if Config.Comprehensive then
         local parts = GetAllCharacterParts(character)
         for _, part in ipairs(parts) do
-            ExpandPart(part, Config.HeadSize)
+            EnsureOverlay(part, Config.HeadSize)
+        end
+        -- Clean up overlays for parts that no longer exist
+        for key, overlay in pairs(overlays) do
+            if typeof(key) == "Instance" then
+                local ok, parent = pcall(function() return key.Parent end)
+                if not ok or not parent or parent ~= character then
+                    DestroyOverlay(overlay)
+                    overlays[key] = nil
+                end
+            end
         end
     else
         local parts = GetTargetParts(character)
-        if parts.Head then ExpandPart(parts.Head, Config.HeadSize) end
-        if parts.Torso then ExpandPart(parts.Torso, Config.TorsoSize) end
+        if parts.Head then EnsureOverlay(parts.Head, Config.HeadSize) end
+        if parts.Torso then EnsureOverlay(parts.Torso, Config.TorsoSize) end
         if parts.Limbs then
             for _, limb in ipairs(parts.Limbs) do
-                ExpandPart(limb, Config.LimbSize)
+                EnsureOverlay(limb, Config.LimbSize)
+            end
+        end
+        -- Clean up old overlays
+        local validKeys = {}
+        if parts.Head then validKeys[parts.Head] = true end
+        if parts.Torso then validKeys[parts.Torso] = true end
+        if parts.Limbs then
+            for _, limb in ipairs(parts.Limbs) do
+                validKeys[limb] = true
+            end
+        end
+        for key, overlay in pairs(overlays) do
+            if not validKeys[key] then
+                DestroyOverlay(overlay)
+                overlays[key] = nil
             end
         end
     end
 end
 
 -- ============================================================
--- Render loop (throttled)
+-- Render loop
 -- ============================================================
 
 local RenderConnection = nil
@@ -318,18 +335,7 @@ end
 
 local function OnCharacterAdded(player, character)
     Config.CharacterMap[player] = character
-    Config.PartCache[character] = nil
-
-    -- Clear expanded tracking for old parts
-    for part, _ in pairs(ExpandedParts) do
-        if typeof(part) == "Instance" then
-            local ok, parent = pcall(function() return part.Parent end)
-            if ok and parent == character then
-                ExpandedParts[part] = nil
-            end
-        end
-    end
-
+    ClearPlayerOverlays(player)
     task.delay(0.1, function()
         if Config.Enabled then
             pcall(function() UpdatePlayer(player) end)
@@ -338,18 +344,9 @@ local function OnCharacterAdded(player, character)
 end
 
 local function OnCharacterRemoving(player, character)
-    ClearCharacter(character)
+    ClearPlayerOverlays(player)
     if Config.CharacterMap[player] == character then
         Config.CharacterMap[player] = nil
-    end
-    -- Clear expanded tracking
-    for part, _ in pairs(ExpandedParts) do
-        if typeof(part) == "Instance" then
-            local ok, parent = pcall(function() return part.Parent end)
-            if ok and parent == character then
-                ExpandedParts[part] = nil
-            end
-        end
     end
 end
 
@@ -382,9 +379,7 @@ local function UnhookPlayer(player)
         if conns.Removing then pcall(function() conns.Removing:Disconnect() end) end
         Config.Connections[player] = nil
     end
-    if player.Character then
-        ClearCharacter(player.Character)
-    end
+    ClearPlayerOverlays(player)
     Config.CharacterMap[player] = nil
 end
 
@@ -428,44 +423,66 @@ function Module.Disable()
         RenderConnection:Disconnect()
         RenderConnection = nil
     end
-    for part, _ in pairs(Config.OriginalSizes) do
-        pcall(function() RestorePart(part) end)
+    -- Destroy ALL overlays
+    for player, overlays in pairs(Config.OverlayMap) do
+        for _, overlay in pairs(overlays) do
+            DestroyOverlay(overlay)
+        end
     end
-    Config.OriginalSizes = {}
-    ExpandedParts = {}
-    Config.PartCache = {}
+    Config.OverlayMap = {}
 end
 
 function Module.SetConfig(key, value)
     if key == "TeamCheck" then 
         Config.TeamCheck = value
-        -- Immediately restore teammates if toggled on
         if value then
             for _, player in pairs(Players:GetPlayers()) do
-                if player ~= LocalPlayer and IsTeammate(player) and player.Character then
-                    local parts = GetAllCharacterParts(player.Character)
-                    for _, part in ipairs(parts) do
-                        if ExpandedParts[part] then
-                            RestorePart(part)
-                            ExpandedParts[part] = nil
-                        end
-                    end
+                if player ~= LocalPlayer and IsTeammate(player) then
+                    ClearPlayerOverlays(player)
                 end
             end
         end
-    elseif key == "ShowExpanded" then Config.ShowExpanded = value
+    elseif key == "ShowExpanded" then 
+        Config.ShowExpanded = value
+        -- Update all existing overlays
+        for _, overlays in pairs(Config.OverlayMap) do
+            for _, overlay in pairs(overlays) do
+                UpdateOverlayVisual(overlay)
+            end
+        end
     elseif key == "HeadSize" then Config.HeadSize = math.clamp(value, 1, 25)
     elseif key == "TorsoSize" then Config.TorsoSize = math.clamp(value, 1, 25)
-    elseif key == "Transparency" then Config.Transparency = math.clamp(value, 0, 1)
+    elseif key == "Transparency" then 
+        Config.Transparency = math.clamp(value, 0, 1)
+        for _, overlays in pairs(Config.OverlayMap) do
+            for _, overlay in pairs(overlays) do
+                UpdateOverlayVisual(overlay)
+            end
+        end
     elseif key == "ExpandLimbs" then Config.ExpandLimbs = value
     elseif key == "LimbSize" then Config.LimbSize = math.clamp(value, 1, 25)
     elseif key == "MaxDistance" then Config.MaxDistance = value
     elseif key == "Comprehensive" then 
         Config.Comprehensive = value
-        -- Clear cache when switching modes
-        Config.PartCache = {}
-        ExpandedParts = {}
+        -- Clear and rebuild
+        for player, _ in pairs(Config.OverlayMap) do
+            ClearPlayerOverlays(player)
+        end
     elseif key == "UpdateRate" then Config.UpdateRate = math.clamp(value, 1, 10)
+    elseif key == "VisualStyle" then 
+        Config.VisualStyle = value
+        for _, overlays in pairs(Config.OverlayMap) do
+            for _, overlay in pairs(overlays) do
+                UpdateOverlayVisual(overlay)
+            end
+        end
+    elseif key == "VisualColor" then 
+        Config.VisualColor = value
+        for _, overlays in pairs(Config.OverlayMap) do
+            for _, overlay in pairs(overlays) do
+                UpdateOverlayVisual(overlay)
+            end
+        end
     end
 end
 
@@ -485,6 +502,8 @@ function Module.ResetConfig()
     Config.MaxDistance = 2000
     Config.Comprehensive = false
     Config.UpdateRate = 3
+    Config.VisualStyle = "Transparent"
+    Config.VisualColor = Color3.fromRGB(255, 105, 180)
 end
 
 function Module.Cleanup()
@@ -502,8 +521,6 @@ function Module.Cleanup()
     end
     Config.Connections = {}
     Config.CharacterMap = {}
-    Config.PartCache = {}
-    ExpandedParts = {}
 end
 
 return Module
