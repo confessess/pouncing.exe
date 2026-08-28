@@ -311,6 +311,24 @@ function MainGUI.Create(screenGui, moduleManager)
     end)
     TagControl(stickyTargetToggle, {"all"})
 
+    local sep5 = GUI.CreateSeparator(ACon)
+    TagControl(sep5, {"all"})
+
+    local debugSection = GUI.CreateSection(ACon, "Debug")
+    TagControl(debugSection, {"all"})
+
+    local debugModeToggle = GUI.CreateToggle(ACon, "Debug Mode", false, nil, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("DebugMode", v) end
+    end)
+    TagControl(debugModeToggle, {"all"})
+
+    local remoteSpyToggle = GUI.CreateToggle(ACon, "Remote Spy", false, nil, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("RemoteSpy", v) end
+    end)
+    TagControl(remoteSpyToggle, {"all"})
+
     -- ============================================================
     -- ESP TAB
     -- ============================================================

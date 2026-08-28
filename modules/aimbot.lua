@@ -1,8 +1,7 @@
--- Pouncing.exe | Aimbot Module v7.4
--- Silent Aim = Bullet Redirect. No separate toggle.
--- Hooks: Raycast, FindPartOnRay (pre), __namecall remote args
+-- Pouncing.exe | Aimbot Module v7.5
+-- Silent Aim = Bullet Redirect via Raycast + FindPartOnRay + __namecall remote replacement
+-- Added: RemoteSpy for debugging + aggressive remote arg replacement
 -- Hitbox: Malrand-style continuous expansion
--- Removed dead __index hooks — Instance properties can't be hooked via Lua metatables
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -38,7 +37,7 @@ local Config = {
     LegitThreshold = 30,
     SnapDuration = 2,
 
-    -- Arsenal Mode (for preset compatibility)
+    -- Arsenal Mode (legacy flag, no functional gating)
     ArsenalMode = false,
 
     -- Hitbox Expansion — Malrand exact
@@ -52,6 +51,7 @@ local Config = {
 
     -- Debug
     DebugMode = false,
+    RemoteSpy = false,
 
     -- Internal
     CurrentTarget = nil,
@@ -165,7 +165,6 @@ local CachedTargetTime = 0
 local function GetSilentAimTarget()
     if not Config.SilentAim or not Config.Enabled then return nil end
 
-    -- Cache target for 1 frame to avoid recomputing in every hook
     if CachedTarget and (tick() - CachedTargetTime) < 0.016 then
         return CachedTarget
     end
@@ -297,11 +296,25 @@ local function RedirectFindPartOnRayHandler(ray, methodName, ...)
     return Ray.new(ray.Origin, target.Position - ray.Origin)
 end
 
--- __namecall deep scan for remotes
-local function IsHitPosition(pos)
-    local camPos = Camera.CFrame.Position
-    local d = (pos - camPos).Magnitude
-    return d > 0.5 and d < Config.MaxDistance * 3
+-- ============================================================
+-- __namecall REMOTE REPLACEMENT
+-- ============================================================
+
+local function IsLikelyHitRemote(remoteName)
+    local n = remoteName:lower()
+    return n:find("hit") or n:find("damage") or n:find("bullet") or n:find("fire") 
+        or n:find("shoot") or n:find("atk") or n:find("attack") or n:find("dmg")
+        or n:find("ray") or n:find("cast") or n:find("proj")
+end
+
+local function IsEnemyPart(part)
+    if not part or not part:IsA("BasePart") then return false end
+    local model = part:FindFirstAncestorOfClass("Model")
+    if not model or model == LocalPlayer.Character then return false end
+    local plr = Players:GetPlayerFromCharacter(model)
+    if not plr then return false end
+    if Config.TeamCheck and IsTeammate(plr) then return false end
+    return true
 end
 
 local function DeepScanAndReplace(t, targetPos, targetPart)
@@ -312,12 +325,15 @@ local function DeepScanAndReplace(t, targetPos, targetPart)
         local vt = typeof(v)
 
         if vt == "Vector3" then
-            if IsHitPosition(v) then
+            -- Replace ANY Vector3 that could be a hit position (within reasonable range)
+            local dist = (v - Camera.CFrame.Position).Magnitude
+            if dist > 0.5 and dist < Config.MaxDistance * 3 then
                 t[k] = targetPos
                 modified = true
             end
         elseif vt == "CFrame" then
-            if IsHitPosition(v.Position) then
+            local dist = (v.Position - Camera.CFrame.Position).Magnitude
+            if dist > 0.5 and dist < Config.MaxDistance * 3 then
                 t[k] = CFrame.new(targetPos)
                 modified = true
             end
@@ -325,8 +341,7 @@ local function DeepScanAndReplace(t, targetPos, targetPart)
             t[k] = Ray.new(v.Origin, targetPos - v.Origin)
             modified = true
         elseif vt == "Instance" and v:IsA("BasePart") then
-            local vm = v:FindFirstAncestorOfClass("Model")
-            if vm and vm ~= LocalPlayer.Character then
+            if IsEnemyPart(v) then
                 t[k] = targetPart
                 modified = true
             end
@@ -335,7 +350,8 @@ local function DeepScanAndReplace(t, targetPos, targetPart)
                 modified = true
             end
         elseif vt == "string" then
-            if v:lower():match("torso") or v:lower():match("body") or v:lower():match("limb") or v:lower():match("arm") or v:lower():match("leg") or v:lower():match("head") then
+            if v:lower():match("torso") or v:lower():match("body") or v:lower():match("limb") 
+               or v:lower():match("arm") or v:lower():match("leg") or v:lower():match("head") then
                 t[k] = targetPart.Name
                 modified = true
             end
@@ -349,16 +365,38 @@ local function RedirectNamecallHandler(args, method, self_obj)
     if not ShouldRedirect() then return args, false end
     if method ~= "FireServer" and method ~= "InvokeServer" then return args, false end
 
-    -- Only process RemoteEvent and RemoteFunction
     local objType = typeof(self_obj)
     if objType ~= "Instance" then return args, false end
     if not (self_obj:IsA("RemoteEvent") or self_obj:IsA("RemoteFunction")) then return args, false end
 
+    local remoteName = self_obj.Name
     local target = GetSilentAimTarget()
     if not target or not target.Part then return args, false end
 
     local aimPos = target.Position
     local modified = false
+    local isHitRemote = IsLikelyHitRemote(remoteName)
+
+    -- REMOTE SPY: Log all remotes when enabled
+    if Config.RemoteSpy then
+        local argSummary = {}
+        for i = 1, math.min(#args, 5) do
+            local a = args[i]
+            local t = typeof(a)
+            if t == "Vector3" then
+                table.insert(argSummary, "V3(" .. tostring(math.floor(a.X)) .. "," .. tostring(math.floor(a.Y)) .. "," .. tostring(math.floor(a.Z)) .. ")")
+            elseif t == "CFrame" then
+                table.insert(argSummary, "CF")
+            elseif t == "Instance" then
+                table.insert(argSummary, a.Name .. "(" .. a.ClassName .. ")")
+            elseif t == "table" then
+                table.insert(argSummary, "table[" .. tostring(#a) .. "]")
+            else
+                table.insert(argSummary, t .. ":" .. tostring(a):sub(1, 20))
+            end
+        end
+        print("[RemoteSpy] " .. remoteName .. ":" .. method .. " | " .. table.concat(argSummary, " | "))
+    end
 
     for i = 1, #args do
         local arg = args[i]
@@ -366,9 +404,18 @@ local function RedirectNamecallHandler(args, method, self_obj)
 
         if argType == "Vector3" then
             local dist = (arg - Camera.CFrame.Position).Magnitude
-            if dist > 0.5 and dist < Config.MaxDistance * 3 then
-                args[i] = aimPos
-                modified = true
+            -- For hit remotes: replace ANY Vector3 within max distance
+            -- For other remotes: only replace if it looks like a hit position (within range)
+            if isHitRemote then
+                if dist > 0.5 and dist < Config.MaxDistance * 3 then
+                    args[i] = aimPos
+                    modified = true
+                end
+            else
+                if dist > 0.5 and dist < Config.MaxDistance * 3 then
+                    args[i] = aimPos
+                    modified = true
+                end
             end
         elseif argType == "CFrame" then
             local dist = (arg.Position - Camera.CFrame.Position).Magnitude
@@ -380,20 +427,17 @@ local function RedirectNamecallHandler(args, method, self_obj)
             args[i] = Ray.new(arg.Origin, aimPos - arg.Origin)
             modified = true
         elseif argType == "Instance" and arg:IsA("BasePart") then
-            local model = arg:FindFirstAncestorOfClass("Model")
-            if model and model ~= LocalPlayer.Character then
-                local plr = Players:GetPlayerFromCharacter(model)
-                if plr then
-                    args[i] = target.Part
-                    modified = true
-                end
+            if IsEnemyPart(arg) then
+                args[i] = target.Part
+                modified = true
             end
         elseif argType == "table" then
             if DeepScanAndReplace(arg, aimPos, target.Part) then
                 modified = true
             end
         elseif argType == "string" then
-            if arg:lower():match("torso") or arg:lower():match("body") or arg:lower():match("limb") or arg:lower():match("arm") or arg:lower():match("leg") or arg:lower():match("head") then
+            if arg:lower():match("torso") or arg:lower():match("body") or arg:lower():match("limb") 
+               or arg:lower():match("arm") or arg:lower():match("leg") or arg:lower():match("head") then
                 args[i] = target.Part.Name
                 modified = true
             end
@@ -401,7 +445,7 @@ local function RedirectNamecallHandler(args, method, self_obj)
     end
 
     if modified and Config.DebugMode then
-        print("[Pouncing Aimbot] Remote " .. self_obj.Name .. ":" .. method .. " redirected to " .. target.Player.Name)
+        print("[Pouncing Aimbot] Remote " .. remoteName .. ":" .. method .. " redirected to " .. target.Player.Name)
     end
 
     return args, modified
@@ -808,7 +852,6 @@ end
 function Module.Enable()
     Config.Enabled = true
     if Config.SilentAim and Utils and Utils.HookManager then
-        -- Working hooks: Raycast, FindPartOnRay (pre), __namecall remotes
         Utils.HookManager:RegisterRaycastHandler("Aimbot", RedirectRaycastHandler, 10)
         Utils.HookManager:RegisterFindPartOnRayHandler("Aimbot", RedirectFindPartOnRayHandler, 10)
         Utils.HookManager:RegisterNamecallHandler("Aimbot", RedirectNamecallHandler, 10)
@@ -885,7 +928,6 @@ function Module.SetConfig(key, value)
     elseif key == "SnapDuration" then Config.SnapDuration = math.clamp(value, 1, 10)
     elseif key == "ArsenalMode" then 
         Config.ArsenalMode = value
-        -- Legacy flag, no longer gates hitbox expander
     elseif key == "ArsenalHitboxExpand" then
         Config.ArsenalHitboxExpand = value
         if Config.Enabled then
@@ -902,6 +944,7 @@ function Module.SetConfig(key, value)
         if FOVCircle then FOVCircle.Color = value end
     elseif key == "ShowFOV" then Config.ShowFOV = value
     elseif key == "DebugMode" then Config.DebugMode = value
+    elseif key == "RemoteSpy" then Config.RemoteSpy = value
     end
 end
 
@@ -939,6 +982,7 @@ function Module.ResetConfig()
     Config.ShowFOV = true
     Config.SnapRestorePending = false
     Config.DebugMode = false
+    Config.RemoteSpy = false
     StopArsenalHitboxLoop()
     if Utils and Utils.HookManager then
         Utils.HookManager:UnregisterRaycastHandler("Aimbot")
