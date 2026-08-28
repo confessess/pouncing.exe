@@ -1,5 +1,5 @@
--- Pouncing.exe | GUI Framework v5.0
--- Futuristic glass UI, no clipping, star VFX contained to window, live themes
+-- Pouncing.exe | GUI Framework v6.0
+-- Cyberpunk HUD UI, no clipping, contained star VFX, snow VFX, live themes
 -- Built with love by ENI for LO
 -- ============================================================
 
@@ -12,43 +12,46 @@ local LocalPlayer = Players.LocalPlayer
 
 local Presets = {
     Pink = {
-        BG = Color3.fromRGB(8, 4, 10), TabBG = Color3.fromRGB(14, 8, 18),
-        ElementBG = Color3.fromRGB(20, 12, 28), HoverBG = Color3.fromRGB(32, 18, 44),
-        Primary = Color3.fromRGB(255, 105, 180), Secondary = Color3.fromRGB(255, 150, 210),
-        Accent = Color3.fromRGB(255, 20, 147), Neon = Color3.fromRGB(255, 0, 255),
-        SoftAccent = Color3.fromRGB(255, 180, 220), Text = Color3.fromRGB(255, 245, 250),
-        SubText = Color3.fromRGB(180, 140, 170), DimText = Color3.fromRGB(120, 90, 110),
-        On = Color3.fromRGB(255, 105, 180), OnGlow = Color3.fromRGB(255, 160, 210),
-        Off = Color3.fromRGB(35, 20, 40), Border = Color3.fromRGB(60, 30, 55),
-        BorderGlow = Color3.fromRGB(255, 105, 180), Shadow = Color3.fromRGB(0, 0, 0),
+        BG = Color3.fromRGB(5, 2, 8), TabBG = Color3.fromRGB(10, 5, 14),
+        ElementBG = Color3.fromRGB(16, 8, 24), HoverBG = Color3.fromRGB(28, 14, 40),
+        Primary = Color3.fromRGB(255, 80, 160), Secondary = Color3.fromRGB(255, 120, 190),
+        Accent = Color3.fromRGB(255, 40, 130), Neon = Color3.fromRGB(255, 60, 180),
+        SoftAccent = Color3.fromRGB(255, 160, 210), Text = Color3.fromRGB(255, 240, 248),
+        SubText = Color3.fromRGB(170, 130, 160), DimText = Color3.fromRGB(110, 80, 100),
+        On = Color3.fromRGB(255, 80, 160), OnGlow = Color3.fromRGB(255, 140, 200),
+        Off = Color3.fromRGB(28, 14, 36), Border = Color3.fromRGB(50, 25, 45),
+        BorderGlow = Color3.fromRGB(255, 80, 160), Shadow = Color3.fromRGB(0, 0, 0),
         White = Color3.fromRGB(255, 255, 255), Black = Color3.fromRGB(0, 0, 0),
-        Warning = Color3.fromRGB(255, 80, 80), Glass = Color3.fromRGB(255, 255, 255),
+        Warning = Color3.fromRGB(255, 60, 80), Glass = Color3.fromRGB(255, 255, 255),
+        VFX = Color3.fromRGB(255, 200, 230),
     },
     Icy = {
-        BG = Color3.fromRGB(4, 8, 16), TabBG = Color3.fromRGB(8, 16, 28),
-        ElementBG = Color3.fromRGB(12, 24, 40), HoverBG = Color3.fromRGB(18, 36, 56),
-        Primary = Color3.fromRGB(100, 210, 255), Secondary = Color3.fromRGB(70, 180, 230),
-        Accent = Color3.fromRGB(100, 210, 255), Neon = Color3.fromRGB(100, 210, 255),
-        SoftAccent = Color3.fromRGB(200, 240, 255), Text = Color3.fromRGB(230, 248, 255),
-        SubText = Color3.fromRGB(140, 180, 200), DimText = Color3.fromRGB(100, 140, 170),
-        On = Color3.fromRGB(100, 210, 255), OnGlow = Color3.fromRGB(180, 235, 255),
-        Off = Color3.fromRGB(12, 24, 42), Border = Color3.fromRGB(30, 60, 85),
-        BorderGlow = Color3.fromRGB(100, 210, 255), Shadow = Color3.fromRGB(0, 0, 0),
-        White = Color3.fromRGB(230, 248, 255), Black = Color3.fromRGB(4, 8, 16),
-        Warning = Color3.fromRGB(255, 100, 100), Glass = Color3.fromRGB(255, 255, 255),
+        BG = Color3.fromRGB(2, 6, 14), TabBG = Color3.fromRGB(6, 14, 26),
+        ElementBG = Color3.fromRGB(10, 22, 38), HoverBG = Color3.fromRGB(16, 32, 52),
+        Primary = Color3.fromRGB(80, 200, 255), Secondary = Color3.fromRGB(60, 170, 230),
+        Accent = Color3.fromRGB(80, 200, 255), Neon = Color3.fromRGB(100, 220, 255),
+        SoftAccent = Color3.fromRGB(180, 230, 255), Text = Color3.fromRGB(220, 245, 255),
+        SubText = Color3.fromRGB(120, 170, 200), DimText = Color3.fromRGB(80, 120, 150),
+        On = Color3.fromRGB(80, 200, 255), OnGlow = Color3.fromRGB(160, 225, 255),
+        Off = Color3.fromRGB(10, 22, 40), Border = Color3.fromRGB(25, 50, 70),
+        BorderGlow = Color3.fromRGB(80, 200, 255), Shadow = Color3.fromRGB(0, 0, 0),
+        White = Color3.fromRGB(220, 245, 255), Black = Color3.fromRGB(2, 6, 14),
+        Warning = Color3.fromRGB(255, 80, 100), Glass = Color3.fromRGB(255, 255, 255),
+        VFX = Color3.fromRGB(200, 240, 255),
     },
     Stary = {
-        BG = Color3.fromRGB(6, 4, 14), TabBG = Color3.fromRGB(10, 6, 22),
-        ElementBG = Color3.fromRGB(16, 10, 32), HoverBG = Color3.fromRGB(24, 14, 48),
-        Primary = Color3.fromRGB(160, 100, 255), Secondary = Color3.fromRGB(130, 70, 255),
-        Accent = Color3.fromRGB(160, 100, 255), Neon = Color3.fromRGB(180, 130, 255),
-        SoftAccent = Color3.fromRGB(210, 190, 255), Text = Color3.fromRGB(240, 235, 255),
-        SubText = Color3.fromRGB(170, 155, 200), DimText = Color3.fromRGB(120, 110, 150),
-        On = Color3.fromRGB(160, 100, 255), OnGlow = Color3.fromRGB(200, 160, 255),
-        Off = Color3.fromRGB(18, 10, 34), Border = Color3.fromRGB(40, 22, 68),
-        BorderGlow = Color3.fromRGB(160, 100, 255), Shadow = Color3.fromRGB(0, 0, 0),
-        White = Color3.fromRGB(240, 235, 255), Black = Color3.fromRGB(6, 4, 14),
-        Warning = Color3.fromRGB(255, 100, 100), Glass = Color3.fromRGB(255, 255, 255),
+        BG = Color3.fromRGB(4, 2, 12), TabBG = Color3.fromRGB(8, 4, 20),
+        ElementBG = Color3.fromRGB(12, 6, 28), HoverBG = Color3.fromRGB(20, 10, 44),
+        Primary = Color3.fromRGB(150, 80, 255), Secondary = Color3.fromRGB(120, 60, 255),
+        Accent = Color3.fromRGB(150, 80, 255), Neon = Color3.fromRGB(170, 110, 255),
+        SoftAccent = Color3.fromRGB(200, 170, 255), Text = Color3.fromRGB(235, 230, 255),
+        SubText = Color3.fromRGB(150, 140, 190), DimText = Color3.fromRGB(100, 90, 140),
+        On = Color3.fromRGB(150, 80, 255), OnGlow = Color3.fromRGB(190, 140, 255),
+        Off = Color3.fromRGB(14, 8, 30), Border = Color3.fromRGB(35, 18, 60),
+        BorderGlow = Color3.fromRGB(150, 80, 255), Shadow = Color3.fromRGB(0, 0, 0),
+        White = Color3.fromRGB(235, 230, 255), Black = Color3.fromRGB(4, 2, 12),
+        Warning = Color3.fromRGB(255, 80, 100), Glass = Color3.fromRGB(255, 255, 255),
+        VFX = Color3.fromRGB(210, 180, 255),
     },
 }
 
@@ -58,6 +61,7 @@ for k, v in pairs(Presets.Pink) do Theme[k] = v end
 local StaticElements = {}
 local ThemeUpdaters = {}
 local StarVFX = {Active = false, Stars = {}, Connection = nil, ParentFrame = nil}
+local SnowVFX = {Active = false, Flakes = {}, Connection = nil, ParentFrame = nil}
 
 local GUI = {Theme = Theme, Presets = Presets, ScreenGui = nil}
 
@@ -72,10 +76,12 @@ function GUI.LoadPreset(name)
     if not preset then return end
     for k, v in pairs(preset) do Theme[k] = v end
     GUI.UpdateTheme()
+    GUI.StopStarVFX()
+    GUI.StopSnowVFX()
     if name == "Stary" then
         GUI.StartStarVFX()
-    else
-        GUI.StopStarVFX()
+    elseif name == "Icy" then
+        GUI.StartSnowVFX()
     end
 end
 function GUI.UpdateTheme()
@@ -89,23 +95,22 @@ function GUI.UpdateTheme()
 end
 
 -- ============================================================
--- STAR VFX SYSTEM (Stary preset only — CONTAINED TO UI WINDOW)
+-- STAR VFX SYSTEM (Stary preset — CONTAINED TO UI WINDOW)
 -- ============================================================
 
 function GUI.StartStarVFX()
     if StarVFX.Active then return end
     StarVFX.Active = true
-
     if not StarVFX.ParentFrame or not StarVFX.ParentFrame.Parent then return end
 
-    for i = 1, 40 do
+    for i = 1, 50 do
         local star = Instance.new("Frame")
         star.Name = "Star" .. i
-        local size = math.random(1, 2)
-        star.Size = UDim2.new(0, size, 0, size)
+        local sz = math.random(1, 3)
+        star.Size = UDim2.new(0, sz, 0, sz)
         star.Position = UDim2.new(math.random(), 0, math.random(), 0)
         star.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        star.BackgroundTransparency = math.random() * 0.6 + 0.15
+        star.BackgroundTransparency = math.random() * 0.5 + 0.1
         star.BorderSizePixel = 0
         star.ZIndex = 1
         star.Parent = StarVFX.ParentFrame
@@ -115,19 +120,18 @@ function GUI.StartStarVFX()
         corner.Parent = star
 
         local glow = Instance.new("UIStroke")
-        glow.Color = Color3.fromRGB(180, 130, 255)
+        glow.Color = Theme.VFX
         glow.Thickness = math.random(1, 2)
         glow.Transparency = star.BackgroundTransparency
         glow.Parent = star
 
         table.insert(StarVFX.Stars, {
-            Frame = star,
-            Glow = glow,
-            BaseTransparency = star.BackgroundTransparency,
+            Frame = star, Glow = glow,
+            BaseTrans = star.BackgroundTransparency,
             Phase = math.random() * math.pi * 2,
-            TwinkleSpeed = math.random() * 2.5 + 0.8,
-            DriftX = (math.random() - 0.5) * 0.0002,
-            DriftY = (math.random() - 0.5) * 0.0002,
+            TwinkleSpeed = math.random() * 3 + 0.5,
+            DriftX = (math.random() - 0.5) * 0.0003,
+            DriftY = (math.random() - 0.5) * 0.0003,
         })
     end
 
@@ -135,39 +139,39 @@ function GUI.StartStarVFX()
         if not StarVFX.Active then return end
         if not StarVFX.ParentFrame or not StarVFX.ParentFrame.Parent then return end
         local ss = Instance.new("Frame")
-        ss.Size = UDim2.new(0, 60, 0, 1.5)
-        ss.BackgroundColor3 = Color3.fromRGB(210, 190, 255)
-        ss.BackgroundTransparency = 0.15
+        ss.Size = UDim2.new(0, math.random(50, 90), 0, 1.5)
+        ss.BackgroundColor3 = Color3.fromRGB(230, 210, 255)
+        ss.BackgroundTransparency = 0.1
         ss.BorderSizePixel = 0
-        ss.Rotation = math.random(20, 50)
-        ss.Position = UDim2.new(math.random() * 0.4, 0, math.random() * 0.4, 0)
+        ss.Rotation = math.random(15, 45)
+        ss.Position = UDim2.new(math.random() * 0.3, 0, math.random() * 0.3, 0)
         ss.ZIndex = 2
         ss.Parent = StarVFX.ParentFrame
 
-        local gradient = Instance.new("UIGradient")
-        gradient.Color = ColorSequence.new({
+        local grad = Instance.new("UIGradient")
+        grad.Color = ColorSequence.new({
             ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
-            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180, 130, 255)),
+            ColorSequenceKeypoint.new(0.4, Color3.fromRGB(200, 160, 255)),
             ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 255, 255))
         })
-        gradient.Transparency = NumberSequence.new({
+        grad.Transparency = NumberSequence.new({
             NumberSequenceKeypoint.new(0, 1),
-            NumberSequenceKeypoint.new(0.3, 0),
-            NumberSequenceKeypoint.new(0.7, 0),
+            NumberSequenceKeypoint.new(0.25, 0),
+            NumberSequenceKeypoint.new(0.75, 0),
             NumberSequenceKeypoint.new(1, 1)
         })
-        gradient.Parent = ss
+        grad.Parent = ss
 
-        TweenService:Create(ss, TweenInfo.new(math.random(6, 12), Enum.EasingStyle.Linear), {
-            Position = UDim2.new(ss.Position.X.Scale + 0.5, 0, ss.Position.Y.Scale + 0.25, 0),
+        TweenService:Create(ss, TweenInfo.new(math.random(5, 10), Enum.EasingStyle.Linear), {
+            Position = UDim2.new(ss.Position.X.Scale + 0.6, 0, ss.Position.Y.Scale + 0.3, 0),
             BackgroundTransparency = 1
         }):Play()
 
-        task.delay(math.random(10, 20), SpawnShootingStar)
-        task.delay(2.5, function() ss:Destroy() end)
+        task.delay(math.random(8, 18), SpawnShootingStar)
+        task.delay(2, function() ss:Destroy() end)
     end
 
-    task.delay(math.random(6, 12), SpawnShootingStar)
+    task.delay(math.random(4, 8), SpawnShootingStar)
 
     if StarVFX.Connection then StarVFX.Connection:Disconnect() end
     StarVFX.Connection = RunService.RenderStepped:Connect(function()
@@ -175,9 +179,9 @@ function GUI.StartStarVFX()
         for _, star in ipairs(StarVFX.Stars) do
             if star.Frame and star.Frame.Parent then
                 local twinkle = math.sin(t * star.TwinkleSpeed + star.Phase) * 0.5 + 0.5
-                local newTrans = star.BaseTransparency + twinkle * 0.35
-                star.Frame.BackgroundTransparency = math.clamp(newTrans, 0.05, 0.9)
-                star.Glow.Transparency = math.clamp(newTrans + 0.1, 0.05, 1)
+                local newTrans = star.BaseTrans + twinkle * 0.3
+                star.Frame.BackgroundTransparency = math.clamp(newTrans, 0.02, 0.85)
+                star.Glow.Transparency = math.clamp(newTrans + 0.1, 0.02, 1)
                 local pos = star.Frame.Position
                 star.Frame.Position = UDim2.new(
                     math.clamp(pos.X.Scale + star.DriftX, 0, 1), 0,
@@ -191,10 +195,7 @@ end
 function GUI.StopStarVFX()
     if not StarVFX.Active then return end
     StarVFX.Active = false
-    if StarVFX.Connection then
-        StarVFX.Connection:Disconnect()
-        StarVFX.Connection = nil
-    end
+    if StarVFX.Connection then StarVFX.Connection:Disconnect() StarVFX.Connection = nil end
     for _, star in ipairs(StarVFX.Stars) do
         if star.Frame then star.Frame:Destroy() end
     end
@@ -202,14 +203,84 @@ function GUI.StopStarVFX()
 end
 
 -- ============================================================
--- WINDOW CREATION (Futuristic glass look, no clipping)
+-- SNOW VFX SYSTEM (Icy preset — CONTAINED TO UI WINDOW)
+-- ============================================================
+
+function GUI.StartSnowVFX()
+    if SnowVFX.Active then return end
+    SnowVFX.Active = true
+    if not SnowVFX.ParentFrame or not SnowVFX.ParentFrame.Parent then return end
+
+    for i = 1, 45 do
+        local flake = Instance.new("Frame")
+        flake.Name = "Snow" .. i
+        local sz = math.random(2, 4)
+        flake.Size = UDim2.new(0, sz, 0, sz)
+        flake.Position = UDim2.new(math.random(), 0, -0.05, 0)
+        flake.BackgroundColor3 = Color3.fromRGB(220, 240, 255)
+        flake.BackgroundTransparency = math.random() * 0.4 + 0.2
+        flake.BorderSizePixel = 0
+        flake.ZIndex = 1
+        flake.Parent = SnowVFX.ParentFrame
+
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(1, 0)
+        corner.Parent = flake
+
+        local glow = Instance.new("UIStroke")
+        glow.Color = Theme.VFX
+        glow.Thickness = 1
+        glow.Transparency = flake.BackgroundTransparency + 0.2
+        glow.Parent = flake
+
+        table.insert(SnowVFX.Flakes, {
+            Frame = flake, Glow = glow,
+            Speed = math.random() * 0.0008 + 0.0003,
+            DriftX = (math.random() - 0.5) * 0.0004,
+            Wobble = math.random() * 2 + 1,
+            WobbleAmp = math.random() * 0.003 + 0.001,
+            Phase = math.random() * math.pi * 2,
+        })
+    end
+
+    if SnowVFX.Connection then SnowVFX.Connection:Disconnect() end
+    SnowVFX.Connection = RunService.RenderStepped:Connect(function()
+        local t = tick()
+        for _, flake in ipairs(SnowVFX.Flakes) do
+            if flake.Frame and flake.Frame.Parent then
+                local pos = flake.Frame.Position
+                local newY = pos.Y.Scale + flake.Speed
+                local wobble = math.sin(t * flake.Wobble + flake.Phase) * flake.WobbleAmp
+                local newX = pos.X.Scale + flake.DriftX + wobble
+                if newY > 1.05 then
+                    newY = -0.05
+                    newX = math.random()
+                end
+                flake.Frame.Position = UDim2.new(math.clamp(newX, 0, 1), 0, newY, 0)
+            end
+        end
+    end)
+end
+
+function GUI.StopSnowVFX()
+    if not SnowVFX.Active then return end
+    SnowVFX.Active = false
+    if SnowVFX.Connection then SnowVFX.Connection:Disconnect() SnowVFX.Connection = nil end
+    for _, flake in ipairs(SnowVFX.Flakes) do
+        if flake.Frame then flake.Frame:Destroy() end
+    end
+    SnowVFX.Flakes = {}
+end
+
+-- ============================================================
+-- WINDOW CREATION (Cyberpunk HUD — NO CLIPPING)
 -- ============================================================
 
 function GUI.CreateWindow(parent, title, size)
-    size = size or UDim2.new(0, 760, 0, 580)
+    size = size or UDim2.new(0, 780, 0, 600)
     GUI.ScreenGui = parent
 
-    -- Outer container (no clip, holds shadow + glow outside)
+    -- Outer container — NO clip, holds everything
     local Container = Instance.new("Frame")
     Container.Name = "PouncingContainer"
     Container.Size = size
@@ -220,46 +291,64 @@ function GUI.CreateWindow(parent, title, size)
     Container.ClipsDescendants = false
     Container.Parent = parent
 
-    -- Shadow (outside main frame)
+    -- Deep shadow
     local shadow = Instance.new("ImageLabel")
     shadow.Name = "Shadow"
     shadow.AnchorPoint = Vector2.new(0.5, 0.5)
     shadow.Position = UDim2.new(0.5, 0, 0.5, 0)
-    shadow.Size = UDim2.new(1, 80, 1, 80)
+    shadow.Size = UDim2.new(1, 100, 1, 100)
     shadow.BackgroundTransparency = 1
     shadow.Image = "rbxassetid://5554236805"
     shadow.ImageColor3 = Theme.Shadow
-    shadow.ImageTransparency = 0.7
+    shadow.ImageTransparency = 0.75
     shadow.ScaleType = Enum.ScaleType.Slice
     shadow.SliceCenter = Rect.new(23, 23, 277, 277)
-    shadow.ZIndex = -3
+    shadow.ZIndex = -5
     shadow.Parent = Container
 
-    -- Outer glow frame
-    local glow = Instance.new("Frame")
-    glow.Name = "OuterGlow"
-    glow.Size = UDim2.new(1, 20, 1, 20)
-    glow.Position = UDim2.new(0, -10, 0, -10)
-    glow.BackgroundTransparency = 1
-    glow.BorderSizePixel = 0
-    glow.ZIndex = -2
-    glow.Parent = Container
-    local glowStroke = Instance.new("UIStroke")
-    glowStroke.Color = Theme.Primary
-    glowStroke.Thickness = 2
-    glowStroke.Transparency = 0.9
-    glowStroke.Parent = glow
-    GUI.TrackStatic(glowStroke, "Color", "Primary")
-    local glowC = Instance.new("UICorner")
-    glowC.CornerRadius = UDim.new(0, 24)
-    glowC.Parent = glow
+    -- Outer neon rim glow
+    local rimGlow = Instance.new("Frame")
+    rimGlow.Name = "RimGlow"
+    rimGlow.Size = UDim2.new(1, 24, 1, 24)
+    rimGlow.Position = UDim2.new(0, -12, 0, -12)
+    rimGlow.BackgroundTransparency = 1
+    rimGlow.BorderSizePixel = 0
+    rimGlow.ZIndex = -4
+    rimGlow.Parent = Container
+    local rimStroke = Instance.new("UIStroke")
+    rimStroke.Color = Theme.Primary
+    rimStroke.Thickness = 3
+    rimStroke.Transparency = 0.92
+    rimStroke.Parent = rimGlow
+    GUI.TrackStatic(rimStroke, "Color", "Primary")
+    local rimC = Instance.new("UICorner")
+    rimC.CornerRadius = UDim.new(0, 26)
+    rimC.Parent = rimGlow
 
-    -- Main frame (glass effect)
+    -- Secondary rim (thinner, brighter)
+    local rim2 = Instance.new("Frame")
+    rim2.Size = UDim2.new(1, 16, 1, 16)
+    rim2.Position = UDim2.new(0, -8, 0, -8)
+    rim2.BackgroundTransparency = 1
+    rim2.BorderSizePixel = 0
+    rim2.ZIndex = -3
+    rim2.Parent = Container
+    local rim2Stroke = Instance.new("UIStroke")
+    rim2Stroke.Color = Theme.Neon
+    rim2Stroke.Thickness = 1
+    rim2Stroke.Transparency = 0.85
+    rim2Stroke.Parent = rim2
+    GUI.TrackStatic(rim2Stroke, "Color", "Neon")
+    local rim2C = Instance.new("UICorner")
+    rim2C.CornerRadius = UDim.new(0, 24)
+    rim2C.Parent = rim2
+
+    -- Main frame
     local MF = Instance.new("Frame")
     MF.Name = "PouncingMain"
     MF.Size = UDim2.new(1, 0, 1, 0)
     MF.BackgroundColor3 = Theme.BG
-    MF.BackgroundTransparency = 0.15
+    MF.BackgroundTransparency = 0.08
     MF.BorderSizePixel = 0
     MF.Active = true
     MF.ClipsDescendants = true
@@ -267,54 +356,50 @@ function GUI.CreateWindow(parent, title, size)
     GUI.TrackStatic(MF, "BackgroundColor3", "BG")
 
     local MC = Instance.new("UICorner")
-    MC.CornerRadius = UDim.new(0, 20)
+    MC.CornerRadius = UDim.new(0, 18)
     MC.Parent = MF
 
-    -- Glass overlay
-    local glass = Instance.new("Frame")
-    glass.Name = "GlassOverlay"
-    glass.Size = UDim2.new(1, 0, 1, 0)
-    glass.BackgroundColor3 = Theme.Glass
-    glass.BackgroundTransparency = 0.92
-    glass.BorderSizePixel = 0
-    glass.ZIndex = 0
-    glass.Parent = MF
-
-    -- Subtle noise texture (optional, using gradient as fallback)
-    local noiseGrad = Instance.new("UIGradient")
-    noiseGrad.Color = ColorSequence.new({
+    -- Scanline overlay (subtle)
+    local scanlines = Instance.new("Frame")
+    scanlines.Name = "Scanlines"
+    scanlines.Size = UDim2.new(1, 0, 1, 0)
+    scanlines.BackgroundTransparency = 1
+    scanlines.ZIndex = 0
+    scanlines.Parent = MF
+    local scanGrad = Instance.new("UIGradient")
+    scanGrad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(255,255,255)),
         ColorSequenceKeypoint.new(1, Color3.fromRGB(255,255,255))
     })
-    noiseGrad.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.97),
-        NumberSequenceKeypoint.new(0.5, 0.94),
-        NumberSequenceKeypoint.new(1, 0.97)
+    scanGrad.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.985),
+        NumberSequenceKeypoint.new(0.5, 0.97),
+        NumberSequenceKeypoint.new(1, 0.985)
     })
-    noiseGrad.Rotation = 45
-    noiseGrad.Parent = glass
+    scanGrad.Rotation = 0
+    scanGrad.Parent = scanlines
 
-    -- Main border stroke
+    -- Main border
     local mainStroke = Instance.new("UIStroke")
     mainStroke.Color = Theme.Border
-    mainStroke.Thickness = 1
-    mainStroke.Transparency = 0.3
+    mainStroke.Thickness = 1.5
+    mainStroke.Transparency = 0.25
     mainStroke.Parent = MF
     GUI.TrackStatic(mainStroke, "Color", "Border")
 
     -- Title bar
     local TB = Instance.new("Frame")
     TB.Name = "TitleBar"
-    TB.Size = UDim2.new(1, 0, 0, 52)
+    TB.Size = UDim2.new(1, 0, 0, 54)
     TB.BackgroundColor3 = Theme.TabBG
-    TB.BackgroundTransparency = 0.25
+    TB.BackgroundTransparency = 0.15
     TB.BorderSizePixel = 0
     TB.Active = true
     TB.Parent = MF
     GUI.TrackStatic(TB, "BackgroundColor3", "TabBG")
 
     local TBC = Instance.new("UICorner")
-    TBC.CornerRadius = UDim.new(0, 20)
+    TBC.CornerRadius = UDim.new(0, 18)
     TBC.Parent = TB
 
     local TBF = Instance.new("Frame")
@@ -322,63 +407,64 @@ function GUI.CreateWindow(parent, title, size)
     TBF.Size = UDim2.new(1, 0, 0, 20)
     TBF.Position = UDim2.new(0, 0, 1, -20)
     TBF.BackgroundColor3 = Theme.TabBG
-    TBF.BackgroundTransparency = 0.25
+    TBF.BackgroundTransparency = 0.15
     TBF.BorderSizePixel = 0
     TBF.Parent = TB
     GUI.TrackStatic(TBF, "BackgroundColor3", "TabBG")
 
-    -- Neon top accent line
-    local topAccent = Instance.new("Frame")
-    topAccent.Name = "TopAccent"
-    topAccent.Size = UDim2.new(1, -40, 0, 2)
-    topAccent.Position = UDim2.new(0, 20, 0, 0)
-    topAccent.BackgroundColor3 = Theme.Primary
-    topAccent.BackgroundTransparency = 0.3
-    topAccent.BorderSizePixel = 0
-    topAccent.Parent = TB
-    GUI.TrackStatic(topAccent, "BackgroundColor3", "Primary")
+    -- Top neon line
+    local topLine = Instance.new("Frame")
+    topLine.Name = "TopLine"
+    topLine.Size = UDim2.new(1, -32, 0, 2)
+    topLine.Position = UDim2.new(0, 16, 0, 0)
+    topLine.BackgroundColor3 = Theme.Primary
+    topLine.BackgroundTransparency = 0.2
+    topLine.BorderSizePixel = 0
+    topLine.Parent = TB
+    GUI.TrackStatic(topLine, "BackgroundColor3", "Primary")
 
-    local topAccentC = Instance.new("UICorner")
-    topAccentC.CornerRadius = UDim.new(1, 0)
-    topAccentC.Parent = topAccent
+    local topLineC = Instance.new("UICorner")
+    topLineC.CornerRadius = UDim.new(1, 0)
+    topLineC.Parent = topLine
 
-    -- Title text with glow
+    -- Title text
     local TT = Instance.new("TextLabel")
     TT.Name = "TitleText"
-    TT.Size = UDim2.new(1, -160, 1, 0)
-    TT.Position = UDim2.new(0, 24, 0, 0)
+    TT.Size = UDim2.new(1, -180, 1, 0)
+    TT.Position = UDim2.new(0, 22, 0, 0)
     TT.BackgroundTransparency = 1
-    TT.Text = "◈ " .. title
+    TT.Text = title
     TT.TextColor3 = Theme.Text
-    TT.TextSize = 18
+    TT.TextSize = 17
     TT.Font = Enum.Font.GothamBold
     TT.TextXAlignment = Enum.TextXAlignment.Left
     TT.TextTruncate = Enum.TextTruncate.AtEnd
     TT.Parent = TB
     GUI.TrackStatic(TT, "TextColor3", "Text")
 
-    -- Title glow effect
+    -- Title glow duplicate
     local TTGlow = Instance.new("TextLabel")
-    TTGlow.Size = UDim2.new(1, -160, 1, 0)
-    TTGlow.Position = UDim2.new(0, 24, 0, 1)
+    TTGlow.Size = TT.Size
+    TTGlow.Position = UDim2.new(0, 22, 0, 1)
     TTGlow.BackgroundTransparency = 1
-    TTGlow.Text = "◈ " .. title
+    TTGlow.Text = title
     TTGlow.TextColor3 = Theme.Primary
-    TTGlow.TextSize = 18
+    TTGlow.TextSize = 17
     TTGlow.Font = Enum.Font.GothamBold
     TTGlow.TextXAlignment = Enum.TextXAlignment.Left
     TTGlow.TextTruncate = Enum.TextTruncate.AtEnd
-    TTGlow.TextTransparency = 0.85
+    TTGlow.TextTransparency = 0.88
     TTGlow.ZIndex = -1
     TTGlow.Parent = TB
     GUI.TrackStatic(TTGlow, "TextColor3", "Primary")
 
+    -- Version tag
     local VT = Instance.new("TextLabel")
     VT.Name = "VersionTag"
     VT.Size = UDim2.new(0, 60, 0, 20)
-    VT.Position = UDim2.new(1, -130, 0, 16)
+    VT.Position = UDim2.new(1, -130, 0, 17)
     VT.BackgroundTransparency = 1
-    VT.Text = "v5.0"
+    VT.Text = "v6.0"
     VT.TextColor3 = Theme.SubText
     VT.TextSize = 11
     VT.Font = Enum.Font.Gotham
@@ -388,10 +474,10 @@ function GUI.CreateWindow(parent, title, size)
     -- Close button
     local CB = Instance.new("TextButton")
     CB.Name = "CloseBtn"
-    CB.Size = UDim2.new(0, 32, 0, 32)
-    CB.Position = UDim2.new(1, -40, 0, 10)
+    CB.Size = UDim2.new(0, 34, 0, 34)
+    CB.Position = UDim2.new(1, -44, 0, 10)
     CB.BackgroundColor3 = Theme.ElementBG
-    CB.BackgroundTransparency = 0.4
+    CB.BackgroundTransparency = 0.3
     CB.BorderSizePixel = 0
     CB.Text = "×"
     CB.TextColor3 = Theme.SubText
@@ -419,10 +505,10 @@ function GUI.CreateWindow(parent, title, size)
     -- Minimize button
     local MB = Instance.new("TextButton")
     MB.Name = "MinBtn"
-    MB.Size = UDim2.new(0, 32, 0, 32)
-    MB.Position = UDim2.new(1, -78, 0, 10)
+    MB.Size = UDim2.new(0, 34, 0, 34)
+    MB.Position = UDim2.new(1, -84, 0, 10)
     MB.BackgroundColor3 = Theme.ElementBG
-    MB.BackgroundTransparency = 0.4
+    MB.BackgroundTransparency = 0.3
     MB.BorderSizePixel = 0
     MB.Text = "−"
     MB.TextColor3 = Theme.SubText
@@ -439,7 +525,7 @@ function GUI.CreateWindow(parent, title, size)
     local Min = false
     MB.MouseButton1Click:Connect(function()
         Min = not Min
-        local ts = Min and UDim2.new(0, size.X.Offset, 0, 52) or size
+        local ts = Min and UDim2.new(0, size.X.Offset, 0, 54) or size
         TweenService:Create(Container, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = ts}):Play()
         MB.Text = Min and "+" or "−"
     end)
@@ -470,21 +556,21 @@ function GUI.CreateWindow(parent, title, size)
     -- Tab container
     local TCon = Instance.new("Frame")
     TCon.Name = "TabContainer"
-    TCon.Size = UDim2.new(0, 170, 1, -52)
-    TCon.Position = UDim2.new(0, 0, 0, 52)
+    TCon.Size = UDim2.new(0, 180, 1, -54)
+    TCon.Position = UDim2.new(0, 0, 0, 54)
     TCon.BackgroundColor3 = Theme.TabBG
-    TCon.BackgroundTransparency = 0.35
+    TCon.BackgroundTransparency = 0.2
     TCon.BorderSizePixel = 0
     TCon.Parent = MF
     GUI.TrackStatic(TCon, "BackgroundColor3", "TabBG")
 
-    -- Tab vertical separator with glow
+    -- Vertical separator
     local tabSep = Instance.new("Frame")
     tabSep.Name = "TabSep"
-    tabSep.Size = UDim2.new(0, 1, 1, -28)
-    tabSep.Position = UDim2.new(1, 0, 0, 14)
+    tabSep.Size = UDim2.new(0, 1, 1, -32)
+    tabSep.Position = UDim2.new(1, 0, 0, 16)
     tabSep.BackgroundColor3 = Theme.Border
-    tabSep.BackgroundTransparency = 0.5
+    tabSep.BackgroundTransparency = 0.4
     tabSep.BorderSizePixel = 0
     tabSep.Parent = TCon
     GUI.TrackStatic(tabSep, "BackgroundColor3", "Border")
@@ -492,22 +578,22 @@ function GUI.CreateWindow(parent, title, size)
     -- Content container
     local CCon = Instance.new("Frame")
     CCon.Name = "ContentContainer"
-    CCon.Size = UDim2.new(1, -170, 1, -52)
-    CCon.Position = UDim2.new(0, 170, 0, 52)
+    CCon.Size = UDim2.new(1, -180, 1, -54)
+    CCon.Position = UDim2.new(0, 180, 0, 54)
     CCon.BackgroundTransparency = 1
     CCon.BorderSizePixel = 0
     CCon.ClipsDescendants = true
     CCon.Parent = MF
 
-    -- Store star VFX parent reference
     StarVFX.ParentFrame = CCon
+    SnowVFX.ParentFrame = CCon
 
-    -- Bottom decoration
+    -- Bottom deco line
     local DecoLine = Instance.new("Frame")
-    DecoLine.Size = UDim2.new(0, 40, 0, 2)
-    DecoLine.Position = UDim2.new(0.5, -20, 1, -20)
+    DecoLine.Size = UDim2.new(0, 50, 0, 2)
+    DecoLine.Position = UDim2.new(0.5, -25, 1, -22)
     DecoLine.BackgroundColor3 = Theme.Primary
-    DecoLine.BackgroundTransparency = 0.4
+    DecoLine.BackgroundTransparency = 0.35
     DecoLine.BorderSizePixel = 0
     DecoLine.Parent = TCon
     GUI.TrackStatic(DecoLine, "BackgroundColor3", "Primary")
@@ -517,14 +603,14 @@ function GUI.CreateWindow(parent, title, size)
     DecoLineC.Parent = DecoLine
 
     return {
-        MainFrame = MF, Container = Container, TitleBar = TB, 
+        MainFrame = MF, Container = Container, TitleBar = TB,
         TabContainer = TCon, ContentContainer = CCon,
         Tabs = {}, Contents = {}, ActiveTab = nil, TabCount = 0,
     }
 end
 
 -- ============================================================
--- TAB CREATION (Futuristic style)
+-- TAB CREATION (Cyberpunk HUD style)
 -- ============================================================
 
 function GUI.CreateTab(window, name, icon)
@@ -532,12 +618,12 @@ function GUI.CreateTab(window, name, icon)
 
     local B = Instance.new("TextButton")
     B.Name = name .. "Tab"
-    B.Size = UDim2.new(1, -24, 0, 44)
-    B.Position = UDim2.new(0, 12, 0, 16 + (order * 52))
+    B.Size = UDim2.new(1, -28, 0, 46)
+    B.Position = UDim2.new(0, 14, 0, 18 + (order * 50))
     B.BackgroundColor3 = Theme.ElementBG
-    B.BackgroundTransparency = 0.5
+    B.BackgroundTransparency = 0.45
     B.BorderSizePixel = 0
-    B.Text = "  " .. (icon or "›") .. "   " .. name
+    B.Text = "  " .. (icon or "›") .. "  " .. name
     B.TextColor3 = Theme.SubText
     B.TextSize = 13
     B.Font = Enum.Font.GothamSemibold
@@ -546,15 +632,15 @@ function GUI.CreateTab(window, name, icon)
     B.Parent = window.TabContainer
 
     local BC = Instance.new("UICorner")
-    BC.CornerRadius = UDim.new(0, 14)
+    BC.CornerRadius = UDim.new(0, 12)
     BC.Parent = B
 
-    -- Left accent bar
+    -- Left neon accent bar
     local accent = Instance.new("Frame")
-    accent.Size = UDim2.new(0, 3, 0, 20)
-    accent.Position = UDim2.new(0, 8, 0.5, -10)
+    accent.Size = UDim2.new(0, 3, 0, 18)
+    accent.Position = UDim2.new(0, 8, 0.5, -9)
     accent.BackgroundColor3 = Theme.Primary
-    accent.BackgroundTransparency = 0.8
+    accent.BackgroundTransparency = 0.75
     accent.BorderSizePixel = 0
     accent.Parent = B
     GUI.TrackStatic(accent, "BackgroundColor3", "Primary")
@@ -563,69 +649,69 @@ function GUI.CreateTab(window, name, icon)
     accentC.CornerRadius = UDim.new(1, 0)
     accentC.Parent = accent
 
-    -- Subtle border
+    -- Subtle border stroke
     local innerGlow = Instance.new("UIStroke")
     innerGlow.Color = Theme.Border
     innerGlow.Thickness = 1
-    innerGlow.Transparency = 0.7
+    innerGlow.Transparency = 0.65
     innerGlow.Parent = B
     GUI.TrackStatic(innerGlow, "Color", "Border")
 
     B.MouseEnter:Connect(function()
         if window.ActiveTab ~= name then
-            TweenService:Create(B, TweenInfo.new(0.2), {BackgroundTransparency = 0.2}):Play()
-            TweenService:Create(accent, TweenInfo.new(0.2), {BackgroundTransparency = 0.4}):Play()
-            TweenService:Create(innerGlow, TweenInfo.new(0.2), {Transparency = 0.3}):Play()
+            TweenService:Create(B, TweenInfo.new(0.2), {BackgroundTransparency = 0.15}):Play()
+            TweenService:Create(accent, TweenInfo.new(0.2), {BackgroundTransparency = 0.35}):Play()
+            TweenService:Create(innerGlow, TweenInfo.new(0.2), {Transparency = 0.25}):Play()
         end
     end)
     B.MouseLeave:Connect(function()
         if window.ActiveTab ~= name then
-            TweenService:Create(B, TweenInfo.new(0.2), {BackgroundTransparency = 0.5}):Play()
-            TweenService:Create(accent, TweenInfo.new(0.2), {BackgroundTransparency = 0.8}):Play()
-            TweenService:Create(innerGlow, TweenInfo.new(0.2), {Transparency = 0.7}):Play()
+            TweenService:Create(B, TweenInfo.new(0.2), {BackgroundTransparency = 0.45}):Play()
+            TweenService:Create(accent, TweenInfo.new(0.2), {BackgroundTransparency = 0.75}):Play()
+            TweenService:Create(innerGlow, TweenInfo.new(0.2), {Transparency = 0.65}):Play()
         end
     end)
 
     GUI.OnThemeChange(function()
         if window.ActiveTab == name then
             B.BackgroundColor3 = Theme.Primary
-            B.BackgroundTransparency = 0.15
+            B.BackgroundTransparency = 0.1
             B.TextColor3 = Theme.White
-            accent.BackgroundTransparency = 0.1
+            accent.BackgroundTransparency = 0.05
             accent.BackgroundColor3 = Theme.White
             innerGlow.Color = Theme.Neon
-            innerGlow.Transparency = 0.15
+            innerGlow.Transparency = 0.1
         else
             B.BackgroundColor3 = Theme.ElementBG
-            B.BackgroundTransparency = 0.5
+            B.BackgroundTransparency = 0.45
             B.TextColor3 = Theme.SubText
-            accent.BackgroundTransparency = 0.8
+            accent.BackgroundTransparency = 0.75
             accent.BackgroundColor3 = Theme.Primary
             innerGlow.Color = Theme.Border
-            innerGlow.Transparency = 0.7
+            innerGlow.Transparency = 0.65
         end
     end)
 
     local F = Instance.new("ScrollingFrame")
     F.Name = name .. "Content"
-    F.Size = UDim2.new(1, -24, 1, -24)
-    F.Position = UDim2.new(0, 12, 0, 12)
+    F.Size = UDim2.new(1, -28, 1, -28)
+    F.Position = UDim2.new(0, 14, 0, 14)
     F.BackgroundTransparency = 1
     F.BorderSizePixel = 0
     F.ScrollBarThickness = 4
     F.ScrollBarImageColor3 = Theme.Primary
-    F.ScrollBarImageTransparency = 0.5
+    F.ScrollBarImageTransparency = 0.45
     F.Visible = false
     F.Parent = window.ContentContainer
     GUI.TrackStatic(F, "ScrollBarImageColor3", "Primary")
 
     local L = Instance.new("UIListLayout")
-    L.Padding = UDim.new(0, 16)
+    L.Padding = UDim.new(0, 14)
     L.SortOrder = Enum.SortOrder.LayoutOrder
     L.Parent = F
 
     L:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
-        F.CanvasSize = UDim2.new(0, 0, 0, L.AbsoluteContentSize.Y + 28)
+        F.CanvasSize = UDim2.new(0, 0, 0, L.AbsoluteContentSize.Y + 24)
     end)
 
     window.Tabs[name] = B
@@ -637,13 +723,13 @@ function GUI.CreateTab(window, name, icon)
         if window.ActiveTab then
             local oldBtn = window.Tabs[window.ActiveTab]
             TweenService:Create(oldBtn, TweenInfo.new(0.2), {
-                BackgroundColor3 = Theme.ElementBG, TextColor3 = Theme.SubText, BackgroundTransparency = 0.5
+                BackgroundColor3 = Theme.ElementBG, TextColor3 = Theme.SubText, BackgroundTransparency = 0.45
             }):Play()
             window.Contents[window.ActiveTab].Visible = false
         end
         window.ActiveTab = name
         TweenService:Create(B, TweenInfo.new(0.2), {
-            BackgroundColor3 = Theme.Primary, TextColor3 = Theme.White, BackgroundTransparency = 0.15
+            BackgroundColor3 = Theme.Primary, TextColor3 = Theme.White, BackgroundTransparency = 0.1
         }):Play()
         window.Contents[name].Visible = true
     end)
@@ -652,35 +738,35 @@ function GUI.CreateTab(window, name, icon)
 end
 
 -- ============================================================
--- TOGGLE (Futuristic glass style)
+-- TOGGLE (Cyberpunk HUD)
 -- ============================================================
 
 function GUI.CreateToggle(parent, text, default, colorKey, callback)
     local F = Instance.new("Frame")
     F.Size = UDim2.new(1, -20, 0, 48)
     F.BackgroundColor3 = Theme.ElementBG
-    F.BackgroundTransparency = 0.4
+    F.BackgroundTransparency = 0.35
     F.BorderSizePixel = 0
     F.Parent = parent
     GUI.TrackStatic(F, "BackgroundColor3", "ElementBG")
 
     local FC = Instance.new("UICorner")
-    FC.CornerRadius = UDim.new(0, 14)
+    FC.CornerRadius = UDim.new(0, 12)
     FC.Parent = F
 
     local fStroke = Instance.new("UIStroke")
     fStroke.Color = Theme.Border
     fStroke.Thickness = 1
-    fStroke.Transparency = 0.6
+    fStroke.Transparency = 0.55
     fStroke.Parent = F
     GUI.TrackStatic(fStroke, "Color", "Border")
 
-    -- Left neon indicator line
+    -- Left neon indicator
     local indicator = Instance.new("Frame")
-    indicator.Size = UDim2.new(0, 3, 0, 22)
-    indicator.Position = UDim2.new(0, 0, 0.5, -11)
+    indicator.Size = UDim2.new(0, 3, 0, 20)
+    indicator.Position = UDim2.new(0, 0, 0.5, -10)
     indicator.BackgroundColor3 = Theme.Primary
-    indicator.BackgroundTransparency = default and 0.2 or 0.85
+    indicator.BackgroundTransparency = default and 0.15 or 0.85
     indicator.BorderSizePixel = 0
     indicator.Parent = F
     GUI.TrackStatic(indicator, "BackgroundColor3", "Primary")
@@ -728,7 +814,7 @@ function GUI.CreateToggle(parent, text, default, colorKey, callback)
     TBtn.Size = UDim2.new(0, 50, 0, 26)
     TBtn.Position = UDim2.new(1, -68, 0.5, -13)
     TBtn.BackgroundColor3 = default and Theme.On or Theme.Off
-    TBtn.BackgroundTransparency = 0.2
+    TBtn.BackgroundTransparency = 0.15
     TBtn.BorderSizePixel = 0
     TBtn.Text = ""
     TBtn.AutoButtonColor = false
@@ -741,7 +827,7 @@ function GUI.CreateToggle(parent, text, default, colorKey, callback)
     local TBtnGlow = Instance.new("UIStroke")
     TBtnGlow.Color = Theme.OnGlow
     TBtnGlow.Thickness = 2
-    TBtnGlow.Transparency = default and 0.35 or 1
+    TBtnGlow.Transparency = default and 0.3 or 1
     TBtnGlow.Parent = TBtn
 
     local Circ = Instance.new("Frame")
@@ -760,7 +846,7 @@ function GUI.CreateToggle(parent, text, default, colorKey, callback)
     local CircS = Instance.new("UIStroke")
     CircS.Color = Theme.Border
     CircS.Thickness = 1
-    CircS.Transparency = 0.3
+    CircS.Transparency = 0.25
     CircS.Parent = Circ
     GUI.TrackStatic(CircS, "Color", "Border")
 
@@ -771,10 +857,10 @@ function GUI.CreateToggle(parent, text, default, colorKey, callback)
         TweenService:Create(Circ, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
             Position = State and UDim2.new(1, -22, 0.5, -10) or UDim2.new(0, 2, 0.5, -10)
         }):Play()
-        TweenService:Create(indicator, TweenInfo.new(0.25), {BackgroundTransparency = State and 0.2 or 0.85}):Play()
+        TweenService:Create(indicator, TweenInfo.new(0.25), {BackgroundTransparency = State and 0.15 or 0.85}):Play()
         TBtn.BackgroundColor3 = State and Theme.On or Theme.Off
         TBtnGlow.Color = Theme.OnGlow
-        TBtnGlow.Transparency = State and 0.35 or 1
+        TBtnGlow.Transparency = State and 0.3 or 1
         if callback then callback(State) end
     end
 
@@ -782,8 +868,8 @@ function GUI.CreateToggle(parent, text, default, colorKey, callback)
         if State then
             TBtn.BackgroundColor3 = Theme.On
             TBtnGlow.Color = Theme.OnGlow
-            TBtnGlow.Transparency = 0.35
-            indicator.BackgroundTransparency = 0.2
+            TBtnGlow.Transparency = 0.3
+            indicator.BackgroundTransparency = 0.15
         else
             TBtn.BackgroundColor3 = Theme.Off
             TBtnGlow.Transparency = 1
@@ -796,31 +882,31 @@ function GUI.CreateToggle(parent, text, default, colorKey, callback)
 end
 
 -- ============================================================
--- SLIDER (Futuristic glass style)
+-- SLIDER (Cyberpunk HUD)
 -- ============================================================
 
 function GUI.CreateSlider(parent, text, min, max, default, callback)
     local F = Instance.new("Frame")
-    F.Size = UDim2.new(1, -20, 0, 68)
+    F.Size = UDim2.new(1, -20, 0, 66)
     F.BackgroundColor3 = Theme.ElementBG
-    F.BackgroundTransparency = 0.4
+    F.BackgroundTransparency = 0.35
     F.BorderSizePixel = 0
     F.Parent = parent
     GUI.TrackStatic(F, "BackgroundColor3", "ElementBG")
 
     local FC = Instance.new("UICorner")
-    FC.CornerRadius = UDim.new(0, 14)
+    FC.CornerRadius = UDim.new(0, 12)
     FC.Parent = F
 
     local fStroke = Instance.new("UIStroke")
     fStroke.Color = Theme.Border
     fStroke.Thickness = 1
-    fStroke.Transparency = 0.6
+    fStroke.Transparency = 0.55
     fStroke.Parent = F
     GUI.TrackStatic(fStroke, "Color", "Border")
 
     local L = Instance.new("TextLabel")
-    L.Size = UDim2.new(1, -100, 0, 24)
+    L.Size = UDim2.new(1, -100, 0, 22)
     L.Position = UDim2.new(0, 18, 0, 10)
     L.BackgroundTransparency = 1
     L.Text = text
@@ -833,7 +919,7 @@ function GUI.CreateSlider(parent, text, min, max, default, callback)
     GUI.TrackStatic(L, "TextColor3", "Text")
 
     local VL = Instance.new("TextLabel")
-    VL.Size = UDim2.new(0, 50, 0, 24)
+    VL.Size = UDim2.new(0, 50, 0, 22)
     VL.Position = UDim2.new(1, -66, 0, 10)
     VL.BackgroundTransparency = 1
     VL.Text = tostring(default)
@@ -845,9 +931,9 @@ function GUI.CreateSlider(parent, text, min, max, default, callback)
 
     local Tr = Instance.new("Frame")
     Tr.Size = UDim2.new(1, -36, 0, 5)
-    Tr.Position = UDim2.new(0, 18, 0, 44)
+    Tr.Position = UDim2.new(0, 18, 0, 42)
     Tr.BackgroundColor3 = Theme.Border
-    Tr.BackgroundTransparency = 0.5
+    Tr.BackgroundTransparency = 0.45
     Tr.BorderSizePixel = 0
     Tr.Parent = F
     GUI.TrackStatic(Tr, "BackgroundColor3", "Border")
@@ -871,7 +957,7 @@ function GUI.CreateSlider(parent, text, min, max, default, callback)
     local FiGlow = Instance.new("UIStroke")
     FiGlow.Color = Theme.Neon
     FiGlow.Thickness = 2
-    FiGlow.Transparency = 0.4
+    FiGlow.Transparency = 0.35
     FiGlow.Parent = Fi
     GUI.TrackStatic(FiGlow, "Color", "Neon")
 
@@ -890,7 +976,7 @@ function GUI.CreateSlider(parent, text, min, max, default, callback)
     local KnGlow = Instance.new("UIStroke")
     KnGlow.Color = Theme.Primary
     KnGlow.Thickness = 2.5
-    KnGlow.Transparency = 0.25
+    KnGlow.Transparency = 0.2
     KnGlow.Parent = Kn
     GUI.TrackStatic(KnGlow, "Color", "Primary")
 
@@ -932,31 +1018,31 @@ function GUI.CreateSlider(parent, text, min, max, default, callback)
 end
 
 -- ============================================================
--- SLIDER WITH INPUT (Futuristic glass style)
+-- SLIDER WITH INPUT (Cyberpunk HUD)
 -- ============================================================
 
 function GUI.CreateSliderWithInput(parent, text, min, max, default, callback)
     local F = Instance.new("Frame")
-    F.Size = UDim2.new(1, -20, 0, 68)
+    F.Size = UDim2.new(1, -20, 0, 66)
     F.BackgroundColor3 = Theme.ElementBG
-    F.BackgroundTransparency = 0.4
+    F.BackgroundTransparency = 0.35
     F.BorderSizePixel = 0
     F.Parent = parent
     GUI.TrackStatic(F, "BackgroundColor3", "ElementBG")
 
     local FC = Instance.new("UICorner")
-    FC.CornerRadius = UDim.new(0, 14)
+    FC.CornerRadius = UDim.new(0, 12)
     FC.Parent = F
 
     local fStroke = Instance.new("UIStroke")
     fStroke.Color = Theme.Border
     fStroke.Thickness = 1
-    fStroke.Transparency = 0.6
+    fStroke.Transparency = 0.55
     fStroke.Parent = F
     GUI.TrackStatic(fStroke, "Color", "Border")
 
     local L = Instance.new("TextLabel")
-    L.Size = UDim2.new(1, -220, 0, 24)
+    L.Size = UDim2.new(1, -220, 0, 22)
     L.Position = UDim2.new(0, 18, 0, 10)
     L.BackgroundTransparency = 1
     L.Text = text
@@ -969,10 +1055,10 @@ function GUI.CreateSliderWithInput(parent, text, min, max, default, callback)
     GUI.TrackStatic(L, "TextColor3", "Text")
 
     local InputBox = Instance.new("TextBox")
-    InputBox.Size = UDim2.new(0, 52, 0, 24)
+    InputBox.Size = UDim2.new(0, 52, 0, 22)
     InputBox.Position = UDim2.new(1, -148, 0, 10)
     InputBox.BackgroundColor3 = Theme.BG
-    InputBox.BackgroundTransparency = 0.3
+    InputBox.BackgroundTransparency = 0.25
     InputBox.BorderSizePixel = 0
     InputBox.Text = tostring(default)
     InputBox.TextColor3 = Theme.Primary
@@ -990,12 +1076,12 @@ function GUI.CreateSliderWithInput(parent, text, min, max, default, callback)
     local InputBoxS = Instance.new("UIStroke")
     InputBoxS.Color = Theme.BorderGlow
     InputBoxS.Thickness = 1
-    InputBoxS.Transparency = 0.5
+    InputBoxS.Transparency = 0.45
     InputBoxS.Parent = InputBox
     GUI.TrackStatic(InputBoxS, "Color", "BorderGlow")
 
     local VL = Instance.new("TextLabel")
-    VL.Size = UDim2.new(0, 45, 0, 24)
+    VL.Size = UDim2.new(0, 45, 0, 22)
     VL.Position = UDim2.new(1, -78, 0, 10)
     VL.BackgroundTransparency = 1
     VL.Text = tostring(default)
@@ -1007,9 +1093,9 @@ function GUI.CreateSliderWithInput(parent, text, min, max, default, callback)
 
     local Tr = Instance.new("Frame")
     Tr.Size = UDim2.new(1, -36, 0, 5)
-    Tr.Position = UDim2.new(0, 18, 0, 44)
+    Tr.Position = UDim2.new(0, 18, 0, 42)
     Tr.BackgroundColor3 = Theme.Border
-    Tr.BackgroundTransparency = 0.5
+    Tr.BackgroundTransparency = 0.45
     Tr.BorderSizePixel = 0
     Tr.Parent = F
     GUI.TrackStatic(Tr, "BackgroundColor3", "Border")
@@ -1033,7 +1119,7 @@ function GUI.CreateSliderWithInput(parent, text, min, max, default, callback)
     local FiGlow = Instance.new("UIStroke")
     FiGlow.Color = Theme.Neon
     FiGlow.Thickness = 2
-    FiGlow.Transparency = 0.4
+    FiGlow.Transparency = 0.35
     FiGlow.Parent = Fi
     GUI.TrackStatic(FiGlow, "Color", "Neon")
 
@@ -1052,7 +1138,7 @@ function GUI.CreateSliderWithInput(parent, text, min, max, default, callback)
     local KnGlow = Instance.new("UIStroke")
     KnGlow.Color = Theme.Primary
     KnGlow.Thickness = 2.5
-    KnGlow.Transparency = 0.25
+    KnGlow.Transparency = 0.2
     KnGlow.Parent = Kn
     GUI.TrackStatic(KnGlow, "Color", "Primary")
 
@@ -1102,14 +1188,14 @@ function GUI.CreateSliderWithInput(parent, text, min, max, default, callback)
 end
 
 -- ============================================================
--- BUTTON (Futuristic glass style)
+-- BUTTON (Cyberpunk HUD)
 -- ============================================================
 
 function GUI.CreateButton(parent, text, callback)
     local F = Instance.new("TextButton")
-    F.Size = UDim2.new(1, -20, 0, 46)
+    F.Size = UDim2.new(1, -20, 0, 44)
     F.BackgroundColor3 = Theme.Primary
-    F.BackgroundTransparency = 0.15
+    F.BackgroundTransparency = 0.1
     F.BorderSizePixel = 0
     F.Text = text
     F.TextColor3 = Theme.White
@@ -1121,22 +1207,22 @@ function GUI.CreateButton(parent, text, callback)
     GUI.TrackStatic(F, "TextColor3", "White")
 
     local FC = Instance.new("UICorner")
-    FC.CornerRadius = UDim.new(0, 14)
+    FC.CornerRadius = UDim.new(0, 12)
     FC.Parent = F
 
     local fStroke = Instance.new("UIStroke")
     fStroke.Color = Theme.Neon
     fStroke.Thickness = 1.5
-    fStroke.Transparency = 0.3
+    fStroke.Transparency = 0.25
     fStroke.Parent = F
     GUI.TrackStatic(fStroke, "Color", "Neon")
 
     -- Bottom glow line
     local glowLine = Instance.new("Frame")
-    glowLine.Size = UDim2.new(1, -20, 0, 2)
-    glowLine.Position = UDim2.new(0, 10, 1, -3)
+    glowLine.Size = UDim2.new(1, -16, 0, 2)
+    glowLine.Position = UDim2.new(0, 8, 1, -3)
     glowLine.BackgroundColor3 = Theme.Neon
-    glowLine.BackgroundTransparency = 0.5
+    glowLine.BackgroundTransparency = 0.4
     glowLine.BorderSizePixel = 0
     glowLine.Parent = F
     GUI.TrackStatic(glowLine, "BackgroundColor3", "Neon")
@@ -1146,19 +1232,19 @@ function GUI.CreateButton(parent, text, callback)
     glowLineC.Parent = glowLine
 
     F.MouseEnter:Connect(function()
-        TweenService:Create(F, TweenInfo.new(0.2), {BackgroundTransparency = 0.05}):Play()
-        TweenService:Create(fStroke, TweenInfo.new(0.2), {Transparency = 0.1}):Play()
-        TweenService:Create(glowLine, TweenInfo.new(0.2), {BackgroundTransparency = 0.2}):Play()
+        TweenService:Create(F, TweenInfo.new(0.2), {BackgroundTransparency = 0.02}):Play()
+        TweenService:Create(fStroke, TweenInfo.new(0.2), {Transparency = 0.08}):Play()
+        TweenService:Create(glowLine, TweenInfo.new(0.2), {BackgroundTransparency = 0.15}):Play()
     end)
     F.MouseLeave:Connect(function()
-        TweenService:Create(F, TweenInfo.new(0.2), {BackgroundTransparency = 0.15}):Play()
-        TweenService:Create(fStroke, TweenInfo.new(0.2), {Transparency = 0.3}):Play()
-        TweenService:Create(glowLine, TweenInfo.new(0.2), {BackgroundTransparency = 0.5}):Play()
+        TweenService:Create(F, TweenInfo.new(0.2), {BackgroundTransparency = 0.1}):Play()
+        TweenService:Create(fStroke, TweenInfo.new(0.2), {Transparency = 0.25}):Play()
+        TweenService:Create(glowLine, TweenInfo.new(0.2), {BackgroundTransparency = 0.4}):Play()
     end)
     F.MouseButton1Click:Connect(function()
-        TweenService:Create(F, TweenInfo.new(0.1), {Size = UDim2.new(1, -24, 0, 44)}):Play()
+        TweenService:Create(F, TweenInfo.new(0.1), {Size = UDim2.new(1, -24, 0, 42)}):Play()
         task.delay(0.1, function()
-            TweenService:Create(F, TweenInfo.new(0.1), {Size = UDim2.new(1, -20, 0, 46)}):Play()
+            TweenService:Create(F, TweenInfo.new(0.1), {Size = UDim2.new(1, -20, 0, 44)}):Play()
         end)
         if callback then callback() end
     end)
@@ -1167,12 +1253,12 @@ function GUI.CreateButton(parent, text, callback)
 end
 
 -- ============================================================
--- LABEL (Futuristic)
+-- LABEL (Cyberpunk HUD)
 -- ============================================================
 
 function GUI.CreateLabel(parent, text, isSub)
     local L = Instance.new("TextLabel")
-    L.Size = UDim2.new(1, -20, 0, 26)
+    L.Size = UDim2.new(1, -20, 0, 24)
     L.BackgroundTransparency = 1
     L.Text = text
     L.TextColor3 = isSub and Theme.SubText or Theme.Text
@@ -1187,7 +1273,7 @@ end
 
 function GUI.CreateWarning(parent, text)
     local L = Instance.new("TextLabel")
-    L.Size = UDim2.new(1, -20, 0, 24)
+    L.Size = UDim2.new(1, -20, 0, 22)
     L.BackgroundTransparency = 1
     L.Text = text
     L.TextColor3 = Theme.Warning
@@ -1201,7 +1287,7 @@ function GUI.CreateWarning(parent, text)
 end
 
 -- ============================================================
--- SEPARATOR (Futuristic)
+-- SEPARATOR (Cyberpunk HUD)
 -- ============================================================
 
 function GUI.CreateSeparator(parent)
@@ -1209,17 +1295,16 @@ function GUI.CreateSeparator(parent)
     F.Size = UDim2.new(1, -40, 0, 1)
     F.Position = UDim2.new(0, 20, 0, 0)
     F.BackgroundColor3 = Theme.Border
-    F.BackgroundTransparency = 0.5
+    F.BackgroundTransparency = 0.4
     F.BorderSizePixel = 0
     F.Parent = parent
     GUI.TrackStatic(F, "BackgroundColor3", "Border")
 
-    -- Center glow dot
     local dot = Instance.new("Frame")
     dot.Size = UDim2.new(0, 6, 0, 6)
     dot.Position = UDim2.new(0.5, -3, 0.5, -3)
     dot.BackgroundColor3 = Theme.Primary
-    dot.BackgroundTransparency = 0.4
+    dot.BackgroundTransparency = 0.3
     dot.BorderSizePixel = 0
     dot.Parent = F
     GUI.TrackStatic(dot, "BackgroundColor3", "Primary")
@@ -1232,22 +1317,21 @@ function GUI.CreateSeparator(parent)
 end
 
 -- ============================================================
--- SECTION (Futuristic)
+-- SECTION (Cyberpunk HUD)
 -- ============================================================
 
 function GUI.CreateSection(parent, title)
     local F = Instance.new("Frame")
-    F.Size = UDim2.new(1, -20, 0, 40)
+    F.Size = UDim2.new(1, -20, 0, 38)
     F.BackgroundTransparency = 1
     F.BorderSizePixel = 0
     F.Parent = parent
 
-    -- Left neon bar
     local accentBar = Instance.new("Frame")
-    accentBar.Size = UDim2.new(0, 3, 0, 20)
+    accentBar.Size = UDim2.new(0, 3, 0, 18)
     accentBar.Position = UDim2.new(0, 0, 0, 10)
     accentBar.BackgroundColor3 = Theme.Primary
-    accentBar.BackgroundTransparency = 0.2
+    accentBar.BackgroundTransparency = 0.15
     accentBar.BorderSizePixel = 0
     accentBar.Parent = F
     GUI.TrackStatic(accentBar, "BackgroundColor3", "Primary")
@@ -1260,7 +1344,7 @@ function GUI.CreateSection(parent, title)
     L.Size = UDim2.new(1, -20, 1, 0)
     L.Position = UDim2.new(0, 14, 0, 0)
     L.BackgroundTransparency = 1
-    L.Text = "◈ " .. title
+    L.Text = title
     L.TextColor3 = Theme.Primary
     L.TextSize = 14
     L.Font = Enum.Font.GothamBold
@@ -1273,35 +1357,34 @@ function GUI.CreateSection(parent, title)
 end
 
 -- ============================================================
--- DROPDOWN (Futuristic glass style)
+-- DROPDOWN (Cyberpunk HUD)
 -- ============================================================
 
 function GUI.CreateDropdown(parent, text, options, default, callback)
     local F = Instance.new("Frame")
     F.Size = UDim2.new(1, -20, 0, 48)
     F.BackgroundColor3 = Theme.ElementBG
-    F.BackgroundTransparency = 0.4
+    F.BackgroundTransparency = 0.35
     F.BorderSizePixel = 0
     F.Parent = parent
     GUI.TrackStatic(F, "BackgroundColor3", "ElementBG")
 
     local FC = Instance.new("UICorner")
-    FC.CornerRadius = UDim.new(0, 14)
+    FC.CornerRadius = UDim.new(0, 12)
     FC.Parent = F
 
     local fStroke = Instance.new("UIStroke")
     fStroke.Color = Theme.Border
     fStroke.Thickness = 1
-    fStroke.Transparency = 0.6
+    fStroke.Transparency = 0.55
     fStroke.Parent = F
     GUI.TrackStatic(fStroke, "Color", "Border")
 
-    -- Left indicator
     local indicator = Instance.new("Frame")
-    indicator.Size = UDim2.new(0, 3, 0, 18)
-    indicator.Position = UDim2.new(0, 0, 0.5, -9)
+    indicator.Size = UDim2.new(0, 3, 0, 16)
+    indicator.Position = UDim2.new(0, 0, 0.5, -8)
     indicator.BackgroundColor3 = Theme.Primary
-    indicator.BackgroundTransparency = 0.6
+    indicator.BackgroundTransparency = 0.55
     indicator.BorderSizePixel = 0
     indicator.Parent = F
     GUI.TrackStatic(indicator, "BackgroundColor3", "Primary")
@@ -1326,10 +1409,10 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
     local selected = default or options[1] or "None"
 
     local DBtn = Instance.new("TextButton")
-    DBtn.Size = UDim2.new(0, 130, 0, 30)
-    DBtn.Position = UDim2.new(1, -146, 0.5, -15)
+    DBtn.Size = UDim2.new(0, 130, 0, 28)
+    DBtn.Position = UDim2.new(1, -146, 0.5, -14)
     DBtn.BackgroundColor3 = Theme.BG
-    DBtn.BackgroundTransparency = 0.3
+    DBtn.BackgroundTransparency = 0.25
     DBtn.BorderSizePixel = 0
     DBtn.Text = selected
     DBtn.TextColor3 = Theme.Primary
@@ -1347,7 +1430,7 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
     local DBS = Instance.new("UIStroke")
     DBS.Color = Theme.BorderGlow
     DBS.Thickness = 1
-    DBS.Transparency = 0.5
+    DBS.Transparency = 0.45
     DBS.Parent = DBtn
     GUI.TrackStatic(DBS, "Color", "BorderGlow")
 
@@ -1373,7 +1456,7 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
             dropFrame.Name = "DropdownMenu"
             dropFrame.Size = UDim2.new(0, 130, 0, math.min(#options * 32, 180))
             dropFrame.BackgroundColor3 = Theme.BG
-            dropFrame.BackgroundTransparency = 0.1
+            dropFrame.BackgroundTransparency = 0.05
             dropFrame.BorderSizePixel = 0
             dropFrame.ZIndex = 100
             dropFrame.Parent = GUI.ScreenGui or parent:FindFirstAncestorOfClass("ScreenGui")
@@ -1410,7 +1493,7 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
                 optBtn.Size = UDim2.new(1, 0, 0, 30)
                 optBtn.Position = UDim2.new(0, 0, 0, (i - 1) * 32)
                 optBtn.BackgroundColor3 = Theme.BG
-                optBtn.BackgroundTransparency = 0.5
+                optBtn.BackgroundTransparency = 0.45
                 optBtn.BorderSizePixel = 0
                 optBtn.Text = opt
                 optBtn.TextColor3 = Theme.Text
@@ -1424,10 +1507,10 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
                 optC.Parent = optBtn
 
                 optBtn.MouseEnter:Connect(function()
-                    TweenService:Create(optBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.15}):Play()
+                    TweenService:Create(optBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.1}):Play()
                 end)
                 optBtn.MouseLeave:Connect(function()
-                    TweenService:Create(optBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.5}):Play()
+                    TweenService:Create(optBtn, TweenInfo.new(0.15), {BackgroundTransparency = 0.45}):Play()
                 end)
                 optBtn.MouseButton1Click:Connect(function()
                     selected = opt
@@ -1447,34 +1530,34 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
 end
 
 -- ============================================================
--- KEYBIND (Futuristic glass style)
+-- KEYBIND (Cyberpunk HUD)
 -- ============================================================
 
 function GUI.CreateKeybind(parent, text, defaultKey, callback)
     local F = Instance.new("Frame")
     F.Size = UDim2.new(1, -20, 0, 48)
     F.BackgroundColor3 = Theme.ElementBG
-    F.BackgroundTransparency = 0.4
+    F.BackgroundTransparency = 0.35
     F.BorderSizePixel = 0
     F.Parent = parent
     GUI.TrackStatic(F, "BackgroundColor3", "ElementBG")
 
     local FC = Instance.new("UICorner")
-    FC.CornerRadius = UDim.new(0, 14)
+    FC.CornerRadius = UDim.new(0, 12)
     FC.Parent = F
 
     local fStroke = Instance.new("UIStroke")
     fStroke.Color = Theme.Border
     fStroke.Thickness = 1
-    fStroke.Transparency = 0.6
+    fStroke.Transparency = 0.55
     fStroke.Parent = F
     GUI.TrackStatic(fStroke, "Color", "Border")
 
     local indicator = Instance.new("Frame")
-    indicator.Size = UDim2.new(0, 3, 0, 18)
-    indicator.Position = UDim2.new(0, 0, 0.5, -9)
+    indicator.Size = UDim2.new(0, 3, 0, 16)
+    indicator.Position = UDim2.new(0, 0, 0.5, -8)
     indicator.BackgroundColor3 = Theme.Primary
-    indicator.BackgroundTransparency = 0.6
+    indicator.BackgroundTransparency = 0.55
     indicator.BorderSizePixel = 0
     indicator.Parent = F
     GUI.TrackStatic(indicator, "BackgroundColor3", "Primary")
@@ -1500,10 +1583,10 @@ function GUI.CreateKeybind(parent, text, defaultKey, callback)
     local listening = false
 
     local KBtn = Instance.new("TextButton")
-    KBtn.Size = UDim2.new(0, 130, 0, 30)
-    KBtn.Position = UDim2.new(1, -146, 0.5, -15)
+    KBtn.Size = UDim2.new(0, 130, 0, 28)
+    KBtn.Position = UDim2.new(1, -146, 0.5, -14)
     KBtn.BackgroundColor3 = Theme.BG
-    KBtn.BackgroundTransparency = 0.3
+    KBtn.BackgroundTransparency = 0.25
     KBtn.BorderSizePixel = 0
     KBtn.Text = currentKey.Name
     KBtn.TextColor3 = Theme.Primary
@@ -1521,7 +1604,7 @@ function GUI.CreateKeybind(parent, text, defaultKey, callback)
     local KBS = Instance.new("UIStroke")
     KBS.Color = Theme.BorderGlow
     KBS.Thickness = 1
-    KBS.Transparency = 0.5
+    KBS.Transparency = 0.45
     KBS.Parent = KBtn
     GUI.TrackStatic(KBS, "Color", "BorderGlow")
 
@@ -1572,7 +1655,7 @@ function GUI.CreateKeybind(parent, text, defaultKey, callback)
 end
 
 -- ============================================================
--- COLOR PICKER (Futuristic glass style)
+-- COLOR PICKER (Cyberpunk HUD)
 -- ============================================================
 
 function GUI.CreateColorPicker(parent, titleText, defaultColor)
@@ -1581,7 +1664,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor)
     CWFrame.Size = UDim2.new(0, 300, 0, 300)
     CWFrame.Position = UDim2.new(0.5, -150, 0.5, -150)
     CWFrame.BackgroundColor3 = Theme.BG
-    CWFrame.BackgroundTransparency = 0.05
+    CWFrame.BackgroundTransparency = 0.03
     CWFrame.BorderSizePixel = 0
     CWFrame.Visible = false
     CWFrame.ZIndex = 200
@@ -1589,7 +1672,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor)
     GUI.TrackStatic(CWFrame, "BackgroundColor3", "BG")
 
     local CWC = Instance.new("UICorner")
-    CWC.CornerRadius = UDim.new(0, 18)
+    CWC.CornerRadius = UDim.new(0, 16)
     CWC.Parent = CWFrame
 
     local CWS = Instance.new("UIStroke")
@@ -1598,11 +1681,10 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor)
     CWS.Parent = CWFrame
     GUI.TrackStatic(CWS, "Color", "BorderGlow")
 
-    -- Glass overlay
     local glass = Instance.new("Frame")
     glass.Size = UDim2.new(1, 0, 1, 0)
     glass.BackgroundColor3 = Theme.Glass
-    glass.BackgroundTransparency = 0.9
+    glass.BackgroundTransparency = 0.92
     glass.BorderSizePixel = 0
     glass.ZIndex = 0
     glass.Parent = CWFrame
@@ -1611,7 +1693,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor)
     CWTitle.Size = UDim2.new(1, -48, 0, 30)
     CWTitle.Position = UDim2.new(0, 18, 0, 10)
     CWTitle.BackgroundTransparency = 1
-    CWTitle.Text = "◈ " .. (titleText or "Color")
+    CWTitle.Text = titleText or "Color"
     CWTitle.TextColor3 = Theme.Text
     CWTitle.TextSize = 14
     CWTitle.Font = Enum.Font.GothamBold
@@ -1682,7 +1764,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor)
         track.Size = UDim2.new(1, -36, 0, 6)
         track.Position = UDim2.new(0, 18, 0, y + 18)
         track.BackgroundColor3 = Theme.Border
-        track.BackgroundTransparency = 0.5
+        track.BackgroundTransparency = 0.4
         track.BorderSizePixel = 0
         track.ZIndex = 201
         track.Parent = CWFrame
@@ -1784,7 +1866,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor)
     hexBox.Size = UDim2.new(0, 130, 0, 28)
     hexBox.Position = UDim2.new(0, 88, 0, 192)
     hexBox.BackgroundColor3 = Theme.ElementBG
-    hexBox.BackgroundTransparency = 0.3
+    hexBox.BackgroundTransparency = 0.25
     hexBox.BorderSizePixel = 0
     hexBox.Text = "#FF69B4"
     hexBox.TextColor3 = Theme.Text

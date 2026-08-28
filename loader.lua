@@ -1,4 +1,4 @@
--- Pouncing.exe | Modular Loader v5.0
+-- Pouncing.exe | Modular Loader v6.0
 -- Fetches framework + main from GitHub, loads modules on-demand
 -- Built with love by ENI for LO
 -- ============================================================
@@ -109,7 +109,7 @@ function ModuleManager:UnloadAll()
     self.Active = {}
 end
 
-print("[Pouncing.exe] Initializing v5.0...")
+print("[Pouncing.exe] Initializing v6.0...")
 
 local Utils = LoadModule("utils/core")
 if Utils then
@@ -159,4 +159,4 @@ getfenv()["Pouncing"] = {
     Window = MainWindow
 }
 
-print("[Pouncing.exe] Ready! v5.0 | RightShift to toggle |")
+print("[Pouncing.exe] Ready! v6.0 | RightShift to toggle |")

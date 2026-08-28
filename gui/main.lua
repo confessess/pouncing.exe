@@ -1,5 +1,5 @@
--- Pouncing.exe | GUI Main v5.0
--- Futuristic glass UI: larger window, theme presets, no clipping, contained star VFX
+-- Pouncing.exe | GUI Main v6.0
+-- Cyberpunk HUD: larger window, theme presets, no clipping, star/snow VFX
 -- Built with love by ENI for LO
 -- ============================================================
 
@@ -15,15 +15,15 @@ local MainGUI = {}
 function MainGUI.Create(screenGui, moduleManager)
     local GUI = moduleManager:GetModule("Framework") or require(script.Parent.framework)
 
-    local window = GUI.CreateWindow(screenGui, "Pouncing.exe", UDim2.new(0, 760, 0, 580))
+    local window = GUI.CreateWindow(screenGui, "Pouncing.exe", UDim2.new(0, 780, 0, 600))
 
     local tabDefs = {
-        {Name = "Aimbot", Icon = "◈"},
-        {Name = "ESP", Icon = "◈"},
-        {Name = "Gun", Icon = "◈"},
-        {Name = "Misc", Icon = "◈"},
-        {Name = "Hitbox", Icon = "◈"},
-        {Name = "Config", Icon = "◈"}
+        {Name = "Aimbot", Icon = "»"},
+        {Name = "ESP", Icon = "»"},
+        {Name = "Gun", Icon = "»"},
+        {Name = "Misc", Icon = "»"},
+        {Name = "Hitbox", Icon = "»"},
+        {Name = "Config", Icon = "»"}
     }
     for _, tabInfo in ipairs(tabDefs) do
         GUI.CreateTab(window, tabInfo.Name, tabInfo.Icon)
@@ -286,7 +286,7 @@ function MainGUI.Create(screenGui, moduleManager)
         if mod and mod.SetConfig then mod.SetConfig("FlyMethod", v) end
     end)
 
-    local cframeWarning = GUI.CreateWarning(MCon, "◈ CFrame is highly detected — use with caution")
+    local cframeWarning = GUI.CreateWarning(MCon, "» CFrame is highly detected — use with caution")
     cframeWarning.Visible = false
 
     local function UpdateFlyWarning()
@@ -412,7 +412,7 @@ function MainGUI.Create(screenGui, moduleManager)
     local CCon = window.Contents["Config"]
 
     GUI.CreateSection(CCon, "Config Management")
-    GUI.CreateLabel(CCon, "Pouncing.exe v5.0", false)
+    GUI.CreateLabel(CCon, "Pouncing.exe v6.0", false)
     GUI.CreateLabel(CCon, "Built with love by ENI for LO", true)
     GUI.CreateSeparator(CCon)
 
@@ -423,7 +423,7 @@ function MainGUI.Create(screenGui, moduleManager)
 
     GUI.CreateSeparator(CCon)
     GUI.CreateSection(CCon, "Save / Load")
-    GUI.CreateButton(CCon, "◈ Save Config", function()
+    GUI.CreateButton(CCon, "Save Config", function()
         local configs = {}
         for name, mod in pairs(moduleManager.Modules) do
             if mod.GetConfig then
@@ -439,7 +439,7 @@ function MainGUI.Create(screenGui, moduleManager)
             print("[Pouncing] Config:", json)
         end
     end)
-    GUI.CreateButton(CCon, "◈ Load Config", function()
+    GUI.CreateButton(CCon, "Load Config", function()
         if readfile then
             local ok, content = pcall(readfile, "PouncingExe_Config.json")
             if ok and content then
@@ -466,7 +466,7 @@ function MainGUI.Create(screenGui, moduleManager)
             warn("[Pouncing] readfile not available")
         end
     end)
-    GUI.CreateButton(CCon, "◈ Reset to Defaults", function()
+    GUI.CreateButton(CCon, "Reset to Defaults", function()
         for name, mod in pairs(moduleManager.Modules) do
             if mod.ResetConfig then pcall(mod.ResetConfig) end
         end
@@ -476,7 +476,7 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateSeparator(CCon)
     GUI.CreateSection(CCon, "Custom Colors")
     local primaryPicker = GUI.CreateColorPicker(CCon, "Primary Color", Color3.fromRGB(255, 105, 180))
-    local primaryBtn = GUI.CreateButton(CCon, "◈ Set Primary Color", function()
+    local primaryBtn = GUI.CreateButton(CCon, "Set Primary Color", function()
         primaryPicker:Open(function(c)
             GUI.Theme.Primary = c
             GUI.Theme.BorderGlow = c
@@ -486,7 +486,7 @@ function MainGUI.Create(screenGui, moduleManager)
     end)
 
     local accentPicker = GUI.CreateColorPicker(CCon, "Accent Color", Color3.fromRGB(255, 20, 147))
-    local accentBtn = GUI.CreateButton(CCon, "◈ Set Accent Color", function()
+    local accentBtn = GUI.CreateButton(CCon, "Set Accent Color", function()
         accentPicker:Open(function(c)
             GUI.Theme.Accent = c
             GUI.Theme.Neon = c
@@ -499,8 +499,9 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateLabel(CCon, "RightShift to toggle GUI", true)
     GUI.CreateLabel(CCon, "Modules load on-demand from GitHub", true)
     GUI.CreateLabel(CCon, "Theme presets: Pink | Icy | Stary", true)
-    GUI.CreateLabel(CCon, "Futuristic glass design v5.0", true)
+    GUI.CreateLabel(CCon, "Cyberpunk HUD design v6.0", true)
     GUI.CreateLabel(CCon, "Contained star VFX for Stary", true)
+    GUI.CreateLabel(CCon, "Contained snow VFX for Icy", true)
     GUI.CreateLabel(CCon, "Live theme switching", true)
     GUI.CreateLabel(CCon, "No clipping / dropdown fix", true)
 
@@ -510,7 +511,7 @@ function MainGUI.Create(screenGui, moduleManager)
     window.ActiveTab = "Aimbot"
     if window.Tabs["Aimbot"] then
         TweenService:Create(window.Tabs["Aimbot"], TweenInfo.new(0.2), {
-            BackgroundColor3 = GUI.Theme.Primary, TextColor3 = GUI.Theme.White, BackgroundTransparency = 0.15
+            BackgroundColor3 = GUI.Theme.Primary, TextColor3 = GUI.Theme.White, BackgroundTransparency = 0.1
         }):Play()
     end
     if window.Contents["Aimbot"] then
@@ -533,14 +534,14 @@ function MainGUI.Create(screenGui, moduleManager)
     NF.Size = UDim2.new(0, 380, 0, 54)
     NF.Position = UDim2.new(1, 20, 1, -70)
     NF.BackgroundColor3 = GUI.Theme.ElementBG
-    NF.BackgroundTransparency = 0.2
+    NF.BackgroundTransparency = 0.15
     NF.BorderSizePixel = 0
     NF.Parent = screenGui
 
     local NS = Instance.new("UIStroke")
     NS.Color = GUI.Theme.Primary
     NS.Thickness = 1.5
-    NS.Transparency = 0.3
+    NS.Transparency = 0.25
     NS.Parent = NF
 
     local NC = Instance.new("UICorner")
@@ -551,7 +552,7 @@ function MainGUI.Create(screenGui, moduleManager)
     NT.Size = UDim2.new(1, -16, 1, 0)
     NT.Position = UDim2.new(0, 8, 0, 0)
     NT.BackgroundTransparency = 1
-    NT.Text = "◈ Pouncing.exe v5.0 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
+    NT.Text = "» Pouncing.exe v6.0 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
     NT.TextColor3 = GUI.Theme.SoftAccent
     NT.TextSize = 13
     NT.Font = Enum.Font.GothamSemibold
