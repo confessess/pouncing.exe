@@ -524,18 +524,27 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateSection(CCon, "Game Detection")
     local gameName = "Universal"
     local placeId = game.PlaceId
-    local detector = moduleManager:GetModule("GameDetector")
-    if not detector then
-        local s, d = pcall(function()
-            return require(script.Parent.Parent.games.detector)
-        end)
-        if s and d then
-            gameName = d.GetPresetName()
-            detector = d
+
+    -- Auto-detect from PlaceId
+    local knownGames = {
+        [286090429] = "Arsenal",
+        [2788229376] = "Da Hood",
+        [16033194031] = "Zee Hood",
+        [7239319209] = "Da Hood",
+    }
+    gameName = knownGames[placeId] or "Universal"
+
+    -- Try to get game name from Marketplace
+    pcall(function()
+        local mps = game:GetService("MarketplaceService")
+        local info = mps:GetProductInfo(placeId)
+        if info and info.Name then
+            local n = info.Name:lower()
+            if n:match("arsenal") then gameName = "Arsenal" end
+            if n:match("da hood") then gameName = "Da Hood" end
+            if n:match("zee hood") then gameName = "Zee Hood" end
         end
-    else
-        gameName = detector.GetPresetName()
-    end
+    end)
 
     local detectedLabel = GUI.CreateLabel(CCon, "Detected Game: " .. gameName, false)
     GUI.CreateLabel(CCon, "PlaceId: " .. tostring(placeId), true)
@@ -556,18 +565,18 @@ function MainGUI.Create(screenGui, moduleManager)
         local presetName = selectedPreset
         if presetName == "Auto-Detect" then presetName = gameName end
 
-        local s, preset = pcall(function()
-            return require(script.Parent.Parent.games.universal)
-        end)
+        local baseUrl = "https://raw.githubusercontent.com/confessess/pouncing.exe/main/games/"
+        local presetUrl = baseUrl .. "universal.lua"
         if presetName == "Arsenal" then
-            s, preset = pcall(function()
-                return require(script.Parent.Parent.games.arsenal)
-            end)
+            presetUrl = baseUrl .. "arsenal.lua"
         elseif presetName == "Da Hood" or presetName == "Zee Hood" then
-            s, preset = pcall(function()
-                return require(script.Parent.Parent.games.da_hood)
-            end)
+            presetUrl = baseUrl .. "da_hood.lua"
         end
+
+        local s, preset = pcall(function()
+            return loadstring(game:HttpGet(presetUrl))()
+        end)
+
         if s and preset and preset.Configs then
             for modName, cfg in pairs(preset.Configs) do
                 local mod = moduleManager:GetModule(modName)
@@ -579,7 +588,7 @@ function MainGUI.Create(screenGui, moduleManager)
             end
             print("[Pouncing] Loaded " .. presetName .. " preset")
         else
-            warn("[Pouncing] Failed to load preset for " .. presetName)
+            warn("[Pouncing] Failed to load preset for " .. presetName .. " from " .. presetUrl)
         end
     end)
     GUI.CreateSeparator(CCon)
