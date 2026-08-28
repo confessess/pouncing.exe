@@ -1,7 +1,7 @@
--- Pouncing.exe | Utils Core v3.2
+-- Pouncing.exe | Utils Core v3.3
 -- Shared utilities + Unified Hook Manager
--- CRITICAL FIX: Removed newcclosure (caused GUI freezes in some executors)
--- Using regular closures + table.unpack for safe argument passing
+-- REMOVED __index hook — was breaking Roblox core GUI scripts
+-- Kept: __namecall for remotes + direct Workspace method hooks
 -- ============================================================
 
 local Workspace = game:GetService("Workspace")
@@ -118,8 +118,9 @@ Utils.SkeletonConnections = {
 }
 
 -- ============================================================
--- UNIFIED HOOK MANAGER v3.2
--- REMOVED newcclosure — using regular closures to prevent freezes
+-- UNIFIED HOOK MANAGER v3.3
+-- REMOVED __index hook — was breaking Roblox core scripts
+-- Kept: __namecall for remotes + direct Workspace method hooks
 -- ============================================================
 local HookManager = {
     OriginalRaycast = nil,
@@ -131,8 +132,6 @@ local HookManager = {
     OriginalNamecall = nil,
     NamecallHandlers = {},
     Mt = nil,
-    OriginalIndex = nil,
-    IndexHandlers = {},
     Hooked = false,
 }
 
@@ -168,13 +167,6 @@ function HookManager:RegisterNamecallHandler(name, handler, priority)
 end
 function HookManager:UnregisterNamecallHandler(name)
     self.NamecallHandlers[name] = nil
-end
-
-function HookManager:RegisterIndexHandler(name, handler, priority)
-    self.IndexHandlers[name] = {handler = handler, priority = priority or 0}
-end
-function HookManager:UnregisterIndexHandler(name)
-    self.IndexHandlers[name] = nil
 end
 
 function HookManager:Install()
@@ -244,7 +236,7 @@ function HookManager:Install()
             mt.__namecall = function(self_obj, ...)
                 local args = {...}
                 local method = nil
-                local methodOk, methodErr = pcall(function()
+                local methodOk = pcall(function()
                     method = getnamecallmethod()
                 end)
                 if not methodOk or not method then
@@ -305,33 +297,9 @@ function HookManager:Install()
                     end
                 end
 
-                if modified then
-                    return oldNamecall(self_obj, table.unpack(args))
-                else
-                    return oldNamecall(self_obj, table.unpack(args))
-                end
+                return oldNamecall(self_obj, table.unpack(args))
             end
             setreadonly(mt, true)
-        end
-    end
-
-    -- __index hook — REGULAR CLOSURE (not newcclosure)
-    local ok2, mt2 = pcall(getrawmetatable, game)
-    if ok2 and mt2 then
-        local oldIndex = mt2.__index
-        if oldIndex then
-            self.OriginalIndex = oldIndex
-            setreadonly(mt2, false)
-            mt2.__index = function(self_obj, key)
-                for _, entry in ipairs(GetSortedHandlers(self.IndexHandlers)) do
-                    local ok3, result = pcall(entry.handler, self_obj, key)
-                    if ok3 and result ~= nil then
-                        return result
-                    end
-                end
-                return oldIndex(self_obj, key)
-            end
-            setreadonly(mt2, true)
         end
     end
 end
@@ -358,16 +326,9 @@ function HookManager:Uninstall()
         setreadonly(self.Mt, true)
     end
 
-    if self.Mt and self.OriginalIndex then
-        setreadonly(self.Mt, false)
-        self.Mt.__index = self.OriginalIndex
-        setreadonly(self.Mt, true)
-    end
-
     self.Hooked = false
     self.OriginalRaycast = nil
     self.OriginalNamecall = nil
-    self.OriginalIndex = nil
     self.Mt = nil
 end
 
