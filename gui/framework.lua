@@ -1,5 +1,5 @@
--- Pouncing.exe | GUI Framework v6.2
--- Cyberpunk HUD UI, no clipping, contained VFX, live themes
+-- Pouncing.exe | GUI Framework v6.3
+-- Cyberpunk HUD UI, contained dropdowns, no clipping, live themes
 -- Built with love by ENI for LO
 -- ============================================================
 
@@ -273,14 +273,14 @@ function GUI.StopSnowVFX()
 end
 
 -- ============================================================
--- WINDOW CREATION (Cyberpunk HUD — ALL corners rounded)
+-- WINDOW CREATION (Cyberpunk HUD — ALL corners rounded, proper clipping)
 -- ============================================================
 
 function GUI.CreateWindow(parent, title, size)
     size = size or UDim2.new(0, 780, 0, 600)
     GUI.ScreenGui = parent
 
-    -- Outer container — NO clip, holds everything
+    -- Outer container — NO clip, holds everything including rim glow
     local Container = Instance.new("Frame")
     Container.Name = "PouncingContainer"
     Container.Size = size
@@ -343,7 +343,7 @@ function GUI.CreateWindow(parent, title, size)
     rim2C.CornerRadius = UDim.new(0, 24)
     rim2C.Parent = rim2
 
-    -- Main frame
+    -- Main frame — this clips everything inside
     local MF = Instance.new("Frame")
     MF.Name = "PouncingMain"
     MF.Size = UDim2.new(1, 0, 1, 0)
@@ -464,7 +464,7 @@ function GUI.CreateWindow(parent, title, size)
     VT.Size = UDim2.new(0, 60, 0, 20)
     VT.Position = UDim2.new(1, -130, 0, 17)
     VT.BackgroundTransparency = 1
-    VT.Text = "v6.2"
+    VT.Text = "v6.3"
     VT.TextColor3 = Theme.SubText
     VT.TextSize = 11
     VT.Font = Enum.Font.Gotham
@@ -528,9 +528,6 @@ function GUI.CreateWindow(parent, title, size)
         local ts = Min and UDim2.new(0, size.X.Offset, 0, 54) or size
         TweenService:Create(Container, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = ts}):Play()
         MB.Text = Min and "+" or "−"
-        -- Hide bottom deco when minimized
-        if DecoLine then DecoLine.Visible = not Min end
-        if sideLine then sideLine.Visible = not Min end
     end)
 
     -- Dragging
@@ -595,7 +592,7 @@ function GUI.CreateWindow(parent, title, size)
     StarVFX.ParentFrame = CCon
     SnowVFX.ParentFrame = CCon
 
-    -- Bottom deco — thin horizontal glow line (hidden when minimized)
+    -- Bottom deco — thin horizontal glow line inside tab container (clips with main frame)
     local DecoLine = Instance.new("Frame")
     DecoLine.Size = UDim2.new(0, 50, 0, 2)
     DecoLine.Position = UDim2.new(0.5, -25, 1, -22)
@@ -609,7 +606,7 @@ function GUI.CreateWindow(parent, title, size)
     DecoLineC.CornerRadius = UDim.new(1, 0)
     DecoLineC.Parent = DecoLine
 
-    -- Side deco — vertical thin glow line on left edge (hidden when minimized)
+    -- Side deco — vertical thin glow line on left edge inside tab container (clips with main frame)
     local sideLine = Instance.new("Frame")
     sideLine.Size = UDim2.new(0, 1, 0, 120)
     sideLine.Position = UDim2.new(0, 8, 0.5, -60)
@@ -627,12 +624,11 @@ function GUI.CreateWindow(parent, title, size)
         MainFrame = MF, Container = Container, TitleBar = TB,
         TabContainer = TCon, ContentContainer = CCon,
         Tabs = {}, Contents = {}, ActiveTab = nil, TabCount = 0,
-        DecoLine = DecoLine, SideLine = sideLine,
     }
 end
 
 -- ============================================================
--- TAB CREATION (Cyberpunk HUD — proper text padding)
+-- TAB CREATION (Cyberpunk HUD — safe text padding from accent bar)
 -- ============================================================
 
 function GUI.CreateTab(window, name, icon)
@@ -645,25 +641,18 @@ function GUI.CreateTab(window, name, icon)
     B.BackgroundColor3 = Theme.ElementBG
     B.BackgroundTransparency = 0.45
     B.BorderSizePixel = 0
-    B.Text = name
-    B.TextColor3 = Theme.SubText
-    B.TextSize = 13
-    B.Font = Enum.Font.GothamSemibold
-    B.TextXAlignment = Enum.TextXAlignment.Left
+    B.Text = ""
     B.AutoButtonColor = false
     B.Parent = window.TabContainer
-
-    -- Proper text padding so name doesnt clip into indicator bar
-    B.TextTruncate = Enum.TextTruncate.AtEnd
 
     local BC = Instance.new("UICorner")
     BC.CornerRadius = UDim.new(0, 12)
     BC.Parent = B
 
-    -- Left neon accent bar — moved further left, smaller
+    -- Left neon accent bar — at the far left edge, very small
     local accent = Instance.new("Frame")
     accent.Size = UDim2.new(0, 3, 0, 16)
-    accent.Position = UDim2.new(0, 6, 0.5, -8)
+    accent.Position = UDim2.new(0, 0, 0.5, -8)
     accent.BackgroundColor3 = Theme.Primary
     accent.BackgroundTransparency = 0.75
     accent.BorderSizePixel = 0
@@ -673,6 +662,21 @@ function GUI.CreateTab(window, name, icon)
     local accentC = Instance.new("UICorner")
     accentC.CornerRadius = UDim.new(1, 0)
     accentC.Parent = accent
+
+    -- Text label with SAFE left padding so it never touches the accent bar
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Name = "TabText"
+    textLabel.Size = UDim2.new(1, -20, 1, 0)
+    textLabel.Position = UDim2.new(0, 16, 0, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = name
+    textLabel.TextColor3 = Theme.SubText
+    textLabel.TextSize = 13
+    textLabel.Font = Enum.Font.GothamSemibold
+    textLabel.TextXAlignment = Enum.TextXAlignment.Left
+    textLabel.TextTruncate = Enum.TextTruncate.AtEnd
+    textLabel.Parent = B
+    GUI.TrackStatic(textLabel, "TextColor3", "SubText")
 
     -- Subtle border stroke
     local innerGlow = Instance.new("UIStroke")
@@ -701,7 +705,7 @@ function GUI.CreateTab(window, name, icon)
         if window.ActiveTab == name then
             B.BackgroundColor3 = Theme.Primary
             B.BackgroundTransparency = 0.1
-            B.TextColor3 = Theme.White
+            textLabel.TextColor3 = Theme.White
             accent.BackgroundTransparency = 0.05
             accent.BackgroundColor3 = Theme.White
             innerGlow.Color = Theme.Neon
@@ -709,7 +713,7 @@ function GUI.CreateTab(window, name, icon)
         else
             B.BackgroundColor3 = Theme.ElementBG
             B.BackgroundTransparency = 0.45
-            B.TextColor3 = Theme.SubText
+            textLabel.TextColor3 = Theme.SubText
             accent.BackgroundTransparency = 0.75
             accent.BackgroundColor3 = Theme.Primary
             innerGlow.Color = Theme.Border
@@ -748,13 +752,13 @@ function GUI.CreateTab(window, name, icon)
         if window.ActiveTab then
             local oldBtn = window.Tabs[window.ActiveTab]
             TweenService:Create(oldBtn, TweenInfo.new(0.2), {
-                BackgroundColor3 = Theme.ElementBG, TextColor3 = Theme.SubText, BackgroundTransparency = 0.45
+                BackgroundColor3 = Theme.ElementBG, BackgroundTransparency = 0.45
             }):Play()
             window.Contents[window.ActiveTab].Visible = false
         end
         window.ActiveTab = name
         TweenService:Create(B, TweenInfo.new(0.2), {
-            BackgroundColor3 = Theme.Primary, TextColor3 = Theme.White, BackgroundTransparency = 0.1
+            BackgroundColor3 = Theme.Primary, BackgroundTransparency = 0.1
         }):Play()
         window.Contents[name].Visible = true
     end)
@@ -763,7 +767,7 @@ function GUI.CreateTab(window, name, icon)
 end
 
 -- ============================================================
--- TOGGLE (Cyberpunk HUD — text doesnt clip into indicator)
+-- TOGGLE (Cyberpunk HUD — text never clips into indicator)
 -- ============================================================
 
 function GUI.CreateToggle(parent, text, default, colorKey, callback)
@@ -786,7 +790,7 @@ function GUI.CreateToggle(parent, text, default, colorKey, callback)
     fStroke.Parent = F
     GUI.TrackStatic(fStroke, "Color", "Border")
 
-    -- Left neon indicator — moved to edge, small
+    -- Left neon indicator — flush at left edge, very thin
     local indicator = Instance.new("Frame")
     indicator.Size = UDim2.new(0, 3, 0, 18)
     indicator.Position = UDim2.new(0, 0, 0.5, -9)
@@ -800,10 +804,10 @@ function GUI.CreateToggle(parent, text, default, colorKey, callback)
     indC.CornerRadius = UDim.new(1, 0)
     indC.Parent = indicator
 
-    -- Text label with proper left padding so it doesnt clip into indicator
+    -- Text label with SAFE left padding (16px from left edge, well clear of 3px indicator)
     local L = Instance.new("TextLabel")
     L.Size = UDim2.new(1, -150, 1, 0)
-    L.Position = UDim2.new(0, 18, 0, 0)
+    L.Position = UDim2.new(0, 16, 0, 0)
     L.BackgroundTransparency = 1
     L.Text = text
     L.TextColor3 = Theme.Text
@@ -933,7 +937,7 @@ function GUI.CreateSlider(parent, text, min, max, default, callback)
 
     local L = Instance.new("TextLabel")
     L.Size = UDim2.new(1, -100, 0, 22)
-    L.Position = UDim2.new(0, 18, 0, 10)
+    L.Position = UDim2.new(0, 16, 0, 10)
     L.BackgroundTransparency = 1
     L.Text = text
     L.TextColor3 = Theme.Text
@@ -1069,7 +1073,7 @@ function GUI.CreateSliderWithInput(parent, text, min, max, default, callback)
 
     local L = Instance.new("TextLabel")
     L.Size = UDim2.new(1, -220, 0, 22)
-    L.Position = UDim2.new(0, 18, 0, 10)
+    L.Position = UDim2.new(0, 16, 0, 10)
     L.BackgroundTransparency = 1
     L.Text = text
     L.TextColor3 = Theme.Text
@@ -1343,7 +1347,7 @@ function GUI.CreateSeparator(parent)
 end
 
 -- ============================================================
--- SECTION (Cyberpunk HUD — no prefix, proper padding)
+-- SECTION (Cyberpunk HUD — no prefix, safe padding)
 -- ============================================================
 
 function GUI.CreateSection(parent, title)
@@ -1353,7 +1357,7 @@ function GUI.CreateSection(parent, title)
     F.BorderSizePixel = 0
     F.Parent = parent
 
-    -- Left neon bar — at edge, small
+    -- Left neon bar — flush at edge, thin
     local accentBar = Instance.new("Frame")
     accentBar.Size = UDim2.new(0, 3, 0, 18)
     accentBar.Position = UDim2.new(0, 0, 0, 10)
@@ -1367,7 +1371,7 @@ function GUI.CreateSection(parent, title)
     accentBarC.CornerRadius = UDim.new(1, 0)
     accentBarC.Parent = accentBar
 
-    -- Text with proper left padding so it doesnt clip into accent bar
+    -- Text with safe left padding (14px from left edge, well clear of 3px bar)
     local L = Instance.new("TextLabel")
     L.Size = UDim2.new(1, -20, 1, 0)
     L.Position = UDim2.new(0, 14, 0, 0)
@@ -1385,7 +1389,7 @@ function GUI.CreateSection(parent, title)
 end
 
 -- ============================================================
--- DROPDOWN (Cyberpunk HUD — ScreenGui parent with scroll tracking)
+-- DROPDOWN (Cyberpunk HUD — contained inside scrolling frame, clips with UI)
 -- ============================================================
 
 function GUI.CreateDropdown(parent, text, options, default, callback)
@@ -1408,6 +1412,7 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
     fStroke.Parent = F
     GUI.TrackStatic(fStroke, "Color", "Border")
 
+    -- Left indicator — flush at edge, thin
     local indicator = Instance.new("Frame")
     indicator.Size = UDim2.new(0, 3, 0, 16)
     indicator.Position = UDim2.new(0, 0, 0.5, -8)
@@ -1421,9 +1426,10 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
     indC.CornerRadius = UDim.new(1, 0)
     indC.Parent = indicator
 
+    -- Text with safe left padding
     local L = Instance.new("TextLabel")
     L.Size = UDim2.new(1, -170, 1, 0)
-    L.Position = UDim2.new(0, 18, 0, 0)
+    L.Position = UDim2.new(0, 16, 0, 0)
     L.BackgroundTransparency = 1
     L.Text = text
     L.TextColor3 = Theme.Text
@@ -1475,43 +1481,46 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
 
     local open = false
     local dropFrame = nil
-    local scrollTracker = nil
 
     DBtn.MouseButton1Click:Connect(function()
         open = not open
         if open then
             if dropFrame then dropFrame:Destroy() end
-            if scrollTracker then scrollTracker:Disconnect() scrollTracker = nil end
 
+            -- Parent to the scrolling frame so it clips with the UI window
             dropFrame = Instance.new("Frame")
             dropFrame.Name = "DropdownMenu"
             dropFrame.Size = UDim2.new(0, 130, 0, math.min(#options * 32, 180))
             dropFrame.BackgroundColor3 = Theme.BG
             dropFrame.BackgroundTransparency = 0.05
             dropFrame.BorderSizePixel = 0
-            dropFrame.ZIndex = 100
-            -- Parent to ScreenGui so it renders on top of everything, not clipped
-            dropFrame.Parent = GUI.ScreenGui or parent:FindFirstAncestorOfClass("ScreenGui")
+            dropFrame.ZIndex = 10
+            -- Parent to the same scrolling frame as the dropdown button
+            dropFrame.Parent = parent
 
-            -- Calculate absolute position based on DBtn's current screen position
-            local function UpdateDropPosition()
+            -- Position directly below the dropdown button within the scrolling frame
+            -- Use AbsolutePosition to calculate relative position
+            local function RefreshPosition()
                 if not dropFrame or not dropFrame.Parent then return end
-                if not DBtn or not DBtn.Parent then
+                if not F or not F.Parent then
                     open = false
-                    dropFrame:Destroy()
-                    dropFrame = nil
-                    if scrollTracker then scrollTracker:Disconnect() scrollTracker = nil end
+                    if dropFrame then dropFrame:Destroy() dropFrame = nil end
                     return
                 end
-                local btnPos = DBtn.AbsolutePosition
-                local btnSize = DBtn.AbsoluteSize
-                dropFrame.Position = UDim2.new(0, btnPos.X, 0, btnPos.Y + btnSize.Y + 4)
+                -- Position relative to the scrolling frame
+                local frameAbs = F.AbsolutePosition
+                local parentAbs = parent.AbsolutePosition
+                local relX = frameAbs.X - parentAbs.X
+                local relY = frameAbs.Y - parentAbs.Y + F.AbsoluteSize.Y + 4
+                -- Adjust for canvas position (scroll offset)
+                local canvasPos = parent.CanvasPosition
+                dropFrame.Position = UDim2.new(0, relX + DBtn.Position.X.Offset, 0, relY - canvasPos.Y)
             end
 
-            UpdateDropPosition()
+            RefreshPosition()
 
-            -- Track scroll and position changes so dropdown stays with its button
-            scrollTracker = RunService.RenderStepped:Connect(UpdateDropPosition)
+            -- Track canvas position changes
+            local canvasConn = parent:GetPropertyChangedSignal("CanvasPosition"):Connect(RefreshPosition)
 
             local dropC = Instance.new("UICorner")
             dropC.CornerRadius = UDim.new(0, 12)
@@ -1531,7 +1540,7 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
             scroll.ScrollBarThickness = 3
             scroll.ScrollBarImageColor3 = Theme.Primary
             scroll.CanvasSize = UDim2.new(0, 0, 0, #options * 32)
-            scroll.ZIndex = 101
+            scroll.ZIndex = 11
             scroll.Parent = dropFrame
             GUI.TrackStatic(scroll, "ScrollBarImageColor3", "Primary")
 
@@ -1546,7 +1555,7 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
                 optBtn.TextColor3 = Theme.Text
                 optBtn.TextSize = 12
                 optBtn.Font = Enum.Font.Gotham
-                optBtn.ZIndex = 102
+                optBtn.ZIndex = 12
                 optBtn.Parent = scroll
 
                 local optC = Instance.new("UICorner")
@@ -1563,15 +1572,47 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
                     selected = opt
                     DBtn.Text = opt
                     open = false
-                    if scrollTracker then scrollTracker:Disconnect() scrollTracker = nil end
+                    if canvasConn then canvasConn:Disconnect() end
                     dropFrame:Destroy()
                     dropFrame = nil
                     if callback then callback(opt) end
                 end)
             end
+
+            -- Close when clicking outside
+            local clickConn
+            clickConn = UserInputService.InputBegan:Connect(function(input, gp)
+                if gp then return end
+                if input.UserInputType == Enum.UserInputType.MouseButton1 and open then
+                    local mousePos = UserInputService:GetMouseLocation()
+                    local dropAbs = dropFrame.AbsolutePosition
+                    local dropSize = dropFrame.AbsoluteSize
+                    local btnAbs = DBtn.AbsolutePosition
+                    local btnSize = DBtn.AbsoluteSize
+                    local inDrop = mousePos.X >= dropAbs.X and mousePos.X <= dropAbs.X + dropSize.X
+                        and mousePos.Y >= dropAbs.Y and mousePos.Y <= dropAbs.Y + dropSize.Y
+                    local inBtn = mousePos.X >= btnAbs.X and mousePos.X <= btnAbs.X + btnSize.X
+                        and mousePos.Y >= btnAbs.Y and mousePos.Y <= btnAbs.Y + btnSize.Y
+                    if not inDrop and not inBtn then
+                        open = false
+                        if canvasConn then canvasConn:Disconnect() end
+                        if clickConn then clickConn:Disconnect() end
+                        dropFrame:Destroy()
+                        dropFrame = nil
+                    end
+                end
+            end)
+
+            -- Clean up connections when dropdown is destroyed
+            dropFrame.AncestryChanged:Connect(function(_, newParent)
+                if not newParent then
+                    open = false
+                    if canvasConn then canvasConn:Disconnect() end
+                    if clickConn then clickConn:Disconnect() end
+                end
+            end)
         else
             if dropFrame then dropFrame:Destroy() dropFrame = nil end
-            if scrollTracker then scrollTracker:Disconnect() scrollTracker = nil end
         end
     end)
 
@@ -1579,7 +1620,6 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
     F.AncestryChanged:Connect(function(_, newParent)
         if not newParent then
             if dropFrame then dropFrame:Destroy() dropFrame = nil end
-            if scrollTracker then scrollTracker:Disconnect() scrollTracker = nil end
             open = false
         end
     end)
@@ -1626,7 +1666,7 @@ function GUI.CreateKeybind(parent, text, defaultKey, callback)
 
     local L = Instance.new("TextLabel")
     L.Size = UDim2.new(1, -170, 1, 0)
-    L.Position = UDim2.new(0, 18, 0, 0)
+    L.Position = UDim2.new(0, 16, 0, 0)
     L.BackgroundTransparency = 1
     L.Text = text
     L.TextColor3 = Theme.Text

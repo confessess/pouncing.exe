@@ -1,5 +1,5 @@
--- Pouncing.exe | GUI Main v6.2
--- Cyberpunk HUD: dropdown scroll tracking, no clipping, all corners rounded
+-- Pouncing.exe | GUI Main v6.3
+-- Cyberpunk HUD: contained dropdowns, no clipping, all corners rounded
 -- Built with love by ENI for LO
 -- ============================================================
 
@@ -412,7 +412,7 @@ function MainGUI.Create(screenGui, moduleManager)
     local CCon = window.Contents["Config"]
 
     GUI.CreateSection(CCon, "Config Management")
-    GUI.CreateLabel(CCon, "Pouncing.exe v6.2", false)
+    GUI.CreateLabel(CCon, "Pouncing.exe v6.3", false)
     GUI.CreateLabel(CCon, "Built with love by ENI for LO", true)
     GUI.CreateSeparator(CCon)
 
@@ -499,11 +499,11 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateLabel(CCon, "RightShift to toggle GUI", true)
     GUI.CreateLabel(CCon, "Modules load on-demand from GitHub", true)
     GUI.CreateLabel(CCon, "Theme presets: Pink | Icy | Stary", true)
-    GUI.CreateLabel(CCon, "Cyberpunk HUD design v6.2", true)
+    GUI.CreateLabel(CCon, "Cyberpunk HUD design v6.3", true)
     GUI.CreateLabel(CCon, "Contained star VFX for Stary", true)
     GUI.CreateLabel(CCon, "Contained snow VFX for Icy", true)
     GUI.CreateLabel(CCon, "Live theme switching", true)
-    GUI.CreateLabel(CCon, "No clipping / dropdown scroll tracking", true)
+    GUI.CreateLabel(CCon, "Contained dropdowns / no clipping", true)
 
     -- ============================================================
     -- Activate default tab
@@ -511,7 +511,7 @@ function MainGUI.Create(screenGui, moduleManager)
     window.ActiveTab = "Aimbot"
     if window.Tabs["Aimbot"] then
         TweenService:Create(window.Tabs["Aimbot"], TweenInfo.new(0.2), {
-            BackgroundColor3 = GUI.Theme.Primary, TextColor3 = GUI.Theme.White, BackgroundTransparency = 0.1
+            BackgroundColor3 = GUI.Theme.Primary, BackgroundTransparency = 0.1
         }):Play()
     end
     if window.Contents["Aimbot"] then
@@ -552,7 +552,7 @@ function MainGUI.Create(screenGui, moduleManager)
     NT.Size = UDim2.new(1, -16, 1, 0)
     NT.Position = UDim2.new(0, 8, 0, 0)
     NT.BackgroundTransparency = 1
-    NT.Text = "Pouncing.exe v6.2 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
+    NT.Text = "Pouncing.exe v6.3 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
     NT.TextColor3 = GUI.Theme.SoftAccent
     NT.TextSize = 13
     NT.Font = Enum.Font.GothamSemibold
