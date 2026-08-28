@@ -395,17 +395,29 @@ function MainGUI.Create(screenGui, moduleManager)
 
     GUI.CreateSeparator(HCon)
     GUI.CreateSection(HCon, "Expansion Settings")
-    GUI.CreateSlider(HCon, "Head Size", 1, 20, 5, function(v)
+    GUI.CreateToggle(HCon, "Expand Limbs", false, nil, function(v)
+        local mod = moduleManager:GetModule("Hitbox")
+        if mod and mod.SetConfig then mod.SetConfig("ExpandLimbs", v) end
+    end)
+    GUI.CreateSlider(HCon, "Head Size", 1, 25, 5, function(v)
         local mod = moduleManager:GetModule("Hitbox")
         if mod and mod.SetConfig then mod.SetConfig("HeadSize", v) end
     end)
-    GUI.CreateSlider(HCon, "Torso Size", 1, 20, 3, function(v)
+    GUI.CreateSlider(HCon, "Torso Size", 1, 25, 3, function(v)
         local mod = moduleManager:GetModule("Hitbox")
         if mod and mod.SetConfig then mod.SetConfig("TorsoSize", v) end
+    end)
+    GUI.CreateSlider(HCon, "Limb Size", 1, 25, 2, function(v)
+        local mod = moduleManager:GetModule("Hitbox")
+        if mod and mod.SetConfig then mod.SetConfig("LimbSize", v) end
     end)
     GUI.CreateSlider(HCon, "Transparency", 0, 100, 90, function(v)
         local mod = moduleManager:GetModule("Hitbox")
         if mod and mod.SetConfig then mod.SetConfig("Transparency", v / 100) end
+    end)
+    GUI.CreateSlider(HCon, "Max Distance", 100, 5000, 2000, function(v)
+        local mod = moduleManager:GetModule("Hitbox")
+        if mod and mod.SetConfig then mod.SetConfig("MaxDistance", v) end
     end)
 
     -- ============================================================
