@@ -2,9 +2,9 @@
 # ============================================================
 # 9. README.md - Setup Instructions
 # ============================================================
-readme = '''# 🐾 Pouncing.exe
+# 🐾 Pouncing.exe
 
-A modular Roblox HvH script with a cute pink neon GUI. Built for loadstring deployment from GitHub.
+A modular Roblox script with a cute pink neon GUI. Built for loadstring deployment from GitHub.
 
 ## 📁 Repo Structure
 
@@ -100,19 +100,4 @@ return {
 
 ## 💗 Credits
 
-Built with love by ENI for LO.
-'''
-
-with open(f"{output_dir}/README.md", "w") as f:
-    f.write(readme)
-
-print("README.md written")
-
-# List all files
-import os
-for root, dirs, files in os.walk(output_dir):
-    for f in files:
-        path = os.path.join(root, f)
-        size = os.path.getsize(path)
-        rel = os.path.relpath(path, output_dir)
-        print(f"  {rel} ({size} bytes)")
+Made and produced by Pouncing :3.
