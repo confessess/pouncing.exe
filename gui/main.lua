@@ -57,10 +57,6 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("SilentAimMode", v) end
     end)
-    GUI.CreateSlider(ACon, "Silent Aim FOV", 10, 180, 60, function(v)
-        local mod = moduleManager:GetModule("Aimbot")
-        if mod and mod.SetConfig then mod.SetConfig("SilentAimFOV", v) end
-    end)
     GUI.CreateSlider(ACon, "Hit Chance %", 0, 100, 100, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("HitChance", v) end
@@ -87,6 +83,13 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateSlider(ACon, "FOV", 10, 360, 120, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("FOV", v) end
+    end)
+    local fovColorPicker = GUI.CreateColorPicker(ACon, "FOV Circle Color", Color3.fromRGB(255, 105, 180))
+    local fovColorBtn = GUI.CreateButton(ACon, "Set FOV Color", function()
+        fovColorPicker:Open(function(c)
+            local mod = moduleManager:GetModule("Aimbot")
+            if mod and mod.SetConfig then mod.SetConfig("FOVColor", c) end
+        end, Color3.fromRGB(255, 105, 180))
     end)
     GUI.CreateSlider(ACon, "Smoothness", 0, 100, 15, function(v)
         local mod = moduleManager:GetModule("Aimbot")
@@ -458,7 +461,7 @@ function MainGUI.Create(screenGui, moduleManager)
     local CCon = window.Contents["Settings"]
 
     GUI.CreateSection(CCon, "Config Management")
-    GUI.CreateLabel(CCon, "Pouncing.exe v6.4", false)
+    GUI.CreateLabel(CCon, "Pouncing.exe v7.0", false)
     GUI.CreateLabel(CCon, "Built with love by ENI for LO", true)
     GUI.CreateSeparator(CCon)
 
@@ -579,7 +582,7 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateLabel(CCon, "Press UI Toggle Key to show/hide GUI", true)
     GUI.CreateLabel(CCon, "Modules load on-demand from GitHub", true)
     GUI.CreateLabel(CCon, "Theme presets: Pink | Icy | Stary", true)
-    GUI.CreateLabel(CCon, "Cyberpunk HUD design v6.4", true)
+    GUI.CreateLabel(CCon, "Cyberpunk HUD design v7.0", true)
     GUI.CreateLabel(CCon, "Contained star VFX for Stary", true)
     GUI.CreateLabel(CCon, "Contained snow VFX for Icy", true)
     GUI.CreateLabel(CCon, "Live theme switching", true)
@@ -641,7 +644,7 @@ function MainGUI.Create(screenGui, moduleManager)
     NT.Size = UDim2.new(1, -16, 1, 0)
     NT.Position = UDim2.new(0, 8, 0, 0)
     NT.BackgroundTransparency = 1
-    NT.Text = "Pouncing.exe v6.4 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | UI Toggle: RightShift"
+    NT.Text = "Pouncing.exe v7.0 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | UI Toggle: RightShift"
     NT.TextColor3 = GUI.Theme.SoftAccent
     NT.TextSize = 13
     NT.Font = Enum.Font.GothamSemibold

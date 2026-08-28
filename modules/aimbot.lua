@@ -1,14 +1,13 @@
--- Pouncing.exe | Aimbot Module v4.0
+-- Pouncing.exe | Aimbot Module v5.0
 -- Lock-on, silent aim, triggerbot, toggle, sticky target
--- Silent Aim: Raycast + FindPartOnRay + Mouse.Hit + __namecall deep scan
--- Handles Arsenal, Da Hood, Zee Hood
+-- Silent Aim: Post-execution FindPartOnRay + Raycast + __namecall + Mouse.Hit
+-- Arsenal-ready: lets original raycast run, then replaces miss with target hit
 -- ============================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -33,24 +32,23 @@ local Config = {
     ToggleMode = false,
     StickyTarget = false,
 
-    -- Silent Aim specific
-    SilentAimMode = "Raycast", -- "Raycast", "Mouse", "Hybrid"
-    SilentAimFOV = 60,         -- separate FOV for silent aim (usually tighter)
-    HitChance = 100,           -- 0-100, chance to actually redirect
-    LegitMode = false,         -- if true, only redirect when close to target
-    LegitThreshold = 30,       -- pixels from target center to activate legit mode
-    WeaponOnly = true,         -- only silent aim when holding a tool
-    RecentClickWindow = 0.5,   -- seconds after mouse click to stay armed
+    -- Silent Aim
+    HitChance = 100,
+    LegitMode = false,
+    LegitThreshold = 30,
+    WeaponOnly = false,
 
+    -- Visuals
+    FOVColor = Color3.fromRGB(255, 105, 180),
+    ShowFOV = true,
+
+    -- Internal
     CurrentTarget = nil,
     LastTriggerTime = 0,
     Aiming = false,
     StickyLostTime = 0,
     StickyGracePeriod = 0.6,
-
-    -- Internal
     LastClickTime = 0,
-    SilentAimArmed = false,
 }
 
 local RenderConnection = nil
@@ -109,19 +107,19 @@ end
 -- FOV
 -- ============================================================
 
-local function GetFOVRadiusPixels(fovValue)
-    local fovAngle = math.rad((fovValue or Config.FOV) / 2)
+local function GetFOVRadiusPixels()
+    local fovAngle = math.rad(Config.FOV / 2)
     local camFov = math.rad(Camera.FieldOfView / 2)
     if camFov <= 0 then return 9999 end
     return math.tan(fovAngle) / math.tan(camFov) * (Camera.ViewportSize.Y / 2)
 end
 
-local function IsInFOV(targetPos, fovValue)
+local function IsInFOV(targetPos)
     local screenPos, onScreen = Camera:WorldToViewportPoint(targetPos)
     if not onScreen then return false, math.huge end
     local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     local distFromCenter = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-    return distFromCenter <= GetFOVRadiusPixels(fovValue), distFromCenter
+    return distFromCenter <= GetFOVRadiusPixels(), distFromCenter
 end
 
 -- ============================================================
@@ -142,40 +140,19 @@ local function CanSee(targetPos, targetCharacter)
 end
 
 -- ============================================================
--- Silent Aim: Weapon / Combat Detection
--- ============================================================
-
-local function IsHoldingTool()
-    local char = LocalPlayer.Character
-    if not char then return false end
-    return char:FindFirstChildOfClass("Tool") ~= nil
-end
-
-local function IsSilentAimArmed()
-    if not Config.SilentAim then return false end
-    if not Config.Enabled then return false end
-
-    if Config.WeaponOnly then
-        local holdingTool = IsHoldingTool()
-        local recentClick = (tick() - Config.LastClickTime) < Config.RecentClickWindow
-        if not holdingTool and not recentClick then
-            return false
-        end
-    end
-
-    return true
-end
-
--- ============================================================
--- Silent Aim: Target Selection (closest to crosshair)
+-- Silent Aim: Target Selection
 -- ============================================================
 
 local function GetSilentAimTarget()
-    if not IsSilentAimArmed() then return nil end
+    if not Config.SilentAim or not Config.Enabled then return nil end
+
+    -- Hit chance check
+    if Config.HitChance < 100 and math.random(1, 100) > Config.HitChance then
+        return nil
+    end
 
     local bestTarget = nil
     local bestScore = math.huge
-    local useFOV = Config.SilentAimFOV or Config.FOV
 
     for _, player in pairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
@@ -191,17 +168,12 @@ local function GetSilentAimTarget()
         local dist = GetDistance(targetPos)
         if dist > Config.MaxDistance then continue end
 
-        local inFOV, fovDist = IsInFOV(targetPos, useFOV)
+        local inFOV, fovDist = IsInFOV(targetPos)
         if not inFOV then continue end
 
         if not CanSee(targetPos, character) then continue end
 
-        -- Hit chance check
-        if Config.HitChance < 100 and math.random(1, 100) > Config.HitChance then
-            continue
-        end
-
-        -- Legit mode: only redirect if already close
+        -- Legit mode: only redirect if already close to crosshair
         if Config.LegitMode and fovDist > Config.LegitThreshold then
             continue
         end
@@ -239,37 +211,49 @@ local function AimAt(target)
 end
 
 -- ============================================================
--- Silent Aim: Raycast Handler
+-- Silent Aim: POST-EXECUTION FindPartOnRay Handler
+-- This is the KEY for Arsenal: let the raycast run, then replace miss with target
 -- ============================================================
 
-local function SilentAimRaycastHandler(origin, direction, params)
-    if not IsSilentAimArmed() then return nil end
+local function SilentAimFindPartOnRayPostHandler(result, ray, methodName, ...)
+    if not Config.SilentAim or not Config.Enabled then return nil end
 
     local target = GetSilentAimTarget()
     if not target or not target.Part then return nil end
 
-    local camPos = Camera.CFrame.Position
-    if (origin - camPos).Magnitude > 15 then return nil end
+    -- result is a table from the original function: {part, position, normal, ...}
+    local hitPart = result[1]
 
+    -- If we already hit a valid enemy part, don't override
+    if hitPart and hitPart:IsA("BasePart") then
+        local hitModel = hitPart:FindFirstAncestorOfClass("Model")
+        if hitModel and hitModel ~= LocalPlayer.Character then
+            local hitPlayer = Players:GetPlayerFromCharacter(hitModel)
+            if hitPlayer and (not Config.TeamCheck or not IsTeammate(hitPlayer)) then
+                return nil -- already hitting an enemy, let it through
+            end
+        end
+    end
+
+    -- Replace miss / wall / teammate hit with target
     local aimPos = target.Position
-    return origin, aimPos - origin, params
+    local normal = (ray.Origin - aimPos).Unit
+
+    return {target.Part, aimPos, normal}
 end
 
 -- ============================================================
--- Silent Aim: FindPartOnRay Handler
+-- Silent Aim: Raycast Handler (pre-execution)
 -- ============================================================
 
-local function SilentAimFindPartOnRayHandler(ray, methodName, ...)
-    if not IsSilentAimArmed() then return nil end
+local function SilentAimRaycastHandler(origin, direction, params)
+    if not Config.SilentAim or not Config.Enabled then return nil end
 
     local target = GetSilentAimTarget()
     if not target or not target.Part then return nil end
 
-    local camPos = Camera.CFrame.Position
-    if (ray.Origin - camPos).Magnitude > 15 then return nil end
-
     local aimPos = target.Position
-    return Ray.new(ray.Origin, aimPos - ray.Origin)
+    return origin, aimPos - origin, params
 end
 
 -- ============================================================
@@ -277,7 +261,7 @@ end
 -- ============================================================
 
 local function SilentAimIndexHandler(self_obj, key)
-    if not IsSilentAimArmed() then return nil end
+    if not Config.SilentAim or not Config.Enabled then return nil end
     if self_obj ~= Mouse then return nil end
 
     local target = GetSilentAimTarget()
@@ -304,7 +288,7 @@ local function IsHitPosition(pos)
     return d > 0.5 and d < Config.MaxDistance * 2
 end
 
-local function DeepScanAndReplace(t, targetPos, targetPart, targetCharacter)
+local function DeepScanAndReplace(t, targetPos, targetPart)
     if type(t) ~= "table" then return false end
     local modified = false
 
@@ -331,11 +315,10 @@ local function DeepScanAndReplace(t, targetPos, targetPart, targetCharacter)
                 modified = true
             end
         elseif vt == "table" then
-            if DeepScanAndReplace(v, targetPos, targetPart, targetCharacter) then
+            if DeepScanAndReplace(v, targetPos, targetPart) then
                 modified = true
             end
         elseif vt == "string" then
-            -- Some games send part names as strings
             if v:lower():match("torso") or v:lower():match("body") or v:lower():match("limb") or v:lower():match("arm") or v:lower():match("leg") then
                 t[k] = targetPart.Name
                 modified = true
@@ -347,7 +330,7 @@ local function DeepScanAndReplace(t, targetPos, targetPart, targetCharacter)
 end
 
 local function SilentAimNamecallHandler(args, method, self_obj)
-    if not IsSilentAimArmed() then return args, false end
+    if not Config.SilentAim or not Config.Enabled then return args, false end
 
     local target = GetSilentAimTarget()
     if not target or not target.Part then return args, false end
@@ -379,7 +362,7 @@ local function SilentAimNamecallHandler(args, method, self_obj)
                 modified = true
             end
         elseif argType == "table" then
-            if DeepScanAndReplace(arg, aimPos, target.Part, target.Character) then
+            if DeepScanAndReplace(arg, aimPos, target.Part) then
                 modified = true
             end
         elseif argType == "string" then
@@ -446,29 +429,17 @@ end
 
 local FOVCircle = nil
 local TargetCircle = nil
-local SilentAimCircle = nil
 
 local function UpdateFOVCircle()
     if not FOVCircle then return end
-    if Config.Enabled then
-        local radius = GetFOVRadiusPixels(Config.FOV)
+    if Config.Enabled and Config.ShowFOV then
+        local radius = GetFOVRadiusPixels()
         FOVCircle.Visible = true
         FOVCircle.Radius = radius
         FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        FOVCircle.Color = Config.FOVColor
     else
         FOVCircle.Visible = false
-    end
-end
-
-local function UpdateSilentAimCircle()
-    if not SilentAimCircle then return end
-    if Config.Enabled and Config.SilentAim then
-        local radius = GetFOVRadiusPixels(Config.SilentAimFOV)
-        SilentAimCircle.Visible = true
-        SilentAimCircle.Radius = radius
-        SilentAimCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-    else
-        SilentAimCircle.Visible = false
     end
 end
 
@@ -500,7 +471,7 @@ local function IsTargetValidStrict(target)
     if not part then return false end
     local dist = GetDistance(part.Position)
     if dist > Config.MaxDistance then return false end
-    local inFOV, _ = IsInFOV(part.Position, Config.FOV)
+    local inFOV, _ = IsInFOV(part.Position)
     if not inFOV then return false end
     if not CanSee(part.Position, target.Character) then return false end
     return true
@@ -565,7 +536,7 @@ local function GetBestTarget()
         local dist = GetDistance(targetPos)
         if dist > Config.MaxDistance then continue end
 
-        local inFOV, fovDist = IsInFOV(targetPos, Config.FOV)
+        local inFOV, fovDist = IsInFOV(targetPos)
         if not inFOV then continue end
 
         if not CanSee(targetPos, character) then continue end
@@ -619,7 +590,6 @@ local function OnRenderStep()
         Config.StickyLostTime = 0
         if FOVCircle then FOVCircle.Visible = false end
         if TargetCircle then TargetCircle.Visible = false end
-        if SilentAimCircle then SilentAimCircle.Visible = false end
         return
     end
 
@@ -639,7 +609,6 @@ local function OnRenderStep()
     end
 
     UpdateFOVCircle()
-    UpdateSilentAimCircle()
     UpdateTargetCircle()
 end
 
@@ -680,18 +649,10 @@ function Module.Init()
     FOVCircle = Drawing.new("Circle")
     FOVCircle.Visible = false
     FOVCircle.Thickness = 1.5
-    FOVCircle.Color = Color3.fromRGB(255, 105, 180)
+    FOVCircle.Color = Config.FOVColor
     FOVCircle.Transparency = 0.5
     FOVCircle.NumSides = 64
     FOVCircle.Filled = false
-
-    SilentAimCircle = Drawing.new("Circle")
-    SilentAimCircle.Visible = false
-    SilentAimCircle.Thickness = 1
-    SilentAimCircle.Color = Color3.fromRGB(255, 255, 0)
-    SilentAimCircle.Transparency = 0.3
-    SilentAimCircle.NumSides = 64
-    SilentAimCircle.Filled = false
 
     TargetCircle = Drawing.new("Circle")
     TargetCircle.Visible = false
@@ -709,8 +670,8 @@ end
 function Module.Enable()
     Config.Enabled = true
     if Config.SilentAim and Utils and Utils.HookManager then
+        Utils.HookManager:RegisterFindPartOnRayPostHandler("Aimbot", SilentAimFindPartOnRayPostHandler, 10)
         Utils.HookManager:RegisterRaycastHandler("Aimbot", SilentAimRaycastHandler, 10)
-        Utils.HookManager:RegisterFindPartOnRayHandler("Aimbot", SilentAimFindPartOnRayHandler, 10)
         Utils.HookManager:RegisterNamecallHandler("Aimbot", SilentAimNamecallHandler, 10)
         Utils.HookManager:RegisterIndexHandler("Aimbot", SilentAimIndexHandler, 10)
         Utils.HookManager:Install()
@@ -726,8 +687,8 @@ function Module.Disable()
     Config.CurrentTarget = nil
     Config.StickyLostTime = 0
     if Utils and Utils.HookManager then
+        Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
         Utils.HookManager:UnregisterRaycastHandler("Aimbot")
-        Utils.HookManager:UnregisterFindPartOnRayHandler("Aimbot")
         Utils.HookManager:UnregisterNamecallHandler("Aimbot")
         Utils.HookManager:UnregisterIndexHandler("Aimbot")
     end
@@ -736,7 +697,6 @@ function Module.Disable()
         RenderConnection = nil
     end
     if FOVCircle then FOVCircle.Visible = false end
-    if SilentAimCircle then SilentAimCircle.Visible = false end
     if TargetCircle then TargetCircle.Visible = false end
 end
 
@@ -745,14 +705,14 @@ function Module.SetConfig(key, value)
         Config.SilentAim = value
         if Config.Enabled and Utils and Utils.HookManager then
             if value then
+                Utils.HookManager:RegisterFindPartOnRayPostHandler("Aimbot", SilentAimFindPartOnRayPostHandler, 10)
                 Utils.HookManager:RegisterRaycastHandler("Aimbot", SilentAimRaycastHandler, 10)
-                Utils.HookManager:RegisterFindPartOnRayHandler("Aimbot", SilentAimFindPartOnRayHandler, 10)
                 Utils.HookManager:RegisterNamecallHandler("Aimbot", SilentAimNamecallHandler, 10)
                 Utils.HookManager:RegisterIndexHandler("Aimbot", SilentAimIndexHandler, 10)
                 Utils.HookManager:Install()
             else
+                Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
                 Utils.HookManager:UnregisterRaycastHandler("Aimbot")
-                Utils.HookManager:UnregisterFindPartOnRayHandler("Aimbot")
                 Utils.HookManager:UnregisterNamecallHandler("Aimbot")
                 Utils.HookManager:UnregisterIndexHandler("Aimbot")
             end
@@ -761,7 +721,6 @@ function Module.SetConfig(key, value)
     elseif key == "TeamCheck" then Config.TeamCheck = value
     elseif key == "WallCheck" then Config.WallCheck = value
     elseif key == "FOV" then Config.FOV = math.clamp(value, 10, 360)
-    elseif key == "SilentAimFOV" then Config.SilentAimFOV = math.clamp(value, 10, 360)
     elseif key == "Smoothness" then Config.Smoothness = math.clamp(value, 0, 100)
     elseif key == "MaxDistance" then Config.MaxDistance = math.clamp(value, 50, 5000)
     elseif key == "TriggerDelay" then Config.TriggerDelay = math.clamp(value, 0, 5000)
@@ -777,7 +736,10 @@ function Module.SetConfig(key, value)
     elseif key == "LegitMode" then Config.LegitMode = value
     elseif key == "LegitThreshold" then Config.LegitThreshold = value
     elseif key == "WeaponOnly" then Config.WeaponOnly = value
-    elseif key == "SilentAimMode" then Config.SilentAimMode = value
+    elseif key == "FOVColor" then 
+        Config.FOVColor = value
+        if FOVCircle then FOVCircle.Color = value end
+    elseif key == "ShowFOV" then Config.ShowFOV = value
     end
 end
 
@@ -792,7 +754,6 @@ function Module.ResetConfig()
     Config.TeamCheck = false
     Config.WallCheck = false
     Config.FOV = 120
-    Config.SilentAimFOV = 60
     Config.Smoothness = 15
     Config.MaxDistance = 1000
     Config.TriggerDelay = 50
@@ -808,11 +769,12 @@ function Module.ResetConfig()
     Config.HitChance = 100
     Config.LegitMode = false
     Config.LegitThreshold = 30
-    Config.WeaponOnly = true
-    Config.SilentAimMode = "Raycast"
+    Config.WeaponOnly = false
+    Config.FOVColor = Color3.fromRGB(255, 105, 180)
+    Config.ShowFOV = true
     if Utils and Utils.HookManager then
+        Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
         Utils.HookManager:UnregisterRaycastHandler("Aimbot")
-        Utils.HookManager:UnregisterFindPartOnRayHandler("Aimbot")
         Utils.HookManager:UnregisterNamecallHandler("Aimbot")
         Utils.HookManager:UnregisterIndexHandler("Aimbot")
     end
@@ -823,7 +785,6 @@ function Module.Cleanup()
     if InputBeganConnection then InputBeganConnection:Disconnect(); InputBeganConnection = nil end
     if InputEndedConnection then InputEndedConnection:Disconnect(); InputEndedConnection = nil end
     if FOVCircle then FOVCircle:Remove(); FOVCircle = nil end
-    if SilentAimCircle then SilentAimCircle:Remove(); SilentAimCircle = nil end
     if TargetCircle then TargetCircle:Remove(); TargetCircle = nil end
 end
 
