@@ -1,6 +1,6 @@
--- Pouncing.exe | GUI Main v2.3
+-- Pouncing.exe | GUI Main v3.0
 -- Assembles the main window with all tabs and real controls
--- Added: Live ESP color updates + module pre-load
+-- Fixed: Priority dropdown matches new modes, version bump
 -- Made by pouncing :3
 -- ============================================================
 
@@ -88,7 +88,8 @@ function MainGUI.Create(screenGui, moduleManager)
 
     GUI.CreateSeparator(ACon)
     GUI.CreateSection(ACon, "Target Priority")
-    GUI.CreateDropdown(ACon, "Priority", {"Closest", "Lowest HP", "Highest Level", "Random"}, "Closest", function(v)
+    -- Updated dropdown with the three requested priority modes
+    GUI.CreateDropdown(ACon, "Priority", {"Closest to Mouse", "Closest to Player", "Lowest HP", "Highest HP", "Random"}, "Closest to Mouse", function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("Priority", v) end
     end)
@@ -422,7 +423,7 @@ function MainGUI.Create(screenGui, moduleManager)
     local CCon = window.Contents["Config"]
 
     GUI.CreateSection(CCon, "Config Management")
-    GUI.CreateLabel(CCon, "Pouncing.exe v2.3", false)
+    GUI.CreateLabel(CCon, "Pouncing.exe v3.0", false)
     GUI.CreateLabel(CCon, "Built with love by ENI for LO 💗", true)
     GUI.CreateSeparator(CCon)
 
@@ -511,6 +512,8 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateLabel(CCon, "Accurate HSV color wheel ✓", true)
     GUI.CreateLabel(CCon, "Per-element ESP colors ✓", true)
     GUI.CreateLabel(CCon, "Live color refresh ✓", true)
+    GUI.CreateLabel(CCon, "Sticky target + priority modes ✓", true)
+    GUI.CreateLabel(CCon, "Improved smoothness curve ✓", true)
 
     -- ============================================================
     -- Activate default tab
@@ -558,7 +561,7 @@ function MainGUI.Create(screenGui, moduleManager)
     NT.Size = UDim2.new(1, -10, 1, 0)
     NT.Position = UDim2.new(0, 5, 0, 0)
     NT.BackgroundTransparency = 1
-    NT.Text = "🐾 Pouncing.exe v2.3 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
+    NT.Text = "🐾 Pouncing.exe v3.0 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
     NT.TextColor3 = Color3.fromRGB(255, 182, 193)
     NT.TextSize = 12
     NT.Font = Enum.Font.GothamSemibold

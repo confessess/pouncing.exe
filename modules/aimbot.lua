@@ -1,6 +1,6 @@
--- Pouncing.exe | Aimbot Module v2.6
+-- Pouncing.exe | Aimbot Module v3.0
 -- Lock-on, silent aim, triggerbot, toggle, sticky target
--- Clean rewrite — focused on reliability
+-- Fixed: Sticky mode persistence, priority modes, smoothness curve
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -22,7 +22,7 @@ local Config = {
     MaxDistance = 1000,
     TriggerDelay = 50,
     TargetPart = "Head",
-    Priority = "Closest",
+    Priority = "Closest to Mouse",
     AimKey = Enum.KeyCode.Q,
     Prediction = false,
     ToggleMode = false,
@@ -31,6 +31,9 @@ local Config = {
     LastTriggerTime = 0,
     Aiming = false,
     SilentAimHooked = false,
+    -- Sticky grace tracking
+    StickyLostTime = 0,
+    StickyGracePeriod = 0.6,
 }
 
 local SilentAimHooks = {}
@@ -129,10 +132,10 @@ local function PredictPosition(target)
 end
 
 -- ============================================================
--- Target selection
+-- Target validation
 -- ============================================================
 
-local function IsTargetValid(target)
+local function IsTargetValidStrict(target)
     if not target then return false end
     if not target.Player or not target.Character then return false end
     if not IsAlive(target.Character) then return false end
@@ -141,20 +144,58 @@ local function IsTargetValid(target)
     if not part then return false end
     local dist = GetDistance(part.Position)
     if dist > Config.MaxDistance then return false end
-    local inFOV = IsInFOV(part.Position)
+    local inFOV, _ = IsInFOV(part.Position)
     if not inFOV then return false end
     if not CanSee(part.Position, target.Character) then return false end
     return true
 end
 
+local function IsTargetValidSticky(target)
+    -- Relaxed validation for sticky mode: only check alive, team, distance
+    -- Skip FOV and wall checks so target stays locked even if behind cover or off-screen briefly
+    if not target then return false end
+    if not target.Player or not target.Character then return false end
+    if not IsAlive(target.Character) then return false end
+    if Config.TeamCheck and IsTeammate(target.Player) then return false end
+    local part = target.Character:FindFirstChild(target.Part.Name)
+    if not part then return false end
+    local dist = GetDistance(part.Position)
+    if dist > Config.MaxDistance then return false end
+    return true
+end
+
+-- ============================================================
+-- Target selection
+-- ============================================================
+
 local function GetBestTarget()
-    -- Sticky: keep current if valid
-    if Config.StickyTarget and IsTargetValid(Config.CurrentTarget) then
-        local part = Config.CurrentTarget.Character:FindFirstChild(Config.CurrentTarget.Part.Name)
-        if part then
-            Config.CurrentTarget.Part = part
-            Config.CurrentTarget.Position = part.Position
-            return Config.CurrentTarget
+    -- Sticky mode: try to keep current target with relaxed validation
+    if Config.StickyTarget and Config.CurrentTarget then
+        if IsTargetValidSticky(Config.CurrentTarget) then
+            -- Update position and part reference
+            local part = Config.CurrentTarget.Character:FindFirstChild(Config.CurrentTarget.Part.Name)
+            if part then
+                Config.CurrentTarget.Part = part
+                Config.CurrentTarget.Position = part.Position
+                Config.StickyLostTime = 0
+                return Config.CurrentTarget
+            end
+        else
+            -- Target failed sticky validation — start grace period
+            if Config.StickyLostTime == 0 then
+                Config.StickyLostTime = tick()
+            elseif tick() - Config.StickyLostTime < Config.StickyGracePeriod then
+                -- Within grace period: keep target but update position if possible
+                local part = Config.CurrentTarget.Character:FindFirstChild(Config.CurrentTarget.Part.Name)
+                if part then
+                    Config.CurrentTarget.Part = part
+                    Config.CurrentTarget.Position = part.Position
+                    return Config.CurrentTarget
+                end
+            end
+            -- Grace period expired or target completely gone
+            Config.CurrentTarget = nil
+            Config.StickyLostTime = 0
         end
     end
 
@@ -180,13 +221,34 @@ local function GetBestTarget()
 
         if not CanSee(targetPos, character) then continue end
 
-        local score = fovDist + (dist * 0.02)
+        local score = math.huge
+        local hum = GetHumanoid(character)
 
-        if Config.Priority == "Lowest HP" then
-            local hum = GetHumanoid(character)
-            if hum then score = score - (hum.MaxHealth - hum.Health) * 2 end
+        if Config.Priority == "Closest to Mouse" then
+            -- Pure screen-space distance from crosshair
+            score = fovDist
+        elseif Config.Priority == "Closest to Player" then
+            -- Pure world distance
+            score = dist
+        elseif Config.Priority == "Lowest HP" then
+            -- Lowest health first, tiebreak with FOV distance
+            if hum then
+                score = hum.Health + (fovDist * 0.1)
+            else
+                score = fovDist
+            end
+        elseif Config.Priority == "Highest HP" then
+            -- Highest health first (for finishers/assists)
+            if hum then
+                score = -hum.Health + (fovDist * 0.1)
+            else
+                score = fovDist
+            end
         elseif Config.Priority == "Random" then
             score = math.random(1, 10000)
+        else
+            -- Default hybrid (closest to mouse weighted)
+            score = fovDist + (dist * 0.02)
         end
 
         if score < bestScore then
@@ -215,13 +277,14 @@ local function AimAt(target)
     if Config.Smoothness <= 0 then
         Camera.CFrame = targetCF
     else
-        local alpha = math.clamp((101 - Config.Smoothness) / 100, 0.005, 1.0)
+        -- Exponential decay curve: 0 = instant, gentle ramp through mid-range
+        local alpha = math.clamp(math.exp(-Config.Smoothness * 0.045), 0.002, 1)
         Camera.CFrame = Camera.CFrame:Lerp(targetCF, alpha)
     end
 end
 
 -- ============================================================
--- Silent Aim — Simple but effective
+-- Silent Aim
 -- ============================================================
 
 local function SetupSilentAim()
@@ -265,13 +328,11 @@ local function SetupSilentAim()
                         local camPos = Camera.CFrame.Position
                         local modified = false
 
-                        -- Helper: check if a position is likely a hit position
                         local function IsHitPos(pos)
                             local d = (pos - camPos).Magnitude
                             return d > 0.5 and d < Config.MaxDistance * 2
                         end
 
-                        -- Scan args (shallow + one level deep in tables)
                         for i = 1, #args do
                             local arg = args[i]
                             local argType = typeof(arg)
@@ -290,14 +351,12 @@ local function SetupSilentAim()
                                 args[i] = Ray.new(arg.Origin, aimPos - arg.Origin)
                                 modified = true
                             elseif argType == "Instance" and arg:IsA("BasePart") then
-                                -- Replace hit part if it's not ours
                                 local model = arg:FindFirstAncestorOfClass("Model")
                                 if model and model ~= LocalPlayer.Character then
                                     args[i] = t.Part
                                     modified = true
                                 end
                             elseif argType == "table" then
-                                -- One-level table scan
                                 for k, v in pairs(arg) do
                                     local vt = typeof(v)
                                     if vt == "Vector3" and IsHitPos(v) then
@@ -433,6 +492,7 @@ end
 local function OnRenderStep()
     if not Config.Enabled then
         Config.CurrentTarget = nil
+        Config.StickyLostTime = 0
         if FOVCircle then FOVCircle.Visible = false end
         if TargetCircle then TargetCircle.Visible = false end
         return
@@ -521,6 +581,7 @@ function Module.Disable()
     Config.Enabled = false
     Config.Aiming = false
     Config.CurrentTarget = nil
+    Config.StickyLostTime = 0
     RemoveSilentAim()
     if RenderConnection then
         RenderConnection:Disconnect()
@@ -569,13 +630,14 @@ function Module.ResetConfig()
     Config.MaxDistance = 1000
     Config.TriggerDelay = 50
     Config.TargetPart = "Head"
-    Config.Priority = "Closest"
+    Config.Priority = "Closest to Mouse"
     Config.AimKey = Enum.KeyCode.Q
     Config.Prediction = false
     Config.ToggleMode = false
     Config.StickyTarget = false
     Config.CurrentTarget = nil
     Config.Aiming = false
+    Config.StickyLostTime = 0
     RemoveSilentAim()
 end
 

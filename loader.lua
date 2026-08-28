@@ -1,4 +1,4 @@
--- Pouncing.exe | Modular Loader v2.1
+-- Pouncing.exe | Modular Loader v3.0
 -- Fetches framework + main from GitHub, loads modules on-demand
 -- ============================================================
 
@@ -152,7 +152,7 @@ end
 -- ============================================================
 -- Boot Sequence
 -- ============================================================
-print("[Pouncing.exe] Initializing v2.1...")
+print("[Pouncing.exe] Initializing v3.0...")
 
 -- Load utilities first and export globally
 local Utils = LoadModule("utils/core")
@@ -212,4 +212,4 @@ getfenv()["Pouncing"] = {
     Window = MainWindow
 }
 
-print("[Pouncing.exe] Ready! v2.1 | RightShift to toggle |")
+print("[Pouncing.exe] Ready! v3.0 | RightShift to toggle |")
