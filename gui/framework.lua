@@ -511,8 +511,16 @@ function GUI.CreateWindow(parent, title, size)
     local Min = false
     MB.MouseButton1Click:Connect(function()
         Min = not Min
-        local ts = Min and UDim2.new(0, size.X.Offset, 0, 54) or size
-        TweenService:Create(Container, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = ts}):Play()
+        if Min then
+            -- Hide everything including shadow/rim glow for clean minimize
+            TweenService:Create(Container, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = UDim2.new(0, size.X.Offset, 0, 0)}):Play()
+            task.delay(0.3, function()
+                if Min then Container.Visible = false end
+            end)
+        else
+            Container.Visible = true
+            TweenService:Create(Container, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Size = size}):Play()
+        end
         MB.Text = Min and "+" or "−"
     end)
 
