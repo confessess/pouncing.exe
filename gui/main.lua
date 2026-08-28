@@ -18,12 +18,12 @@ function MainGUI.Create(screenGui, moduleManager)
     local window = GUI.CreateWindow(screenGui, "Pouncing.exe", UDim2.new(0, 780, 0, 600))
 
     local tabDefs = {
-        {Name = "Aimbot", Icon = ""},
-        {Name = "ESP", Icon = ""},
-        {Name = "Gun", Icon = ""},
-        {Name = "Misc", Icon = ""},
-        {Name = "Hitbox", Icon = ""},
-        {Name = "Config", Icon = ""}
+        {Name = " Aimbot", Icon = ""},
+        {Name = " ESP", Icon = ""},
+        {Name = " Gun", Icon = ""},
+        {Name = " Misc", Icon = ""},
+        {Name = " Hitbox", Icon = ""},
+        {Name = " Config", Icon = ""}
     }
     for _, tabInfo in ipairs(tabDefs) do
         GUI.CreateTab(window, tabInfo.Name, tabInfo.Icon)
