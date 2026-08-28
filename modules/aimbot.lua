@@ -170,7 +170,7 @@ end
 
 local function GetBestTarget()
     -- Sticky mode: try to keep current target with relaxed validation
-    if Config.StickyTarget and Config.CurrentTarget then
+    if Config.Enabled and Config.CurrentTarget then
         if IsTargetValidSticky(Config.CurrentTarget) then
             -- Update position and part reference
             local part = Config.CurrentTarget.Character:FindFirstChild(Config.CurrentTarget.Part.Name)
