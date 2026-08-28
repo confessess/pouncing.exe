@@ -1187,7 +1187,11 @@ function MainGUI.Create(screenGui, moduleManager)
     -- Apply initial preset visibility (auto-detected game)
     -- ============================================================
     task.delay(0.1, function()
-        ApplyPresetVisibility(gameName)
+        if window and window.Tabs and window.Contents then
+            ApplyPresetVisibility(gameName)
+        else
+            warn("[Pouncing] Delayed preset apply skipped — window not ready")
+        end
     end)
 
     -- ============================================================

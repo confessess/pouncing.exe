@@ -421,8 +421,12 @@ local function HookRemoteDirect(remote)
     if DirectRemoteHooks[remote] then return end
 
     local remoteName = remote.Name
-    local originalFire = remote.FireServer
-    local originalInvoke = remote.InvokeServer
+    local originalFire = nil
+    local originalInvoke = nil
+
+    -- Safely read methods (some executors error reading InvokeServer on RemoteEvent)
+    pcall(function() originalFire = remote.FireServer end)
+    pcall(function() originalInvoke = remote.InvokeServer end)
 
     DirectRemoteHooks[remote] = {
         originalFire = originalFire,
@@ -956,16 +960,19 @@ function Module.Enable()
     Config.Enabled = true
 
     -- METHOD 1: Direct remote hooking (most reliable)
-    StartRemoteScanner()
+    local ok1, err1 = pcall(StartRemoteScanner)
+    if not ok1 and Config.DebugMode then
+        warn("[Pouncing Aimbot] Direct remote hooking failed: " .. tostring(err1))
+    end
 
     -- METHOD 2: HookManager fallback (Raycast, FindPartOnRay, __namecall)
     if Utils and Utils.HookManager then
         Utils.HookManager:RegisterRaycastHandler("Aimbot", RedirectRaycastHandler, 10)
         Utils.HookManager:RegisterFindPartOnRayHandler("Aimbot", RedirectFindPartOnRayHandler, 10)
         Utils.HookManager:RegisterNamecallHandler("Aimbot", RedirectNamecallHandler, 10)
-        local ok, err = pcall(function() Utils.HookManager:Install() end)
-        if not ok and Config.DebugMode then
-            warn("[Pouncing Aimbot] HookManager install failed: " .. tostring(err))
+        local ok2, err2 = pcall(function() Utils.HookManager:Install() end)
+        if not ok2 and Config.DebugMode then
+            warn("[Pouncing Aimbot] HookManager install failed: " .. tostring(err2))
         end
     end
 
