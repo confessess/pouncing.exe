@@ -1,7 +1,3 @@
-
-# ============================================================
-# 9. README.md - Setup Instructions
-# ============================================================
 # 🐾 Pouncing.exe
 
 A modular Roblox script with a cute pink neon GUI. Built for loadstring deployment from GitHub.
