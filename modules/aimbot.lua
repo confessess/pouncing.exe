@@ -1,14 +1,13 @@
--- Pouncing.exe | Aimbot Module v7.6
--- Silent Aim = Bullet Redirect via direct remote hooking + __namecall fallback
--- Arsenal-specific: hooks ALL remotes in ReplicatedStorage for hit detection
+-- Pouncing.exe | Aimbot Module v7.7
+-- Silent Aim = Bullet Redirect via HookManager (__namecall for remotes)
 -- Hitbox: Malrand-style continuous expansion
+-- Removed: Direct remote hooking (caused executor crashes)
 -- ============================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
@@ -70,9 +69,6 @@ local InputBeganConnection = nil
 local InputEndedConnection = nil
 local ArsenalHitboxThread = nil
 local ArsenalHitboxRunning = false
-
--- Direct remote hooks storage
-local DirectRemoteHooks = {}
 
 -- ============================================================
 -- Helpers
@@ -271,7 +267,7 @@ local function DoCameraSnap()
 end
 
 -- ============================================================
--- BULLET REDIRECT: Remote Argument Replacement
+-- BULLET REDIRECT: HookManager-based
 -- ============================================================
 
 local function IsLikelyHitRemote(remoteName)
@@ -410,118 +406,7 @@ local function ProcessRemoteArgs(args, remoteName)
     return args, modified
 end
 
--- ============================================================
--- DIRECT REMOTE HOOKING
--- Hooks ALL RemoteEvents and RemoteFunctions in ReplicatedStorage
--- This bypasses __namecall entirely and works even if getrawmetatable fails
--- ============================================================
-
-local function HookRemoteDirect(remote)
-    if not remote or not (remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction")) then return end
-    if DirectRemoteHooks[remote] then return end
-
-    local remoteName = remote.Name
-    local originalFire = nil
-    local originalInvoke = nil
-
-    -- Safely read methods (some executors error reading InvokeServer on RemoteEvent)
-    pcall(function() originalFire = remote.FireServer end)
-    pcall(function() originalInvoke = remote.InvokeServer end)
-
-    DirectRemoteHooks[remote] = {
-        originalFire = originalFire,
-        originalInvoke = originalInvoke,
-    }
-
-    -- Hook FireServer (only for RemoteEvent)
-    if remote:IsA("RemoteEvent") and originalFire then
-        remote.FireServer = function(self_obj, ...)
-            if not Config.SilentAim or not Config.Enabled then
-                return originalFire(self_obj, ...)
-            end
-            local args = {...}
-            local newArgs, modified = ProcessRemoteArgs(args, remoteName)
-            if modified then
-                return originalFire(self_obj, unpack(newArgs))
-            end
-            return originalFire(self_obj, ...)
-        end
-    end
-
-    -- Hook InvokeServer (only for RemoteFunction)
-    if remote:IsA("RemoteFunction") and originalInvoke then
-        remote.InvokeServer = function(self_obj, ...)
-            if not Config.SilentAim or not Config.Enabled then
-                return originalInvoke(self_obj, ...)
-            end
-            local args = {...}
-            local newArgs, modified = ProcessRemoteArgs(args, remoteName)
-            if modified then
-                return originalInvoke(self_obj, unpack(newArgs))
-            end
-            return originalInvoke(self_obj, ...)
-        end
-    end
-end
-
-local function UnhookAllRemotesDirect()
-    for remote, hooks in pairs(DirectRemoteHooks) do
-        if remote and remote.Parent then
-            pcall(function()
-                if remote:IsA("RemoteEvent") and hooks.originalFire then
-                    remote.FireServer = hooks.originalFire
-                end
-                if remote:IsA("RemoteFunction") and hooks.originalInvoke then
-                    remote.InvokeServer = hooks.originalInvoke
-                end
-            end)
-        end
-    end
-    DirectRemoteHooks = {}
-end
-
-local function ScanAndHookRemotes()
-    local count = 0
-    for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
-        if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-            HookRemoteDirect(obj)
-            count = count + 1
-        end
-    end
-    if Config.DebugMode then
-        print("[Pouncing Aimbot] Direct-hooked " .. tostring(count) .. " remotes")
-    end
-end
-
--- Also hook remotes that are added after initial scan
-local RemoteAddedConnection = nil
-
-local function StartRemoteScanner()
-    ScanAndHookRemotes()
-    if RemoteAddedConnection then return end
-    RemoteAddedConnection = ReplicatedStorage.DescendantAdded:Connect(function(desc)
-        if desc:IsA("RemoteEvent") or desc:IsA("RemoteFunction") then
-            task.wait(0.1)
-            HookRemoteDirect(desc)
-            if Config.DebugMode then
-                print("[Pouncing Aimbot] Late-hooked remote: " .. desc.Name)
-            end
-        end
-    end)
-end
-
-local function StopRemoteScanner()
-    if RemoteAddedConnection then
-        RemoteAddedConnection:Disconnect()
-        RemoteAddedConnection = nil
-    end
-    UnhookAllRemotesDirect()
-end
-
--- ============================================================
--- FALLBACK: __namecall hook (for remotes not in ReplicatedStorage)
--- ============================================================
-
+-- __namecall handler for HookManager
 local function RedirectNamecallHandler(args, method, self_obj)
     if method ~= "FireServer" and method ~= "InvokeServer" then return args, false end
 
@@ -534,10 +419,7 @@ local function RedirectNamecallHandler(args, method, self_obj)
     return newArgs, modified
 end
 
--- ============================================================
--- Raycast / FindPartOnRay hooks (for games that use them)
--- ============================================================
-
+-- Raycast handler for HookManager
 local function RedirectRaycastHandler(origin, direction, params)
     if not Config.SilentAim or not Config.Enabled then return nil end
     local target = GetSilentAimTarget()
@@ -548,6 +430,7 @@ local function RedirectRaycastHandler(origin, direction, params)
     return origin, target.Position - origin, params
 end
 
+-- FindPartOnRay handler for HookManager
 local function RedirectFindPartOnRayHandler(ray, methodName, ...)
     if not Config.SilentAim or not Config.Enabled then return nil end
     local target = GetSilentAimTarget()
@@ -882,7 +765,7 @@ local function OnRenderStep()
 
     if target then
         if Config.SilentAim then
-            -- Silent aim uses remote hooks
+            -- Silent aim uses HookManager __namecall
         elseif Config.Aiming then
             AimAt(target)
         end
@@ -959,21 +842,17 @@ end
 function Module.Enable()
     Config.Enabled = true
 
-    -- METHOD 1: Direct remote hooking (most reliable)
-    local ok1, err1 = pcall(StartRemoteScanner)
-    if not ok1 and Config.DebugMode then
-        warn("[Pouncing Aimbot] Direct remote hooking failed: " .. tostring(err1))
-    end
-
-    -- METHOD 2: HookManager fallback (Raycast, FindPartOnRay, __namecall)
+    -- Register hooks with HookManager
     if Utils and Utils.HookManager then
         Utils.HookManager:RegisterRaycastHandler("Aimbot", RedirectRaycastHandler, 10)
         Utils.HookManager:RegisterFindPartOnRayHandler("Aimbot", RedirectFindPartOnRayHandler, 10)
         Utils.HookManager:RegisterNamecallHandler("Aimbot", RedirectNamecallHandler, 10)
-        local ok2, err2 = pcall(function() Utils.HookManager:Install() end)
-        if not ok2 and Config.DebugMode then
-            warn("[Pouncing Aimbot] HookManager install failed: " .. tostring(err2))
+        local ok, err = pcall(function() Utils.HookManager:Install() end)
+        if not ok and Config.DebugMode then
+            warn("[Pouncing Aimbot] HookManager install failed: " .. tostring(err))
         end
+    elseif Config.DebugMode then
+        warn("[Pouncing Aimbot] HookManager not available — silent aim will not work")
     end
 
     if Config.ArsenalHitboxExpand then
@@ -985,7 +864,7 @@ function Module.Enable()
     end
 
     if Config.DebugMode then
-        print("[Pouncing Aimbot] Enabled. Direct remote hooks + HookManager fallback active.")
+        print("[Pouncing Aimbot] Enabled. FOV circle + hitbox loop active.")
     end
 end
 
@@ -995,8 +874,6 @@ function Module.Disable()
     Config.CurrentTarget = nil
     Config.StickyLostTime = 0
     Config.SnapRestorePending = false
-
-    StopRemoteScanner()
 
     if Utils and Utils.HookManager then
         pcall(function()
@@ -1019,10 +896,6 @@ end
 function Module.SetConfig(key, value)
     if key == "SilentAim" then
         Config.SilentAim = value
-        -- Re-scan remotes when toggling to ensure fresh hooks
-        if value and Config.Enabled then
-            StartRemoteScanner()
-        end
     elseif key == "Triggerbot" then Config.Triggerbot = value
     elseif key == "TeamCheck" then Config.TeamCheck = value
     elseif key == "WallCheck" then Config.WallCheck = value
@@ -1100,7 +973,6 @@ function Module.ResetConfig()
     Config.DebugMode = false
     Config.RemoteSpy = false
     StopArsenalHitboxLoop()
-    StopRemoteScanner()
     if Utils and Utils.HookManager then
         pcall(function()
             Utils.HookManager:UnregisterRaycastHandler("Aimbot")
