@@ -24,7 +24,7 @@ function MainGUI.Create(screenGui, moduleManager)
         {Name = "Gun", Icon = ""},
         {Name = "Misc", Icon = ""},
         {Name = "Hitbox", Icon = ""},
-        {Name = "Config", Icon = ""}
+        {Name = "Settings", Icon = ""}
     }
     for _, tabInfo in ipairs(tabDefs) do
         GUI.CreateTab(window, tabInfo.Name, tabInfo.Icon)
@@ -410,7 +410,7 @@ function MainGUI.Create(screenGui, moduleManager)
     -- ============================================================
     -- CONFIG TAB
     -- ============================================================
-    local CCon = window.Contents["Config"]
+    local CCon = window.Contents["Settings"]
 
     GUI.CreateSection(CCon, "Config Management")
     GUI.CreateLabel(CCon, "Pouncing.exe v6.3", false)
@@ -504,6 +504,28 @@ function MainGUI.Create(screenGui, moduleManager)
     end)
 
     GUI.CreateSeparator(CCon)
+    GUI.CreateSection(CCon, "Kill Switch")
+    GUI.CreateButton(CCon, "UNINJECT / KILL SWITCH", function()
+        -- Destroy all modules
+        for name, mod in pairs(moduleManager.Modules) do
+            if mod and mod.Cleanup then
+                pcall(mod.Cleanup)
+            end
+        end
+        -- Destroy the UI
+        if screenGui then
+            screenGui:Destroy()
+        end
+        -- Clear module manager
+        moduleManager.Modules = {}
+        -- Disconnect any remaining connections
+        for _, conn in pairs(getconnections(UserInputService.InputBegan)) do
+            pcall(function() conn:Disconnect() end)
+        end
+        print("[Pouncing] Killswitch activated — fully uninjected")
+    end)
+
+    GUI.CreateSeparator(CCon)
     GUI.CreateSection(CCon, "Info")
     GUI.CreateLabel(CCon, "Press UI Toggle Key to show/hide GUI", true)
     GUI.CreateLabel(CCon, "Modules load on-demand from GitHub", true)
@@ -533,15 +555,14 @@ function MainGUI.Create(screenGui, moduleManager)
     UserInputService.InputBegan:Connect(function(input, gp)
         if gp then return end
         local isMatch = false
-        if typeof(uiToggleKey) == "EnumItem" then
-            if uiToggleKey.EnumType == Enum.KeyCode and input.KeyCode == uiToggleKey then
-                isMatch = true
-            elseif uiToggleKey.EnumType == Enum.UserInputType and input.UserInputType == uiToggleKey then
-                isMatch = true
-            end
+        if uiToggleKey.EnumType == Enum.KeyCode then
+            isMatch = (input.KeyCode == uiToggleKey)
+        elseif uiToggleKey.EnumType == Enum.UserInputType then
+            isMatch = (input.UserInputType == uiToggleKey)
         end
         if isMatch then
             window.MainFrame.Visible = not window.MainFrame.Visible
+            print("[Pouncing] UI toggled — Visible:", tostring(window.MainFrame.Visible))
         end
     end)
 
