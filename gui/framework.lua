@@ -280,7 +280,6 @@ function GUI.CreateWindow(parent, title, size)
     size = size or UDim2.new(0, 780, 0, 600)
     GUI.ScreenGui = parent
 
-    -- Outer container — NO clip, holds everything including rim glow
     local Container = Instance.new("Frame")
     Container.Name = "PouncingContainer"
     Container.Size = size
@@ -291,7 +290,6 @@ function GUI.CreateWindow(parent, title, size)
     Container.ClipsDescendants = false
     Container.Parent = parent
 
-    -- Deep shadow
     local shadow = Instance.new("ImageLabel")
     shadow.Name = "Shadow"
     shadow.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -306,7 +304,6 @@ function GUI.CreateWindow(parent, title, size)
     shadow.ZIndex = -5
     shadow.Parent = Container
 
-    -- Outer neon rim glow
     local rimGlow = Instance.new("Frame")
     rimGlow.Name = "RimGlow"
     rimGlow.Size = UDim2.new(1, 24, 1, 24)
@@ -325,7 +322,6 @@ function GUI.CreateWindow(parent, title, size)
     rimC.CornerRadius = UDim.new(0, 26)
     rimC.Parent = rimGlow
 
-    -- Secondary rim (thinner, brighter)
     local rim2 = Instance.new("Frame")
     rim2.Size = UDim2.new(1, 16, 1, 16)
     rim2.Position = UDim2.new(0, -8, 0, -8)
@@ -343,7 +339,6 @@ function GUI.CreateWindow(parent, title, size)
     rim2C.CornerRadius = UDim.new(0, 24)
     rim2C.Parent = rim2
 
-    -- Main frame — this clips everything inside
     local MF = Instance.new("Frame")
     MF.Name = "PouncingMain"
     MF.Size = UDim2.new(1, 0, 1, 0)
@@ -359,7 +354,6 @@ function GUI.CreateWindow(parent, title, size)
     MC.CornerRadius = UDim.new(0, 18)
     MC.Parent = MF
 
-    -- Scanline overlay
     local scanlines = Instance.new("Frame")
     scanlines.Name = "Scanlines"
     scanlines.Size = UDim2.new(1, 0, 1, 0)
@@ -379,7 +373,6 @@ function GUI.CreateWindow(parent, title, size)
     scanGrad.Rotation = 0
     scanGrad.Parent = scanlines
 
-    -- Main border
     local mainStroke = Instance.new("UIStroke")
     mainStroke.Color = Theme.Border
     mainStroke.Thickness = 1.5
@@ -387,7 +380,6 @@ function GUI.CreateWindow(parent, title, size)
     mainStroke.Parent = MF
     GUI.TrackStatic(mainStroke, "Color", "Border")
 
-    -- Title bar
     local TB = Instance.new("Frame")
     TB.Name = "TitleBar"
     TB.Size = UDim2.new(1, 0, 0, 54)
@@ -412,7 +404,6 @@ function GUI.CreateWindow(parent, title, size)
     TBF.Parent = TB
     GUI.TrackStatic(TBF, "BackgroundColor3", "TabBG")
 
-    -- Top neon line
     local topLine = Instance.new("Frame")
     topLine.Name = "TopLine"
     topLine.Size = UDim2.new(1, -32, 0, 2)
@@ -427,7 +418,6 @@ function GUI.CreateWindow(parent, title, size)
     topLineC.CornerRadius = UDim.new(1, 0)
     topLineC.Parent = topLine
 
-    -- Title text
     local TT = Instance.new("TextLabel")
     TT.Name = "TitleText"
     TT.Size = UDim2.new(1, -180, 1, 0)
@@ -442,7 +432,6 @@ function GUI.CreateWindow(parent, title, size)
     TT.Parent = TB
     GUI.TrackStatic(TT, "TextColor3", "Text")
 
-    -- Title glow duplicate
     local TTGlow = Instance.new("TextLabel")
     TTGlow.Size = TT.Size
     TTGlow.Position = UDim2.new(0, 22, 0, 1)
@@ -458,7 +447,6 @@ function GUI.CreateWindow(parent, title, size)
     TTGlow.Parent = TB
     GUI.TrackStatic(TTGlow, "TextColor3", "Primary")
 
-    -- Version tag
     local VT = Instance.new("TextLabel")
     VT.Name = "VersionTag"
     VT.Size = UDim2.new(0, 60, 0, 20)
@@ -471,7 +459,6 @@ function GUI.CreateWindow(parent, title, size)
     VT.Parent = TB
     GUI.TrackStatic(VT, "TextColor3", "SubText")
 
-    -- Close button
     local CB = Instance.new("TextButton")
     CB.Name = "CloseBtn"
     CB.Size = UDim2.new(0, 34, 0, 34)
@@ -502,7 +489,6 @@ function GUI.CreateWindow(parent, title, size)
         task.delay(0.35, function() parent:Destroy() end)
     end)
 
-    -- Minimize button
     local MB = Instance.new("TextButton")
     MB.Name = "MinBtn"
     MB.Size = UDim2.new(0, 34, 0, 34)
@@ -530,7 +516,6 @@ function GUI.CreateWindow(parent, title, size)
         MB.Text = Min and "+" or "−"
     end)
 
-    -- Dragging
     local dragging = false
     local dragStart, startPos = nil, nil
     TB.InputBegan:Connect(function(input)
@@ -553,7 +538,6 @@ function GUI.CreateWindow(parent, title, size)
         end
     end)
 
-    -- Tab container — rounded bottom-left to match main frame
     local TCon = Instance.new("Frame")
     TCon.Name = "TabContainer"
     TCon.Size = UDim2.new(0, 180, 1, -54)
@@ -568,7 +552,6 @@ function GUI.CreateWindow(parent, title, size)
     tabCorner.CornerRadius = UDim.new(0, 18)
     tabCorner.Parent = TCon
 
-    -- Vertical separator
     local tabSep = Instance.new("Frame")
     tabSep.Name = "TabSep"
     tabSep.Size = UDim2.new(0, 1, 1, -32)
@@ -579,7 +562,6 @@ function GUI.CreateWindow(parent, title, size)
     tabSep.Parent = TCon
     GUI.TrackStatic(tabSep, "BackgroundColor3", "Border")
 
-    -- Content container
     local CCon = Instance.new("Frame")
     CCon.Name = "ContentContainer"
     CCon.Size = UDim2.new(1, -180, 1, -54)
@@ -592,7 +574,6 @@ function GUI.CreateWindow(parent, title, size)
     StarVFX.ParentFrame = CCon
     SnowVFX.ParentFrame = CCon
 
-    -- Bottom deco — thin horizontal glow line inside tab container (clips with main frame)
     local DecoLine = Instance.new("Frame")
     DecoLine.Size = UDim2.new(0, 50, 0, 2)
     DecoLine.Position = UDim2.new(0.5, -25, 1, -22)
@@ -606,7 +587,6 @@ function GUI.CreateWindow(parent, title, size)
     DecoLineC.CornerRadius = UDim.new(1, 0)
     DecoLineC.Parent = DecoLine
 
-    -- Side deco — vertical thin glow line on left edge inside tab container (clips with main frame)
     local sideLine = Instance.new("Frame")
     sideLine.Size = UDim2.new(0, 1, 0, 120)
     sideLine.Position = UDim2.new(0, 8, 0.5, -60)
@@ -628,7 +608,7 @@ function GUI.CreateWindow(parent, title, size)
 end
 
 -- ============================================================
--- TAB CREATION (Cyberpunk HUD — safe text padding from accent bar)
+-- TAB CREATION
 -- ============================================================
 
 function GUI.CreateTab(window, name, icon)
@@ -649,7 +629,6 @@ function GUI.CreateTab(window, name, icon)
     BC.CornerRadius = UDim.new(0, 12)
     BC.Parent = B
 
-    -- Left neon accent bar — at the far left edge, very small
     local accent = Instance.new("Frame")
     accent.Size = UDim2.new(0, 3, 0, 16)
     accent.Position = UDim2.new(0, 0, 0.5, -8)
@@ -663,7 +642,6 @@ function GUI.CreateTab(window, name, icon)
     accentC.CornerRadius = UDim.new(1, 0)
     accentC.Parent = accent
 
-    -- Text label with SAFE left padding so it never touches the accent bar
     local textLabel = Instance.new("TextLabel")
     textLabel.Name = "TabText"
     textLabel.Size = UDim2.new(1, -20, 1, 0)
@@ -678,7 +656,6 @@ function GUI.CreateTab(window, name, icon)
     textLabel.Parent = B
     GUI.TrackStatic(textLabel, "TextColor3", "SubText")
 
-    -- Subtle border stroke
     local innerGlow = Instance.new("UIStroke")
     innerGlow.Color = Theme.Border
     innerGlow.Thickness = 1
@@ -767,7 +744,7 @@ function GUI.CreateTab(window, name, icon)
 end
 
 -- ============================================================
--- TOGGLE (Cyberpunk HUD — text never clips into indicator)
+-- TOGGLE
 -- ============================================================
 
 function GUI.CreateToggle(parent, text, default, colorKey, callback)
@@ -790,7 +767,6 @@ function GUI.CreateToggle(parent, text, default, colorKey, callback)
     fStroke.Parent = F
     GUI.TrackStatic(fStroke, "Color", "Border")
 
-    -- Left neon indicator — flush at left edge, very thin
     local indicator = Instance.new("Frame")
     indicator.Size = UDim2.new(0, 3, 0, 18)
     indicator.Position = UDim2.new(0, 0, 0.5, -9)
@@ -804,7 +780,6 @@ function GUI.CreateToggle(parent, text, default, colorKey, callback)
     indC.CornerRadius = UDim.new(1, 0)
     indC.Parent = indicator
 
-    -- Text label with SAFE left padding (16px from left edge, well clear of 3px indicator)
     local L = Instance.new("TextLabel")
     L.Size = UDim2.new(1, -150, 1, 0)
     L.Position = UDim2.new(0, 16, 0, 0)
@@ -912,7 +887,7 @@ function GUI.CreateToggle(parent, text, default, colorKey, callback)
 end
 
 -- ============================================================
--- SLIDER (Cyberpunk HUD)
+-- SLIDER
 -- ============================================================
 
 function GUI.CreateSlider(parent, text, min, max, default, callback)
@@ -1048,7 +1023,7 @@ function GUI.CreateSlider(parent, text, min, max, default, callback)
 end
 
 -- ============================================================
--- SLIDER WITH INPUT (Cyberpunk HUD)
+-- SLIDER WITH INPUT
 -- ============================================================
 
 function GUI.CreateSliderWithInput(parent, text, min, max, default, callback)
@@ -1218,7 +1193,7 @@ function GUI.CreateSliderWithInput(parent, text, min, max, default, callback)
 end
 
 -- ============================================================
--- BUTTON (Cyberpunk HUD)
+-- BUTTON
 -- ============================================================
 
 function GUI.CreateButton(parent, text, callback)
@@ -1247,7 +1222,6 @@ function GUI.CreateButton(parent, text, callback)
     fStroke.Parent = F
     GUI.TrackStatic(fStroke, "Color", "Neon")
 
-    -- Bottom glow line
     local glowLine = Instance.new("Frame")
     glowLine.Size = UDim2.new(1, -16, 0, 2)
     glowLine.Position = UDim2.new(0, 8, 1, -3)
@@ -1283,7 +1257,7 @@ function GUI.CreateButton(parent, text, callback)
 end
 
 -- ============================================================
--- LABEL (Cyberpunk HUD)
+-- LABEL
 -- ============================================================
 
 function GUI.CreateLabel(parent, text, isSub)
@@ -1317,7 +1291,7 @@ function GUI.CreateWarning(parent, text)
 end
 
 -- ============================================================
--- SEPARATOR (Cyberpunk HUD)
+-- SEPARATOR
 -- ============================================================
 
 function GUI.CreateSeparator(parent)
@@ -1347,7 +1321,7 @@ function GUI.CreateSeparator(parent)
 end
 
 -- ============================================================
--- SECTION (Cyberpunk HUD — no prefix, safe padding)
+-- SECTION
 -- ============================================================
 
 function GUI.CreateSection(parent, title)
@@ -1357,7 +1331,6 @@ function GUI.CreateSection(parent, title)
     F.BorderSizePixel = 0
     F.Parent = parent
 
-    -- Left neon bar — flush at edge, thin
     local accentBar = Instance.new("Frame")
     accentBar.Size = UDim2.new(0, 3, 0, 18)
     accentBar.Position = UDim2.new(0, 0, 0, 10)
@@ -1371,7 +1344,6 @@ function GUI.CreateSection(parent, title)
     accentBarC.CornerRadius = UDim.new(1, 0)
     accentBarC.Parent = accentBar
 
-    -- Text with safe left padding (14px from left edge, well clear of 3px bar)
     local L = Instance.new("TextLabel")
     L.Size = UDim2.new(1, -20, 1, 0)
     L.Position = UDim2.new(0, 14, 0, 0)
@@ -1389,7 +1361,7 @@ function GUI.CreateSection(parent, title)
 end
 
 -- ============================================================
--- DROPDOWN (Cyberpunk HUD — contained inside scrolling frame, clips with UI)
+-- DROPDOWN (Fixed — positioned below button, ScreenGui parent)
 -- ============================================================
 
 function GUI.CreateDropdown(parent, text, options, default, callback)
@@ -1412,7 +1384,6 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
     fStroke.Parent = F
     GUI.TrackStatic(fStroke, "Color", "Border")
 
-    -- Left indicator — flush at edge, thin
     local indicator = Instance.new("Frame")
     indicator.Size = UDim2.new(0, 3, 0, 16)
     indicator.Position = UDim2.new(0, 0, 0.5, -8)
@@ -1426,7 +1397,6 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
     indC.CornerRadius = UDim.new(1, 0)
     indC.Parent = indicator
 
-    -- Text with safe left padding
     local L = Instance.new("TextLabel")
     L.Size = UDim2.new(1, -170, 1, 0)
     L.Position = UDim2.new(0, 16, 0, 0)
@@ -1481,13 +1451,15 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
 
     local open = false
     local dropFrame = nil
+    local clickConn = nil
 
     DBtn.MouseButton1Click:Connect(function()
         open = not open
         if open then
             if dropFrame then dropFrame:Destroy() end
+            if clickConn then clickConn:Disconnect() end
 
-            -- Parent to the scrolling frame so it clips with the UI window
+            -- Parent to ScreenGui so it renders on top, position directly below DBtn
             dropFrame = Instance.new("Frame")
             dropFrame.Name = "DropdownMenu"
             dropFrame.Size = UDim2.new(0, 130, 0, math.min(#options * 32, 180))
@@ -1495,32 +1467,12 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
             dropFrame.BackgroundTransparency = 0.05
             dropFrame.BorderSizePixel = 0
             dropFrame.ZIndex = 10
-            -- Parent to the same scrolling frame as the dropdown button
-            dropFrame.Parent = parent
+            dropFrame.Parent = GUI.ScreenGui or parent:FindFirstAncestorOfClass("ScreenGui")
 
-            -- Position directly below the dropdown button within the scrolling frame
-            -- Use AbsolutePosition to calculate relative position
-            local function RefreshPosition()
-                if not dropFrame or not dropFrame.Parent then return end
-                if not F or not F.Parent then
-                    open = false
-                    if dropFrame then dropFrame:Destroy() dropFrame = nil end
-                    return
-                end
-                -- Position relative to the scrolling frame
-                local frameAbs = F.AbsolutePosition
-                local parentAbs = parent.AbsolutePosition
-                local relX = frameAbs.X - parentAbs.X
-                local relY = frameAbs.Y - parentAbs.Y + F.AbsoluteSize.Y + 4
-                -- Adjust for canvas position (scroll offset)
-                local canvasPos = parent.CanvasPosition
-                dropFrame.Position = UDim2.new(0, relX + DBtn.Position.X.Offset, 0, relY - canvasPos.Y)
-            end
-
-            RefreshPosition()
-
-            -- Track canvas position changes
-            local canvasConn = parent:GetPropertyChangedSignal("CanvasPosition"):Connect(RefreshPosition)
+            -- Position directly below the dropdown button in absolute screen coords
+            local btnAbs = DBtn.AbsolutePosition
+            local btnSize = DBtn.AbsoluteSize
+            dropFrame.Position = UDim2.new(0, btnAbs.X, 0, btnAbs.Y + btnSize.Y + 2)
 
             local dropC = Instance.new("UICorner")
             dropC.CornerRadius = UDim.new(0, 12)
@@ -1572,7 +1524,7 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
                     selected = opt
                     DBtn.Text = opt
                     open = false
-                    if canvasConn then canvasConn:Disconnect() end
+                    if clickConn then clickConn:Disconnect() clickConn = nil end
                     dropFrame:Destroy()
                     dropFrame = nil
                     if callback then callback(opt) end
@@ -1580,7 +1532,6 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
             end
 
             -- Close when clicking outside
-            local clickConn
             clickConn = UserInputService.InputBegan:Connect(function(input, gp)
                 if gp then return end
                 if input.UserInputType == Enum.UserInputType.MouseButton1 and open then
@@ -1595,31 +1546,29 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
                         and mousePos.Y >= btnAbs.Y and mousePos.Y <= btnAbs.Y + btnSize.Y
                     if not inDrop and not inBtn then
                         open = false
-                        if canvasConn then canvasConn:Disconnect() end
-                        if clickConn then clickConn:Disconnect() end
+                        if clickConn then clickConn:Disconnect() clickConn = nil end
                         dropFrame:Destroy()
                         dropFrame = nil
                     end
                 end
             end)
 
-            -- Clean up connections when dropdown is destroyed
             dropFrame.AncestryChanged:Connect(function(_, newParent)
                 if not newParent then
                     open = false
-                    if canvasConn then canvasConn:Disconnect() end
-                    if clickConn then clickConn:Disconnect() end
+                    if clickConn then clickConn:Disconnect() clickConn = nil end
                 end
             end)
         else
             if dropFrame then dropFrame:Destroy() dropFrame = nil end
+            if clickConn then clickConn:Disconnect() clickConn = nil end
         end
     end)
 
-    -- Clean up if parent is destroyed
     F.AncestryChanged:Connect(function(_, newParent)
         if not newParent then
             if dropFrame then dropFrame:Destroy() dropFrame = nil end
+            if clickConn then clickConn:Disconnect() clickConn = nil end
             open = false
         end
     end)
@@ -1628,7 +1577,7 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
 end
 
 -- ============================================================
--- KEYBIND (Cyberpunk HUD)
+-- KEYBIND
 -- ============================================================
 
 function GUI.CreateKeybind(parent, text, defaultKey, callback)
@@ -1753,7 +1702,7 @@ function GUI.CreateKeybind(parent, text, defaultKey, callback)
 end
 
 -- ============================================================
--- COLOR PICKER (Cyberpunk HUD)
+-- COLOR PICKER
 -- ============================================================
 
 function GUI.CreateColorPicker(parent, titleText, defaultColor)
