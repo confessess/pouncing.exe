@@ -1,6 +1,7 @@
--- Pouncing.exe | Aimbot Module v7.0
+-- Pouncing.exe | Aimbot Module v7.1
 -- Lock-on, silent aim, triggerbot, toggle, sticky target
 -- Arsenal Mode: aggressive Camera.CFrame + Mouse.Hit + Raycast + FindPartOnRay
+-- PLUS: Arsenal Silent Aim — continuous hitbox expansion (RightUpperLeg, LeftUpperLeg, HeadHB, HRP)
 -- Non-Arsenal: Camera Snap method
 -- ============================================================
 
@@ -41,6 +42,11 @@ local Config = {
     -- Arsenal Mode
     ArsenalMode = false,
 
+    -- Arsenal Silent Aim (hitbox expansion)
+    ArsenalHitboxExpand = true,
+    ArsenalHitboxSize = 13,
+    ArsenalHitboxParts = {"RightUpperLeg", "LeftUpperLeg", "HeadHB", "HumanoidRootPart"},
+
     -- Visuals
     FOVColor = Color3.fromRGB(255, 105, 180),
     ShowFOV = true,
@@ -53,11 +59,15 @@ local Config = {
     StickyGracePeriod = 0.6,
     LastClickTime = 0,
     SnapRestorePending = false,
+
+    -- Arsenal hitbox storage
+    ArsenalOriginalSizes = {},
 }
 
 local RenderConnection = nil
 local InputBeganConnection = nil
 local InputEndedConnection = nil
+local ArsenalHitboxConnection = nil
 
 -- ============================================================
 -- Helpers
@@ -427,6 +437,86 @@ local function ArsenalNamecallHandler(args, method, self_obj)
 end
 
 -- ============================================================
+-- ARSENAL SILENT AIM: Hitbox Expansion
+-- (From uploaded script — expands enemy hitboxes for guaranteed hits)
+-- ============================================================
+
+local function RestoreArsenalHitboxes(player)
+    local sizes = Config.ArsenalOriginalSizes[player]
+    if not sizes then return end
+    local character = player.Character
+    if character then
+        for partName, originalData in pairs(sizes) do
+            local part = character:FindFirstChild(partName)
+            if part and part:IsA("BasePart") then
+                part.Size = originalData.Size
+                part.Transparency = originalData.Transparency
+                part.CanCollide = originalData.CanCollide
+            end
+        end
+    end
+    Config.ArsenalOriginalSizes[player] = nil
+end
+
+local function ExpandArsenalHitboxes(player)
+    if player == LocalPlayer then return end
+    if Config.TeamCheck and IsTeammate(player) then
+        RestoreArsenalHitboxes(player)
+        return
+    end
+
+    local character = player.Character
+    if not character then
+        RestoreArsenalHitboxes(player)
+        return
+    end
+
+    local hum = character:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then
+        RestoreArsenalHitboxes(player)
+        return
+    end
+
+    if not Config.ArsenalOriginalSizes[player] then
+        Config.ArsenalOriginalSizes[player] = {}
+    end
+
+    for _, partName in ipairs(Config.ArsenalHitboxParts) do
+        local part = character:FindFirstChild(partName)
+        if part and part:IsA("BasePart") then
+            if not Config.ArsenalOriginalSizes[player][partName] then
+                Config.ArsenalOriginalSizes[player][partName] = {
+                    Size = part.Size,
+                    Transparency = part.Transparency,
+                    CanCollide = part.CanCollide,
+                }
+            end
+            part.CanCollide = false
+            part.Transparency = 1
+            part.Size = Vector3.new(Config.ArsenalHitboxSize, Config.ArsenalHitboxSize, Config.ArsenalHitboxSize)
+        end
+    end
+end
+
+local function ClearAllArsenalHitboxes()
+    for player, _ in pairs(Config.ArsenalOriginalSizes) do
+        RestoreArsenalHitboxes(player)
+    end
+    Config.ArsenalOriginalSizes = {}
+end
+
+local function OnArsenalHitboxLoop()
+    if not Config.Enabled or not Config.ArsenalMode or not Config.ArsenalHitboxExpand then
+        ClearAllArsenalHitboxes()
+        return
+    end
+
+    for _, player in pairs(Players:GetPlayers()) do
+        pcall(function() ExpandArsenalHitboxes(player) end)
+    end
+end
+
+-- ============================================================
 -- Triggerbot
 -- ============================================================
 
@@ -733,6 +823,18 @@ function Module.Enable()
         Utils.HookManager:RegisterNamecallHandler("Aimbot", ArsenalNamecallHandler, 10)
         Utils.HookManager:Install()
     end
+
+    -- Start Arsenal hitbox expansion loop
+    if Config.ArsenalMode and Config.ArsenalHitboxExpand then
+        if ArsenalHitboxConnection then ArsenalHitboxConnection:Disconnect() end
+        ArsenalHitboxConnection = task.spawn(function()
+            while Config.Enabled and Config.ArsenalMode and Config.ArsenalHitboxExpand do
+                OnArsenalHitboxLoop()
+                task.wait(1)
+            end
+        end)
+    end
+
     if not RenderConnection then
         RenderConnection = RunService.RenderStepped:Connect(OnRenderStep)
     end
@@ -751,6 +853,13 @@ function Module.Disable()
         Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
         Utils.HookManager:UnregisterNamecallHandler("Aimbot")
     end
+
+    -- Stop Arsenal hitbox expansion and restore all
+    if ArsenalHitboxConnection then
+        ArsenalHitboxConnection = nil
+    end
+    ClearAllArsenalHitboxes()
+
     if RenderConnection then
         RenderConnection:Disconnect()
         RenderConnection = nil
@@ -797,7 +906,41 @@ function Module.SetConfig(key, value)
     elseif key == "LegitMode" then Config.LegitMode = value
     elseif key == "LegitThreshold" then Config.LegitThreshold = value
     elseif key == "SnapDuration" then Config.SnapDuration = math.clamp(value, 1, 10)
-    elseif key == "ArsenalMode" then Config.ArsenalMode = value
+    elseif key == "ArsenalMode" then 
+        Config.ArsenalMode = value
+        -- Manage hitbox expansion loop when ArsenalMode toggles
+        if Config.Enabled then
+            if value and Config.ArsenalHitboxExpand then
+                if ArsenalHitboxConnection then ArsenalHitboxConnection = nil end
+                ArsenalHitboxConnection = task.spawn(function()
+                    while Config.Enabled and Config.ArsenalMode and Config.ArsenalHitboxExpand do
+                        OnArsenalHitboxLoop()
+                        task.wait(1)
+                    end
+                end)
+            else
+                if ArsenalHitboxConnection then ArsenalHitboxConnection = nil end
+                ClearAllArsenalHitboxes()
+            end
+        end
+    elseif key == "ArsenalHitboxExpand" then
+        Config.ArsenalHitboxExpand = value
+        if Config.Enabled and Config.ArsenalMode then
+            if value then
+                if ArsenalHitboxConnection then ArsenalHitboxConnection = nil end
+                ArsenalHitboxConnection = task.spawn(function()
+                    while Config.Enabled and Config.ArsenalMode and Config.ArsenalHitboxExpand do
+                        OnArsenalHitboxLoop()
+                        task.wait(1)
+                    end
+                end)
+            else
+                if ArsenalHitboxConnection then ArsenalHitboxConnection = nil end
+                ClearAllArsenalHitboxes()
+            end
+        end
+    elseif key == "ArsenalHitboxSize" then
+        Config.ArsenalHitboxSize = math.clamp(value, 1, 25)
     elseif key == "FOVColor" then 
         Config.FOVColor = value
         if FOVCircle then FOVCircle.Color = value end
@@ -833,9 +976,12 @@ function Module.ResetConfig()
     Config.LegitThreshold = 30
     Config.SnapDuration = 2
     Config.ArsenalMode = false
+    Config.ArsenalHitboxExpand = true
+    Config.ArsenalHitboxSize = 13
     Config.FOVColor = Color3.fromRGB(255, 105, 180)
     Config.ShowFOV = true
     Config.SnapRestorePending = false
+    ClearAllArsenalHitboxes()
     if Utils and Utils.HookManager then
         Utils.HookManager:UnregisterIndexHandler("Aimbot_Mouse")
         Utils.HookManager:UnregisterIndexHandler("Aimbot_Camera")

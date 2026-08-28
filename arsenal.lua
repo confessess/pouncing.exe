@@ -1,70 +1,110 @@
--- Pouncing.exe | Arsenal Game Preset
--- Optimized configs and modules for Arsenal (PlaceId: 286090429)
+-- Pouncing.exe | Arsenal Preset v1.0
+-- Optimized for Arsenal (PlaceId: 286090429)
+-- Enables: Silent Aim (Arsenal Mode), Hitbox Expander (Arsenal Mode), ESP
 -- ============================================================
 
-local ArsenalPreset = {
+return {
     Name = "Arsenal",
-    PlaceId = 286090429,
-
-    -- Module configs optimized for Arsenal
     Configs = {
         Aimbot = {
-            Enabled = false,
+            Enabled = true,
             SilentAim = true,
-            Triggerbot = false,
-            TeamCheck = false,
-            WallCheck = false,
-            FOV = 50,
-            Smoothness = 10,
-            MaxDistance = 800,
+            ArsenalMode = true,
+            TeamCheck = true,
+            WallCheck = true,
+            FOV = 80,
+            Smoothness = 5,
+            MaxDistance = 1500,
+            TriggerDelay = 50,
             TargetPart = "Head",
             Priority = "Closest to Mouse",
+            AimKey = Enum.KeyCode.Q,
+            Prediction = false,
+            ToggleMode = false,
+            StickyTarget = true,
             HitChance = 100,
-            SnapDuration = 3,
+            LegitMode = false,
+            LegitThreshold = 30,
+            SnapDuration = 2,
+            ShowFOV = true,
+            FOVColor = Color3.fromRGB(255, 105, 180),
+        },
+        Hitbox = {
+            Enabled = true,
             ArsenalMode = true,
+            TeamCheck = true,
+            ShowExpanded = false,
+            HitboxSize = 13,
+            TargetParts = "All Major",
+            MaxDistance = 2000,
+            VisualColor = Color3.fromRGB(255, 105, 180),
+            VisualStyle = "Transparent",
+            Comprehensive = false,
+            UpdateRate = 2,
         },
         ESP = {
-            Enabled = false,
+            Enabled = true,
             Boxes = true,
+            Box3D = false,
             Names = true,
             Health = true,
-            TeamCheck = false,
-            MaxDistance = 1500,
+            Skeleton = false,
+            Chams = false,
+            Tracers = false,
+            HeadDot = false,
+            Distance = false,
+            WeaponNames = false,
+            TeamCheck = true,
+            MaxDistance = 2000,
+            BoxThickness = 1,
+            TracerOrigin = 0.5,
+            HeadDotThickness = 1,
+            HeadDotSize = 0.5,
+            Color_Box = Color3.fromRGB(255, 105, 180),
+            Color_Skeleton = Color3.fromRGB(255, 0, 255),
+            Color_ChamsFill = Color3.fromRGB(255, 20, 147),
+            Color_Tracers = Color3.fromRGB(255, 105, 180),
+            Color_HeadDot = Color3.fromRGB(255, 255, 255),
+            Color_Name = Color3.fromRGB(255, 255, 255),
+            Color_Health = Color3.fromRGB(0, 255, 100),
+            Color_Distance = Color3.fromRGB(200, 200, 200),
         },
         Gun = {
             Enabled = false,
-            NoRecoil = true,
-            NoSpread = true,
-            RapidFire = true,
-            FireRate = 3,
-        },
-        Hitbox = {
-            Enabled = false,
-            TeamCheck = false,
-            HitboxSize = 3,
-            TargetParts = "Head",
-            MaxDistance = 1000,
-            ShowExpanded = true,
+            NoRecoil = false,
+            NoSpread = false,
+            RapidFire = false,
+            AutoFire = false,
+            InfiniteAmmo = false,
+            InstantReload = false,
+            AlwaysHeadshot = false,
+            FireRate = 2,
+            DamageMult = 1,
+            RecoilReduction = 100,
         },
         Misc = {
             Enabled = false,
+            BunnyHop = false,
+            AutoStrafe = false,
             SpeedHack = false,
-            WalkSpeed = 35,
             Fly = false,
+            FlyMethod = "Tween",
+            InfiniteJump = false,
+            NoClip = false,
+            AntiAFK = false,
+            AntiAim = false,
+            WalkSpeed = 50,
+            JumpPower = 100,
             FlySpeed = 50,
+            Fullbright = false,
+            NoFog = false,
+            NoShadows = false,
+            CustomTime = false,
+            Brightness = 2,
+            TimeOfDay = 12,
+            FlyKey = Enum.KeyCode.F,
+            SpeedKey = Enum.KeyCode.LeftShift,
+            NoClipKey = Enum.KeyCode.N,
         },
-    },
-
-    -- Arsenal-specific modules (loaded in addition to universal)
-    ExtraModules = {
-        -- "arsenal_esp" = custom ESP for Arsenal's unique character system
-        -- "auto_vote" = auto vote for maps
-    },
-
-    -- Tab order / visibility
-    TabOrder = {"Aimbot", "ESP", "Gun", "Hitbox", "Misc", "Settings"},
-
-    Description = "Server-authoritative FPS. Silent Aim uses Camera Snap. Hitbox limited to Head only.",
+    }
 }
-
-return ArsenalPreset

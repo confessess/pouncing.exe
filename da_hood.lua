@@ -1,75 +1,96 @@
--- Pouncing.exe | Da Hood Game Preset
--- Optimized configs and modules for Da Hood (PlaceId: 2788229376)
+-- Pouncing.exe | Da Hood Preset v1.0
+-- Optimized for Da Hood / Zee Hood
 -- ============================================================
 
-local DaHoodPreset = {
+return {
     Name = "Da Hood",
-    PlaceId = 2788229376,
-
-    -- Module configs optimized for Da Hood
     Configs = {
         Aimbot = {
-            Enabled = false,
+            Enabled = true,
             SilentAim = true,
-            Triggerbot = false,
-            TeamCheck = false,
-            WallCheck = false,
-            FOV = 80,
-            Smoothness = 20,
-            MaxDistance = 1200,
-            TargetPart = "Head",
-            Priority = "Closest to Mouse",
-            HitChance = 100,
-            SnapDuration = 2,
             ArsenalMode = false,
-        },
-        ESP = {
-            Enabled = false,
-            Boxes = true,
-            Names = true,
-            Health = true,
-            WeaponNames = true,
-            TeamCheck = false,
-            MaxDistance = 2000,
-        },
-        Gun = {
-            Enabled = false,
-            AutoFire = true,
-            NoRecoil = true,
-            NoSpread = true,
-            RapidFire = true,
-            FireRate = 5,
+            TeamCheck = true,
+            WallCheck = false,
+            FOV = 60,
+            Smoothness = 10,
+            MaxDistance = 1000,
+            TriggerDelay = 50,
+            TargetPart = "HumanoidRootPart",
+            Priority = "Closest to Player",
+            AimKey = Enum.KeyCode.Q,
+            Prediction = false,
+            ToggleMode = false,
+            StickyTarget = false,
+            HitChance = 100,
+            LegitMode = false,
+            LegitThreshold = 30,
+            SnapDuration = 2,
+            ShowFOV = true,
+            FOVColor = Color3.fromRGB(255, 105, 180),
         },
         Hitbox = {
             Enabled = false,
-            TeamCheck = false,
-            HitboxSize = 5,
-            TargetParts = "Head + HRP",
-            MaxDistance = 2000,
+            ArsenalMode = false,
+            TeamCheck = true,
             ShowExpanded = true,
+            HitboxSize = 5,
+            TargetParts = "Head",
+            MaxDistance = 2000,
+            VisualColor = Color3.fromRGB(255, 105, 180),
+            VisualStyle = "Transparent",
+            Comprehensive = false,
+            UpdateRate = 2,
+        },
+        ESP = {
+            Enabled = true,
+            Boxes = true,
+            Box3D = false,
+            Names = true,
+            Health = true,
+            Skeleton = false,
+            Chams = false,
+            Tracers = false,
+            HeadDot = false,
+            Distance = false,
+            WeaponNames = false,
+            TeamCheck = true,
+            MaxDistance = 1500,
+            BoxThickness = 1,
+            TracerOrigin = 0.5,
+            HeadDotThickness = 1,
+            HeadDotSize = 0.5,
+            Color_Box = Color3.fromRGB(255, 105, 180),
+            Color_Skeleton = Color3.fromRGB(255, 0, 255),
+            Color_ChamsFill = Color3.fromRGB(255, 20, 147),
+            Color_Tracers = Color3.fromRGB(255, 105, 180),
+            Color_HeadDot = Color3.fromRGB(255, 255, 255),
+            Color_Name = Color3.fromRGB(255, 255, 255),
+            Color_Health = Color3.fromRGB(0, 255, 100),
+            Color_Distance = Color3.fromRGB(200, 200, 200),
         },
         Misc = {
             Enabled = false,
-            SpeedHack = true,
-            WalkSpeed = 80,
-            Fly = true,
-            FlySpeed = 100,
             BunnyHop = false,
+            AutoStrafe = false,
+            SpeedHack = false,
+            Fly = false,
+            FlyMethod = "Tween",
+            InfiniteJump = false,
+            NoClip = false,
+            AntiAFK = false,
             AntiAim = false,
+            WalkSpeed = 50,
+            JumpPower = 100,
+            FlySpeed = 50,
+            Fullbright = false,
+            NoFog = false,
+            NoShadows = false,
+            CustomTime = false,
+            Brightness = 2,
+            TimeOfDay = 12,
+            FlyKey = Enum.KeyCode.F,
+            SpeedKey = Enum.KeyCode.LeftShift,
+            NoClipKey = Enum.KeyCode.N,
         },
-    },
-
-    -- Da Hood-specific modules
-    ExtraModules = {
-        -- "knock_check" = shows who's knocked/down
-        -- "hp_checker" = displays player health above heads
-        -- "auto_stomp" = auto stomp downed players
-        -- "auto_drop" = auto drop cash
-    },
-
-    TabOrder = {"Aimbot", "ESP", "Gun", "Hitbox", "Misc", "Settings"},
-
-    Description = "Street RP with client-trusted hit detection. Hitbox expander works well. Silent Aim via Mouse.Hit.",
+    }
 }
-
-return DaHoodPreset

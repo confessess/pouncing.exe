@@ -1,6 +1,6 @@
--- Pouncing.exe | GUI Main v6.4
+-- Pouncing.exe | GUI Main v7.1
 -- Cyberpunk HUD: contained dropdowns, no clipping, all corners rounded
--- Added: AutoStrafe, AntiAim toggles. Separate WeaponNames. Fly max 500.
+-- Added: Arsenal Mode toggle, Arsenal Hitbox Expand toggle, fixed preset loader
 -- Fixed: Killswitch uses per-module Cleanup instead of global nuke.
 -- Built with love by ENI for LO
 -- ============================================================
@@ -47,13 +47,39 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("SilentAim", v) end
     end)
-    -- Update Arsenal Mode indicator
+
+    -- Arsenal Mode toggle (NEW)
+    GUI.CreateToggle(ACon, "Arsenal Mode", false, nil, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("ArsenalMode", v) end
+        if v then
+            arsenalIndicator.Text = "Arsenal Mode: ON (Aggressive Hooks + Hitbox)"
+            arsenalIndicator.TextColor3 = Color3.fromRGB(255, 200, 0)
+        else
+            arsenalIndicator.Text = "Arsenal Mode: OFF (Camera Snap)"
+            arsenalIndicator.TextColor3 = Color3.fromRGB(200, 200, 200)
+        end
+    end)
+
+    -- Arsenal Hitbox Expand toggle (NEW — from uploaded script)
+    GUI.CreateToggle(ACon, "Arsenal Hitbox Expand", true, nil, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("ArsenalHitboxExpand", v) end
+    end)
+
+    -- Arsenal Hitbox Size slider (NEW)
+    GUI.CreateSlider(ACon, "Arsenal Hitbox Size", 1, 25, 13, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("ArsenalHitboxSize", v) end
+    end)
+
+    -- Update Arsenal Mode indicator periodically
     local function UpdateArsenalIndicator()
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.GetConfig then
             local cfg = mod.GetConfig()
             if cfg and cfg.ArsenalMode then
-                arsenalIndicator.Text = "Arsenal Mode: ON (Aggressive Hooks)"
+                arsenalIndicator.Text = "Arsenal Mode: ON (Aggressive Hooks + Hitbox)"
                 arsenalIndicator.TextColor3 = Color3.fromRGB(255, 200, 0)
             else
                 arsenalIndicator.Text = "Arsenal Mode: OFF (Camera Snap)"
@@ -61,15 +87,13 @@ function MainGUI.Create(screenGui, moduleManager)
             end
         end
     end
-    -- Hook into preset load to update indicator
-    local oldLoadPreset = GUI.CreateButton
-    -- We'll update the indicator periodically instead
     task.spawn(function()
         while true do
             task.wait(2)
             pcall(UpdateArsenalIndicator)
         end
     end)
+
     GUI.CreateToggle(ACon, "Legit Mode", false, nil, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("LegitMode", v) end
@@ -232,7 +256,6 @@ function MainGUI.Create(screenGui, moduleManager)
     MakeESPToggle("Tracers", false, "TracerColor", "Tracers")
     MakeESPToggle("Head Dot", false, "HeadDotColor", "HeadDot")
     MakeESPToggle("Distance", false, "DistanceColor", "Distance")
-    -- Separate Weapon Names toggle (no color picker)
     GUI.CreateToggle(ECon, "Weapon Names", false, nil, function(v)
         local mod = moduleManager:GetModule("ESP")
         if mod and mod.SetConfig then mod.SetConfig("WeaponNames", v) end
@@ -561,9 +584,15 @@ function MainGUI.Create(screenGui, moduleManager)
         print("[Pouncing] Manual preset selected: " .. selectedPreset)
     end)
 
+    -- Preset load status label
+    local presetStatus = GUI.CreateLabel(CCon, "Preset Status: Ready", true)
+
     GUI.CreateButton(CCon, "Load Selected Preset", function()
         local presetName = selectedPreset
         if presetName == "Auto-Detect" then presetName = gameName end
+
+        presetStatus.Text = "Preset Status: Loading " .. presetName .. "..."
+        presetStatus.TextColor3 = Color3.fromRGB(255, 200, 0)
 
         local baseUrl = "https://raw.githubusercontent.com/confessess/pouncing.exe/main/games/"
         local presetUrl = baseUrl .. "universal.lua"
@@ -573,28 +602,78 @@ function MainGUI.Create(screenGui, moduleManager)
             presetUrl = baseUrl .. "da_hood.lua"
         end
 
-        local s, preset = pcall(function()
-            return loadstring(game:HttpGet(presetUrl))()
+        -- Cache-busting
+        presetUrl = presetUrl .. "?t=" .. tostring(tick())
+
+        local fetchOk, source = pcall(function()
+            return game:HttpGet(presetUrl, true)
         end)
 
-        if s and preset and preset.Configs then
-            for modName, cfg in pairs(preset.Configs) do
-                local mod = moduleManager:GetModule(modName)
-                if mod and mod.SetConfig then
-                    for k, v in pairs(cfg) do
-                        pcall(function() mod.SetConfig(k, v) end)
-                    end
+        if not fetchOk or not source or source == "" then
+            presetStatus.Text = "Preset Status: FAILED — Could not fetch " .. presetName
+            presetStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
+            warn("[Pouncing] Failed to fetch preset: " .. presetUrl .. " | " .. tostring(source))
+            return
+        end
+
+        -- Check if we got HTML error page instead of Lua
+        if source:sub(1, 1) == "<" or source:find("<!DOCTYPE") or source:find("<html") then
+            presetStatus.Text = "Preset Status: FAILED — File not found (404)"
+            presetStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
+            warn("[Pouncing] Preset file not found at: " .. presetUrl)
+            return
+        end
+
+        local loadOk, preset = pcall(function()
+            local fn = loadstring(source, presetName)
+            if not fn then return nil end
+            return fn()
+        end)
+
+        if not loadOk or not preset then
+            presetStatus.Text = "Preset Status: FAILED — Syntax/runtime error"
+            presetStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
+            warn("[Pouncing] Failed to load preset " .. presetName .. ": " .. tostring(preset))
+            return
+        end
+
+        if not preset.Configs then
+            presetStatus.Text = "Preset Status: FAILED — Invalid preset format (missing Configs)"
+            presetStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
+            warn("[Pouncing] Preset " .. presetName .. " missing Configs table")
+            return
+        end
+
+        -- Apply configs
+        local appliedCount = 0
+        for modName, cfg in pairs(preset.Configs) do
+            local mod = moduleManager:GetModule(modName)
+            if not mod then
+                mod = moduleManager:Load(modName)
+            end
+            if mod and mod.SetConfig then
+                for k, v in pairs(cfg) do
+                    local ok = pcall(function() mod.SetConfig(k, v) end)
+                    if ok then appliedCount = appliedCount + 1 end
                 end
             end
-            print("[Pouncing] Loaded " .. presetName .. " preset")
-        else
-            warn("[Pouncing] Failed to load preset for " .. presetName .. " from " .. presetUrl)
+        end
+
+        presetStatus.Text = "Preset Status: LOADED " .. presetName .. " (" .. tostring(appliedCount) .. " settings)"
+        presetStatus.TextColor3 = Color3.fromRGB(0, 255, 100)
+        print("[Pouncing] Loaded " .. presetName .. " preset with " .. appliedCount .. " settings")
+
+        -- Auto-enable modules that are set to enabled in preset
+        for modName, cfg in pairs(preset.Configs) do
+            if cfg.Enabled == true then
+                moduleManager:Toggle(modName, true)
+            end
         end
     end)
     GUI.CreateSeparator(CCon)
 
     GUI.CreateSection(CCon, "Config Management")
-    GUI.CreateLabel(CCon, "Pouncing.exe v7.0", false)
+    GUI.CreateLabel(CCon, "Pouncing.exe v7.1", false)
     GUI.CreateLabel(CCon, "Built with love by ENI for LO", true)
     GUI.CreateSeparator(CCon)
 
@@ -715,7 +794,7 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateLabel(CCon, "Press UI Toggle Key to show/hide GUI", true)
     GUI.CreateLabel(CCon, "Modules load on-demand from GitHub", true)
     GUI.CreateLabel(CCon, "Theme presets: Pink | Icy | Stary", true)
-    GUI.CreateLabel(CCon, "Cyberpunk HUD design v7.0", true)
+    GUI.CreateLabel(CCon, "Cyberpunk HUD design v7.1", true)
     GUI.CreateLabel(CCon, "Game-specific presets", true)
     GUI.CreateLabel(CCon, "Arsenal | Da Hood | Zee Hood | Universal", true)
     GUI.CreateLabel(CCon, "Contained star VFX for Stary", true)
@@ -779,7 +858,7 @@ function MainGUI.Create(screenGui, moduleManager)
     NT.Size = UDim2.new(1, -16, 1, 0)
     NT.Position = UDim2.new(0, 8, 0, 0)
     NT.BackgroundTransparency = 1
-    NT.Text = "Pouncing.exe v7.0 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | UI Toggle: RightShift"
+    NT.Text = "Pouncing.exe v7.1 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | UI Toggle: RightShift"
     NT.TextColor3 = GUI.Theme.SoftAccent
     NT.TextSize = 13
     NT.Font = Enum.Font.GothamSemibold
