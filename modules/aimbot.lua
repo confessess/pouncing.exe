@@ -1,7 +1,7 @@
--- Pouncing.exe | Aimbot Module v6.0
+-- Pouncing.exe | Aimbot Module v7.0
 -- Lock-on, silent aim, triggerbot, toggle, sticky target
--- Silent Aim: Camera Snap (primary) + Mouse.Hit + Raycast + __namecall
--- FOV capped at 100, visual circle bounded
+-- Arsenal Mode: aggressive Camera.CFrame + Mouse.Hit + Raycast + FindPartOnRay
+-- Non-Arsenal: Camera Snap method
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -36,7 +36,10 @@ local Config = {
     HitChance = 100,
     LegitMode = false,
     LegitThreshold = 30,
-    SnapDuration = 2, -- frames to keep camera snapped
+    SnapDuration = 2,
+
+    -- Arsenal Mode
+    ArsenalMode = false,
 
     -- Visuals
     FOVColor = Color3.fromRGB(255, 105, 180),
@@ -113,7 +116,6 @@ local function GetFOVRadiusPixels()
     local camFov = math.rad(Camera.FieldOfView / 2)
     if camFov <= 0 then return 9999 end
     local radius = math.tan(fovAngle) / math.tan(camFov) * (Camera.ViewportSize.Y / 2)
-    -- Cap visual radius so it doesn't go off screen
     return math.min(radius, Camera.ViewportSize.Y * 0.8)
 end
 
@@ -212,15 +214,14 @@ local function AimAt(target)
 end
 
 -- ============================================================
--- Silent Aim: CAMERA SNAP (Primary Method)
--- Briefly snaps camera to target when firing, then restores
--- This produces 100% legitimate rays for server validation
+-- NON-ARSENAL: Camera Snap
 -- ============================================================
 
 local function DoCameraSnap()
+    if Config.ArsenalMode then return end
     if not Config.SilentAim or not Config.Enabled then return end
-    if Config.Aiming then return end -- don't interfere with lock-on
-    if Config.SnapRestorePending then return end -- already snapping
+    if Config.Aiming then return end
+    if Config.SnapRestorePending then return end
 
     local target = GetSilentAimTarget()
     if not target or not target.Part then return end
@@ -228,11 +229,9 @@ local function DoCameraSnap()
     local savedCF = Camera.CFrame
     local aimPos = target.Position
 
-    -- Snap camera to target
     Camera.CFrame = CFrame.new(Camera.CFrame.Position, aimPos)
     Config.SnapRestorePending = true
 
-    -- Restore after N frames
     local frames = math.clamp(Config.SnapDuration, 1, 10)
     task.defer(function()
         for i = 1, frames do
@@ -246,10 +245,12 @@ local function DoCameraSnap()
 end
 
 -- ============================================================
--- Silent Aim: Mouse.Hit / Mouse.Target __index Handler
+-- ARSENAL MODE: Aggressive Hooks
 -- ============================================================
 
-local function SilentAimIndexHandler(self_obj, key)
+-- Mouse.Hit / Mouse.UnitRay / Mouse.Origin
+local function ArsenalMouseHook(self_obj, key)
+    if not Config.ArsenalMode then return nil end
     if not Config.SilentAim or not Config.Enabled then return nil end
     if self_obj ~= Mouse then return nil end
 
@@ -262,16 +263,38 @@ local function SilentAimIndexHandler(self_obj, key)
         return target.Part
     elseif key == "TargetSurface" then
         return Enum.NormalId.Top
+    elseif key == "UnitRay" then
+        local origin = Camera.CFrame.Position
+        return Ray.new(origin, (target.Position - origin).Unit)
+    elseif key == "Origin" then
+        return Camera.CFrame.Position
     end
 
     return nil
 end
 
--- ============================================================
--- Silent Aim: Raycast Handler (pre-execution)
--- ============================================================
+-- Camera.CFrame — only redirect when game reads it for raycast context
+local LastCameraRead = 0
+local function ArsenalCameraHook(self_obj, key)
+    if not Config.ArsenalMode then return nil end
+    if not Config.SilentAim or not Config.Enabled then return nil end
+    if self_obj ~= Camera then return nil end
+    if key ~= "CFrame" then return nil end
 
-local function SilentAimRaycastHandler(origin, direction, params)
+    -- Only redirect within 0.15s of a click (fire window)
+    if tick() - Config.LastClickTime > 0.15 then return nil end
+
+    local target = GetSilentAimTarget()
+    if not target or not target.Part then return nil end
+
+    LastCameraRead = tick()
+    -- Return camera at same position but looking at target
+    return CFrame.new(Camera.CFrame.Position, target.Position)
+end
+
+-- Raycast: redirect to target
+local function ArsenalRaycastHandler(origin, direction, params)
+    if not Config.ArsenalMode then return nil end
     if not Config.SilentAim or not Config.Enabled then return nil end
 
     local target = GetSilentAimTarget()
@@ -281,11 +304,9 @@ local function SilentAimRaycastHandler(origin, direction, params)
     return origin, aimPos - origin, params
 end
 
--- ============================================================
--- Silent Aim: FindPartOnRay POST-Execution Handler
--- ============================================================
-
-local function SilentAimFindPartOnRayPostHandler(result, ray, methodName, ...)
+-- FindPartOnRay POST: replace miss with target
+local function ArsenalFindPartOnRayPostHandler(result, ray, methodName, ...)
+    if not Config.ArsenalMode then return nil end
     if not Config.SilentAim or not Config.Enabled then return nil end
 
     local target = GetSilentAimTarget()
@@ -309,10 +330,7 @@ local function SilentAimFindPartOnRayPostHandler(result, ray, methodName, ...)
     return {target.Part, aimPos, normal}
 end
 
--- ============================================================
--- Silent Aim: __namecall Deep Scan Handler
--- ============================================================
-
+-- __namecall deep scan for remotes
 local function IsHitPosition(pos)
     local camPos = Camera.CFrame.Position
     local d = (pos - camPos).Magnitude
@@ -360,7 +378,8 @@ local function DeepScanAndReplace(t, targetPos, targetPart)
     return modified
 end
 
-local function SilentAimNamecallHandler(args, method, self_obj)
+local function ArsenalNamecallHandler(args, method, self_obj)
+    if not Config.ArsenalMode then return args, false end
     if not Config.SilentAim or not Config.Enabled then return args, false end
 
     local target = GetSilentAimTarget()
@@ -629,7 +648,7 @@ local function OnRenderStep()
 
     if target then
         if Config.SilentAim then
-            -- Silent aim uses camera snap + hooks
+            -- Silent aim uses hooks (Arsenal mode) or camera snap (non-Arsenal)
         elseif Config.Aiming then
             AimAt(target)
         end
@@ -650,10 +669,11 @@ end
 local function OnInputBegan(input, gp)
     if gp then return end
 
-    -- CAMERA SNAP SILENT AIM: trigger on mouse click
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         Config.LastClickTime = tick()
-        DoCameraSnap()
+        if not Config.ArsenalMode then
+            DoCameraSnap()
+        end
     end
 
     if input.UserInputType == Config.AimKey or input.KeyCode == Config.AimKey then
@@ -705,10 +725,12 @@ end
 function Module.Enable()
     Config.Enabled = true
     if Config.SilentAim and Utils and Utils.HookManager then
-        Utils.HookManager:RegisterRaycastHandler("Aimbot", SilentAimRaycastHandler, 10)
-        Utils.HookManager:RegisterFindPartOnRayPostHandler("Aimbot", SilentAimFindPartOnRayPostHandler, 10)
-        Utils.HookManager:RegisterNamecallHandler("Aimbot", SilentAimNamecallHandler, 10)
-        Utils.HookManager:RegisterIndexHandler("Aimbot", SilentAimIndexHandler, 10)
+        -- Arsenal mode hooks
+        Utils.HookManager:RegisterIndexHandler("Aimbot_Mouse", ArsenalMouseHook, 10)
+        Utils.HookManager:RegisterIndexHandler("Aimbot_Camera", ArsenalCameraHook, 9)
+        Utils.HookManager:RegisterRaycastHandler("Aimbot", ArsenalRaycastHandler, 10)
+        Utils.HookManager:RegisterFindPartOnRayPostHandler("Aimbot", ArsenalFindPartOnRayPostHandler, 10)
+        Utils.HookManager:RegisterNamecallHandler("Aimbot", ArsenalNamecallHandler, 10)
         Utils.HookManager:Install()
     end
     if not RenderConnection then
@@ -723,10 +745,11 @@ function Module.Disable()
     Config.StickyLostTime = 0
     Config.SnapRestorePending = false
     if Utils and Utils.HookManager then
+        Utils.HookManager:UnregisterIndexHandler("Aimbot_Mouse")
+        Utils.HookManager:UnregisterIndexHandler("Aimbot_Camera")
         Utils.HookManager:UnregisterRaycastHandler("Aimbot")
         Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
         Utils.HookManager:UnregisterNamecallHandler("Aimbot")
-        Utils.HookManager:UnregisterIndexHandler("Aimbot")
     end
     if RenderConnection then
         RenderConnection:Disconnect()
@@ -741,16 +764,18 @@ function Module.SetConfig(key, value)
         Config.SilentAim = value
         if Config.Enabled and Utils and Utils.HookManager then
             if value then
-                Utils.HookManager:RegisterRaycastHandler("Aimbot", SilentAimRaycastHandler, 10)
-                Utils.HookManager:RegisterFindPartOnRayPostHandler("Aimbot", SilentAimFindPartOnRayPostHandler, 10)
-                Utils.HookManager:RegisterNamecallHandler("Aimbot", SilentAimNamecallHandler, 10)
-                Utils.HookManager:RegisterIndexHandler("Aimbot", SilentAimIndexHandler, 10)
+                Utils.HookManager:RegisterIndexHandler("Aimbot_Mouse", ArsenalMouseHook, 10)
+                Utils.HookManager:RegisterIndexHandler("Aimbot_Camera", ArsenalCameraHook, 9)
+                Utils.HookManager:RegisterRaycastHandler("Aimbot", ArsenalRaycastHandler, 10)
+                Utils.HookManager:RegisterFindPartOnRayPostHandler("Aimbot", ArsenalFindPartOnRayPostHandler, 10)
+                Utils.HookManager:RegisterNamecallHandler("Aimbot", ArsenalNamecallHandler, 10)
                 Utils.HookManager:Install()
             else
+                Utils.HookManager:UnregisterIndexHandler("Aimbot_Mouse")
+                Utils.HookManager:UnregisterIndexHandler("Aimbot_Camera")
                 Utils.HookManager:UnregisterRaycastHandler("Aimbot")
                 Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
                 Utils.HookManager:UnregisterNamecallHandler("Aimbot")
-                Utils.HookManager:UnregisterIndexHandler("Aimbot")
             end
         end
     elseif key == "Triggerbot" then Config.Triggerbot = value
@@ -772,6 +797,7 @@ function Module.SetConfig(key, value)
     elseif key == "LegitMode" then Config.LegitMode = value
     elseif key == "LegitThreshold" then Config.LegitThreshold = value
     elseif key == "SnapDuration" then Config.SnapDuration = math.clamp(value, 1, 10)
+    elseif key == "ArsenalMode" then Config.ArsenalMode = value
     elseif key == "FOVColor" then 
         Config.FOVColor = value
         if FOVCircle then FOVCircle.Color = value end
@@ -806,14 +832,16 @@ function Module.ResetConfig()
     Config.LegitMode = false
     Config.LegitThreshold = 30
     Config.SnapDuration = 2
+    Config.ArsenalMode = false
     Config.FOVColor = Color3.fromRGB(255, 105, 180)
     Config.ShowFOV = true
     Config.SnapRestorePending = false
     if Utils and Utils.HookManager then
+        Utils.HookManager:UnregisterIndexHandler("Aimbot_Mouse")
+        Utils.HookManager:UnregisterIndexHandler("Aimbot_Camera")
         Utils.HookManager:UnregisterRaycastHandler("Aimbot")
         Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
         Utils.HookManager:UnregisterNamecallHandler("Aimbot")
-        Utils.HookManager:UnregisterIndexHandler("Aimbot")
     end
 end
 

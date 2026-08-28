@@ -20,6 +20,7 @@ local UniversalPreset = {
             Priority = "Closest to Mouse",
             HitChance = 100,
             SnapDuration = 2,
+            ArsenalMode = false,
         },
         ESP = {
             Enabled = false,

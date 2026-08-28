@@ -1,9 +1,9 @@
--- Pouncing.exe  Arsenal Game Preset
--- Optimized configs and modules for Arsenal (PlaceId 286090429)
+-- Pouncing.exe | Arsenal Game Preset
+-- Optimized configs and modules for Arsenal (PlaceId: 286090429)
 -- ============================================================
 
 local ArsenalPreset = {
-    Name = Arsenal,
+    Name = "Arsenal",
     PlaceId = 286090429,
 
     -- Module configs optimized for Arsenal
@@ -17,10 +17,11 @@ local ArsenalPreset = {
             FOV = 50,
             Smoothness = 10,
             MaxDistance = 800,
-            TargetPart = Head,
-            Priority = Closest to Mouse,
+            TargetPart = "Head",
+            Priority = "Closest to Mouse",
             HitChance = 100,
             SnapDuration = 3,
+            ArsenalMode = true,
         },
         ESP = {
             Enabled = false,
@@ -41,7 +42,7 @@ local ArsenalPreset = {
             Enabled = false,
             TeamCheck = false,
             HitboxSize = 3,
-            TargetParts = Head,
+            TargetParts = "Head",
             MaxDistance = 1000,
             ShowExpanded = true,
         },
@@ -56,14 +57,14 @@ local ArsenalPreset = {
 
     -- Arsenal-specific modules (loaded in addition to universal)
     ExtraModules = {
-        -- arsenal_esp = custom ESP for Arsenal's unique character system
-        -- auto_vote = auto vote for maps
+        -- "arsenal_esp" = custom ESP for Arsenal's unique character system
+        -- "auto_vote" = auto vote for maps
     },
 
-    -- Tab order  visibility
-    TabOrder = {Aimbot, ESP, Gun, Hitbox, Misc, Settings},
+    -- Tab order / visibility
+    TabOrder = {"Aimbot", "ESP", "Gun", "Hitbox", "Misc", "Settings"},
 
-    Description = Server-authoritative FPS. Silent Aim uses Camera Snap. Hitbox limited to Head only.,
+    Description = "Server-authoritative FPS. Silent Aim uses Camera Snap. Hitbox limited to Head only.",
 }
 
 return ArsenalPreset

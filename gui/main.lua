@@ -39,12 +39,36 @@ function MainGUI.Create(screenGui, moduleManager)
     local ACon = window.Contents["Aimbot"]
 
     GUI.CreateSection(ACon, "Aimbot Core")
+    local arsenalIndicator = GUI.CreateLabel(ACon, "Arsenal Mode: OFF", true)
     GUI.CreateToggle(ACon, "Enabled", false, nil, function(v)
         moduleManager:Toggle("Aimbot", v)
     end)
     GUI.CreateToggle(ACon, "Silent Aim", false, nil, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("SilentAim", v) end
+    end)
+    -- Update Arsenal Mode indicator
+    local function UpdateArsenalIndicator()
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.GetConfig then
+            local cfg = mod.GetConfig()
+            if cfg and cfg.ArsenalMode then
+                arsenalIndicator.Text = "Arsenal Mode: ON (Aggressive Hooks)"
+                arsenalIndicator.TextColor3 = Color3.fromRGB(255, 200, 0)
+            else
+                arsenalIndicator.Text = "Arsenal Mode: OFF (Camera Snap)"
+                arsenalIndicator.TextColor3 = Color3.fromRGB(200, 200, 200)
+            end
+        end
+    end
+    -- Hook into preset load to update indicator
+    local oldLoadPreset = GUI.CreateButton
+    -- We'll update the indicator periodically instead
+    task.spawn(function()
+        while true do
+            task.wait(2)
+            pcall(UpdateArsenalIndicator)
+        end
     end)
     GUI.CreateToggle(ACon, "Legit Mode", false, nil, function(v)
         local mod = moduleManager:GetModule("Aimbot")
