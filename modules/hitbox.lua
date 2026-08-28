@@ -1,9 +1,7 @@
--- Pouncing.exe | Hitbox Module v3.0
--- Comprehensive hitbox expander with server-authoritative awareness
--- Handles R6/R15, MeshParts, team detection via Team+TeamColor
--- NOTE: Visual expansion always works. Actual hit registration depends
--- on whether the game uses client-side or server-side hit validation.
--- For server-authoritative games (Arsenal), use Silent Aim instead.
+-- Pouncing.exe | Hitbox Module v4.0
+-- Performance-optimized hitbox expander
+-- Comprehensive mode now uses caching + throttled updates
+-- Robust TeamCheck with multiple fallback methods
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -21,32 +19,50 @@ local Config = {
     ExpandLimbs = false,
     LimbSize = 2,
     MaxDistance = 2000,
-    Comprehensive = false, -- expands ALL BaseParts in character
+    Comprehensive = false,
+    UpdateRate = 3, -- frames between updates (higher = less lag)
 
     -- Internal
     OriginalSizes = {},
     Connections = {},
     CharacterMap = {},
+    PartCache = {}, -- character -> {parts} cache
+    FrameCounter = 0,
 }
 
 -- ============================================================
--- Team Detection (Team + TeamColor fallback)
+-- Team Detection (multiple fallbacks)
 -- ============================================================
 
 local function IsTeammate(player)
     if player == LocalPlayer then return true end
 
-    -- Check Team object
+    -- Method 1: Team object comparison
     if LocalPlayer.Team and player.Team then
         if LocalPlayer.Team == player.Team then return true end
     end
 
-    -- Check TeamColor (used by some games instead of Team objects)
+    -- Method 2: TeamColor comparison
     if LocalPlayer.TeamColor and player.TeamColor then
         if LocalPlayer.TeamColor == player.TeamColor then return true end
     end
 
-    -- If neither has a team, treat as non-teammate (FFA)
+    -- Method 3: Check if both are in the same team group
+    if LocalPlayer:FindFirstChild("Team") and player:FindFirstChild("Team") then
+        local lt = LocalPlayer:FindFirstChild("Team")
+        local pt = player:FindFirstChild("Team")
+        if lt.Value and pt.Value and lt.Value == pt.Value then return true end
+    end
+
+    -- Method 4: Leaderstats team check (some games store team name there)
+    local myStats = LocalPlayer:FindFirstChild("leaderstats")
+    local theirStats = player:FindFirstChild("leaderstats")
+    if myStats and theirStats then
+        local myTeam = myStats:FindFirstChild("Team") or myStats:FindFirstChild("team")
+        local theirTeam = theirStats:FindFirstChild("Team") or theirStats:FindFirstChild("team")
+        if myTeam and theirTeam and myTeam.Value == theirTeam.Value then return true end
+    end
+
     return false
 end
 
@@ -69,27 +85,49 @@ local function GetDistance(pos)
 end
 
 -- ============================================================
--- Part discovery
+-- Part discovery with caching
 -- ============================================================
 
 local function GetAllCharacterParts(character)
+    local cached = Config.PartCache[character]
+    if cached then
+        -- Verify cache is still valid (parts still exist)
+        local valid = true
+        for i = 1, math.min(3, #cached) do
+            if not cached[i] or not cached[i].Parent then
+                valid = false
+                break
+            end
+        end
+        if valid then return cached end
+    end
+
     local parts = {}
     for _, child in pairs(character:GetDescendants()) do
         if child:IsA("BasePart") then
-            table.insert(parts, child)
+            -- Skip accessories, tools, effects
+            local parent = child.Parent
+            local parentName = parent and parent.Name or ""
+            local isAccessory = parentName:match("Accessory") or parentName:match("Hat") or parentName:match("Gear")
+            local isTool = parentName:match("Tool") or child.Name:match("Handle") and parent and parent:IsA("Tool")
+            local isEffect = child.Name:match("Trail") or child.Name:match("Particle") or child.Name:match("Beam")
+
+            if not isAccessory and not isTool and not isEffect then
+                table.insert(parts, child)
+            end
         end
     end
+
+    Config.PartCache[character] = parts
     return parts
 end
 
 local function GetTargetParts(character)
     local parts = {}
 
-    -- Head
     local head = character:FindFirstChild("Head")
     if head and IsValidPart(head) then parts.Head = head end
 
-    -- Torso
     local torsoNames = {"HumanoidRootPart", "UpperTorso", "Torso", "LowerTorso", "Body"}
     for _, name in ipairs(torsoNames) do
         local part = character:FindFirstChild(name)
@@ -99,7 +137,6 @@ local function GetTargetParts(character)
         end
     end
 
-    -- Limbs
     if Config.ExpandLimbs then
         local limbNames = {
             "LeftUpperArm", "LeftLowerArm", "LeftHand",
@@ -158,6 +195,7 @@ local function RestorePart(part)
 end
 
 local function ClearCharacter(character)
+    Config.PartCache[character] = nil
     for part, _ in pairs(Config.OriginalSizes) do
         if typeof(part) == "Instance" then
             local ok, parent = pcall(function() return part.Parent end)
@@ -169,13 +207,18 @@ local function ClearCharacter(character)
 end
 
 -- ============================================================
--- Expansion
+-- Expansion (optimized - skip if already expanded)
 -- ============================================================
+
+local ExpandedParts = {} -- part -> true (tracks which parts we've already expanded)
 
 local function ExpandPart(part, multiplier)
     if not IsValidPart(part) then return end
-    SaveOriginal(part)
 
+    -- Skip if already expanded with same multiplier (approximate check)
+    if ExpandedParts[part] then return end
+
+    SaveOriginal(part)
     local orig = Config.OriginalSizes[part]
     if not orig then return end
 
@@ -192,11 +235,27 @@ local function ExpandPart(part, multiplier)
             part.Transparency = orig.Transparency
         end
     end)
+
+    ExpandedParts[part] = true
 end
 
 local function UpdatePlayer(player)
     if player == LocalPlayer then return end
-    if Config.TeamCheck and IsTeammate(player) then return end
+
+    -- TEAM CHECK
+    if Config.TeamCheck and IsTeammate(player) then
+        -- Restore any expanded parts for this teammate
+        if player.Character then
+            local parts = GetAllCharacterParts(player.Character)
+            for _, part in ipairs(parts) do
+                if ExpandedParts[part] then
+                    RestorePart(part)
+                    ExpandedParts[part] = nil
+                end
+            end
+        end
+        return
+    end
 
     local character = player.Character
     if not character then return end
@@ -206,17 +265,23 @@ local function UpdatePlayer(player)
     local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
     if root then
         local dist = GetDistance(root.Position)
-        if dist > Config.MaxDistance then return end
+        if dist > Config.MaxDistance then
+            -- Restore parts for out-of-range players
+            local parts = GetAllCharacterParts(character)
+            for _, part in ipairs(parts) do
+                if ExpandedParts[part] then
+                    RestorePart(part)
+                    ExpandedParts[part] = nil
+                end
+            end
+            return
+        end
     end
 
     if Config.Comprehensive then
-        -- Expand ALL BaseParts in the character
-        for _, part in pairs(GetAllCharacterParts(character)) do
-            -- Skip accessories/tools
-            local parentName = part.Parent and part.Parent.Name or ""
-            if not parentName:match("Accessory") and not parentName:match("Tool") then
-                ExpandPart(part, Config.HeadSize)
-            end
+        local parts = GetAllCharacterParts(character)
+        for _, part in ipairs(parts) do
+            ExpandPart(part, Config.HeadSize)
         end
     else
         local parts = GetTargetParts(character)
@@ -231,13 +296,17 @@ local function UpdatePlayer(player)
 end
 
 -- ============================================================
--- Render loop
+-- Render loop (throttled)
 -- ============================================================
 
 local RenderConnection = nil
 
 local function OnRenderStep()
     if not Config.Enabled then return end
+
+    Config.FrameCounter = Config.FrameCounter + 1
+    if Config.FrameCounter % Config.UpdateRate ~= 0 then return end
+
     for _, player in pairs(Players:GetPlayers()) do
         pcall(function() UpdatePlayer(player) end)
     end
@@ -249,6 +318,18 @@ end
 
 local function OnCharacterAdded(player, character)
     Config.CharacterMap[player] = character
+    Config.PartCache[character] = nil
+
+    -- Clear expanded tracking for old parts
+    for part, _ in pairs(ExpandedParts) do
+        if typeof(part) == "Instance" then
+            local ok, parent = pcall(function() return part.Parent end)
+            if ok and parent == character then
+                ExpandedParts[part] = nil
+            end
+        end
+    end
+
     task.delay(0.1, function()
         if Config.Enabled then
             pcall(function() UpdatePlayer(player) end)
@@ -260,6 +341,15 @@ local function OnCharacterRemoving(player, character)
     ClearCharacter(character)
     if Config.CharacterMap[player] == character then
         Config.CharacterMap[player] = nil
+    end
+    -- Clear expanded tracking
+    for part, _ in pairs(ExpandedParts) do
+        if typeof(part) == "Instance" then
+            local ok, parent = pcall(function() return part.Parent end)
+            if ok and parent == character then
+                ExpandedParts[part] = nil
+            end
+        end
     end
 end
 
@@ -342,10 +432,27 @@ function Module.Disable()
         pcall(function() RestorePart(part) end)
     end
     Config.OriginalSizes = {}
+    ExpandedParts = {}
+    Config.PartCache = {}
 end
 
 function Module.SetConfig(key, value)
-    if key == "TeamCheck" then Config.TeamCheck = value
+    if key == "TeamCheck" then 
+        Config.TeamCheck = value
+        -- Immediately restore teammates if toggled on
+        if value then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and IsTeammate(player) and player.Character then
+                    local parts = GetAllCharacterParts(player.Character)
+                    for _, part in ipairs(parts) do
+                        if ExpandedParts[part] then
+                            RestorePart(part)
+                            ExpandedParts[part] = nil
+                        end
+                    end
+                end
+            end
+        end
     elseif key == "ShowExpanded" then Config.ShowExpanded = value
     elseif key == "HeadSize" then Config.HeadSize = math.clamp(value, 1, 25)
     elseif key == "TorsoSize" then Config.TorsoSize = math.clamp(value, 1, 25)
@@ -353,7 +460,12 @@ function Module.SetConfig(key, value)
     elseif key == "ExpandLimbs" then Config.ExpandLimbs = value
     elseif key == "LimbSize" then Config.LimbSize = math.clamp(value, 1, 25)
     elseif key == "MaxDistance" then Config.MaxDistance = value
-    elseif key == "Comprehensive" then Config.Comprehensive = value
+    elseif key == "Comprehensive" then 
+        Config.Comprehensive = value
+        -- Clear cache when switching modes
+        Config.PartCache = {}
+        ExpandedParts = {}
+    elseif key == "UpdateRate" then Config.UpdateRate = math.clamp(value, 1, 10)
     end
 end
 
@@ -372,6 +484,7 @@ function Module.ResetConfig()
     Config.LimbSize = 2
     Config.MaxDistance = 2000
     Config.Comprehensive = false
+    Config.UpdateRate = 3
 end
 
 function Module.Cleanup()
@@ -389,7 +502,8 @@ function Module.Cleanup()
     end
     Config.Connections = {}
     Config.CharacterMap = {}
-    Config.OriginalSizes = {}
+    Config.PartCache = {}
+    ExpandedParts = {}
 end
 
 return Module

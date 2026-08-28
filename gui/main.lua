@@ -423,6 +423,10 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("Hitbox")
         if mod and mod.SetConfig then mod.SetConfig("MaxDistance", v) end
     end)
+    GUI.CreateSlider(HCon, "Update Rate", 1, 10, 3, function(v)
+        local mod = moduleManager:GetModule("Hitbox")
+        if mod and mod.SetConfig then mod.SetConfig("UpdateRate", v) end
+    end)
 
     -- ============================================================
     -- CONFIG TAB
