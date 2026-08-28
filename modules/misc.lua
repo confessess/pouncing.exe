@@ -1,5 +1,6 @@
--- Pouncing.exe | Misc Module v2.5
--- Movement, visual, combat tweaks + 4 undetected fly methods
+-- Pouncing.exe | Misc Module v3.0
+-- Movement, visual, combat tweaks + fly methods
+-- Fixed: FlyMethod switch auto-restarts if was flying
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -18,7 +19,7 @@ local Config = {
     Fullbright = false, NoFog = false, NoShadows = false, CustomTime = false,
     WalkSpeed = 50, JumpPower = 100, FlySpeed = 50, FlyKey = Enum.KeyCode.F,
     SpeedKey = Enum.KeyCode.LeftShift, NoClipKey = Enum.KeyCode.N,
-    FlyMethod = "Tween", -- "CFrame", "Velocity", "LinearVelocity", "Humanoid"
+    FlyMethod = "Tween",
     Brightness = 2, TimeOfDay = 12,
     Connections = {}, OriginalValues = {},
     State = {
@@ -95,7 +96,7 @@ local function ResetSpeed()
 end
 
 -- ============================================================
--- Fly — 5 Methods (ranked by server detection risk)
+-- Fly — Input helper
 -- ============================================================
 
 local function GetFlyInput()
@@ -111,8 +112,6 @@ local function GetFlyInput()
 end
 
 -- ── Method 1: Tween (most server-undetected) ──
--- Uses TweenService to interpolate position. Server sees smooth
--- position changes that look like lag compensation or physics.
 local function StartFly_Tween()
     if Config.State.Flying then return end
     local char = LocalPlayer.Character
@@ -132,11 +131,9 @@ local function DoFly_Tween()
     if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
-
     local move = GetFlyInput()
     if move.Magnitude > 0 then
         local targetPos = root.Position + move * 0.016
-        -- Smooth step using lerp (looks like physics interpolation to server)
         root.CFrame = CFrame.new(root.Position:Lerp(targetPos, 0.3))
         root.Velocity = Vector3.new(0, 0, 0)
         root.RotVelocity = Vector3.new(0, 0, 0)
@@ -161,8 +158,6 @@ local function StopFly_Tween()
 end
 
 -- ── Method 2: Humanoid (stealth — uses native movement) ──
--- Server just sees a player with high walkspeed and jump velocity.
--- No foreign instances, no CFrame snaps, no velocity spikes.
 local function StartFly_Humanoid()
     if Config.State.Flying then return end
     local char = LocalPlayer.Character
@@ -184,15 +179,12 @@ local function DoFly_Humanoid()
     if not hum then return end
     local root = char:FindFirstChild("HumanoidRootPart")
     if not root then return end
-
     local moveDir = Vector3.new(0, 0, 0)
     if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Vector3.new(0, 0, -1) end
     if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir + Vector3.new(0, 0, 1) end
     if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir + Vector3.new(-1, 0, 0) end
     if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Vector3.new(1, 0, 0) end
-
     hum:Move(moveDir, true)
-
     if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
         root.Velocity = Vector3.new(root.Velocity.X, math.clamp(Config.FlySpeed * 0.6, 10, 80), root.Velocity.Z)
     elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
@@ -218,8 +210,6 @@ local function StopFly_Humanoid()
 end
 
 -- ── Method 3: Velocity (physics-based, no instances) ──
--- Sets AssemblyLinearVelocity. Server sees velocity but it's within
--- physics bounds. Risk: velocity magnitude checks.
 local function StartFly_Velocity()
     if Config.State.Flying then return end
     local char = LocalPlayer.Character
@@ -264,8 +254,6 @@ local function StopFly_Velocity()
 end
 
 -- ── Method 4: LinearVelocity constraint ──
--- Creates a LinearVelocity constraint. Server sees it but physics
--- are valid. Risk: foreign instance detection.
 local function StartFly_LinearVelocity()
     if Config.State.Flying then return end
     local char = LocalPlayer.Character
@@ -277,7 +265,6 @@ local function StartFly_LinearVelocity()
         hum.PlatformStand = true
         hum.AutoRotate = false
     end
-
     local attachment = root:FindFirstChild("RootAttachment") or root:FindFirstChildOfClass("Attachment")
     if not attachment then
         attachment = Instance.new("Attachment")
@@ -285,14 +272,12 @@ local function StartFly_LinearVelocity()
         attachment.Parent = root
     end
     Config.State.FlyAttachment = attachment
-
     local linVel = Instance.new("LinearVelocity")
     linVel.Attachment0 = attachment
     linVel.MaxForce = math.huge
     linVel.VectorVelocity = Vector3.new(0, 0, 0)
     linVel.Parent = root
     Config.State.FlyLinearVelocity = linVel
-
     Config.State.Flying = true
 end
 
@@ -325,8 +310,6 @@ local function StopFly_LinearVelocity()
 end
 
 -- ── Method 5: CFrame (fastest, highest detection risk) ──
--- Direct CFrame manipulation. Server sees position teleportation.
--- Only use on games with no server-side position validation.
 local function StartFly_CFrame()
     if Config.State.Flying then return end
     local char = LocalPlayer.Character
@@ -680,8 +663,11 @@ function Module.SetConfig(key, value)
     elseif key == "SpeedKey" then Config.SpeedKey = value
     elseif key == "NoClipKey" then Config.NoClipKey = value
     elseif key == "FlyMethod" then
-        if Config.State.Flying then StopFly() end
+        -- Fixed: stop old method BEFORE changing config, then restart if was flying
+        local wasFlying = Config.State.Flying
+        if wasFlying then StopFly() end
         Config.FlyMethod = value
+        if wasFlying and Config.Fly then StartFly() end
     elseif key == "Brightness" then Config.Brightness = value
     elseif key == "TimeOfDay" then Config.TimeOfDay = value
     end

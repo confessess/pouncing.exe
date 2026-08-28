@@ -600,10 +600,10 @@ function Module.SetConfig(key, value)
     elseif key == "Triggerbot" then Config.Triggerbot = value
     elseif key == "TeamCheck" then Config.TeamCheck = value
     elseif key == "WallCheck" then Config.WallCheck = value
-    elseif key == "FOV" then Config.FOV = value
-    elseif key == "Smoothness" then Config.Smoothness = value
-    elseif key == "MaxDistance" then Config.MaxDistance = value
-    elseif key == "TriggerDelay" then Config.TriggerDelay = value
+    elseif key == "FOV" then Config.FOV = math.clamp(value, 10, 360)
+    elseif key == "Smoothness" then Config.Smoothness = math.clamp(value, 0, 100)
+    elseif key == "MaxDistance" then Config.MaxDistance = math.clamp(value, 50, 5000)
+    elseif key == "TriggerDelay" then Config.TriggerDelay = math.clamp(value, 0, 5000)
     elseif key == "TargetPart" then Config.TargetPart = value
     elseif key == "Priority" then Config.Priority = value
     elseif key == "AimKey" then Config.AimKey = value
@@ -630,7 +630,7 @@ function Module.ResetConfig()
     Config.MaxDistance = 1000
     Config.TriggerDelay = 50
     Config.TargetPart = "Head"
-    Config.Priority = "Closest to Mouse"
+    Config.Priority = "Mouse"
     Config.AimKey = Enum.KeyCode.Q
     Config.Prediction = false
     Config.ToggleMode = false

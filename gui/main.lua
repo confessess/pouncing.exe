@@ -1,6 +1,6 @@
 -- Pouncing.exe | GUI Main v3.0
 -- Assembles the main window with all tabs and real controls
--- Fixed: Priority dropdown matches new modes, version bump
+-- Fixed: Fly dropdown (3 methods + warning), SliderWithInput for movement
 -- Made by pouncing :3
 -- ============================================================
 
@@ -18,9 +18,6 @@ function MainGUI.Create(screenGui, moduleManager)
 
     local window = GUI.CreateWindow(screenGui, "Pouncing.exe", UDim2.new(0, 560, 0, 400))
 
-    -- ============================================================
-    -- Create all 6 tabs
-    -- ============================================================
     local tabDefs = {
         {Name = "Aimbot", Icon = "🎯"},
         {Name = "ESP", Icon = "👁️"},
@@ -88,7 +85,6 @@ function MainGUI.Create(screenGui, moduleManager)
 
     GUI.CreateSeparator(ACon)
     GUI.CreateSection(ACon, "Target Priority")
-    -- Updated dropdown with the three requested priority modes
     GUI.CreateDropdown(ACon, "Priority", {"Closest to Mouse", "Closest to Player", "Lowest HP", "Highest HP", "Random"}, "Closest to Mouse", function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("Priority", v) end
@@ -123,12 +119,10 @@ function MainGUI.Create(screenGui, moduleManager)
         moduleManager:Toggle("ESP", v)
     end)
 
-    -- Pre-load ESP module so colors can be set before enabling
     task.defer(function()
         moduleManager:Load("ESP")
     end)
 
-    -- Create color pickers FIRST (invisible by default)
     local colorPickers = {}
     colorPickers.BoxColor = GUI.CreateColorPicker(ECon, "Box Color", Color3.fromRGB(255, 105, 180))
     colorPickers.SkeletonColor = GUI.CreateColorPicker(ECon, "Skeleton Color", Color3.fromRGB(255, 0, 255))
@@ -160,7 +154,6 @@ function MainGUI.Create(screenGui, moduleManager)
         DistanceColor = Color3.fromRGB(200, 200, 200),
     }
 
-    -- Helper: create ESP toggle with wired color button
     local function MakeESPToggle(text, default, colorKey, configKey)
         local row, _, cbtn = GUI.CreateToggle(ECon, text, default, colorKey, function(v)
             local mod = moduleManager:GetModule("ESP")
@@ -307,10 +300,50 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("Fly", v) end
     end)
-    GUI.CreateDropdown(MCon, "Fly Method", {"Tween", "Humanoid", "Velocity", "LinearVelocity"}, "Tween", function(v)
+
+    -- Fly Method dropdown — 3 methods only, Tween default
+    local flyDropdown, flyGetSelected = GUI.CreateDropdown(MCon, "Fly Method", {"Tween", "Velocity", "CFrame"}, "Tween", function(v)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("FlyMethod", v) end
     end)
+
+    -- CFrame warning label (hidden by default)
+    local cframeWarning = Instance.new("TextLabel")
+    cframeWarning.Size = UDim2.new(1, -20, 0, 18)
+    cframeWarning.BackgroundTransparency = 1
+    cframeWarning.Text = "⚠ CFrame is highly detected — use with caution"
+    cframeWarning.TextColor3 = GUI.Theme.Warning
+    cframeWarning.TextSize = 10
+    cframeWarning.Font = Enum.Font.Gotham
+    cframeWarning.TextXAlignment = Enum.TextXAlignment.Left
+    cframeWarning.Visible = false
+    cframeWarning.Parent = MCon
+
+    -- Show/hide warning based on selection
+    local function UpdateFlyWarning()
+        local selected = flyGetSelected and flyGetSelected() or "Tween"
+        cframeWarning.Visible = (selected == "CFrame")
+    end
+
+    -- Hook into dropdown callback to update warning
+    local originalFlyCallback = nil
+    -- We need to rewire the dropdown callback to also update the warning
+    -- The dropdown button is inside flyDropdown, we can hook its click
+    for _, child in pairs(flyDropdown:GetDescendants()) do
+        if child:IsA("TextButton") and child.Name == "DropdownBtn" then
+            child.MouseButton1Click:Connect(UpdateFlyWarning)
+        end
+    end
+    -- Also update when any option is clicked — we need to find the dropdown frame
+    -- Simpler: just poll or hook the module config change
+    -- Actually, let's just update the warning periodically
+    task.spawn(function()
+        while true do
+            task.wait(0.5)
+            UpdateFlyWarning()
+        end
+    end)
+
     GUI.CreateToggle(MCon, "Infinite Jump", false, nil, function(v)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("InfiniteJump", v) end
@@ -326,15 +359,17 @@ function MainGUI.Create(screenGui, moduleManager)
 
     GUI.CreateSeparator(MCon)
     GUI.CreateSection(MCon, "Movement Settings")
-    GUI.CreateSlider(MCon, "Walk Speed", 16, 500, 50, function(v)
+
+    -- Use CreateSliderWithInput for precise value entry
+    GUI.CreateSliderWithInput(MCon, "Walk Speed", 16, 500, 50, function(v)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("WalkSpeed", v) end
     end)
-    GUI.CreateSlider(MCon, "Jump Power", 50, 500, 100, function(v)
+    GUI.CreateSliderWithInput(MCon, "Jump Power", 50, 500, 100, function(v)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("JumpPower", v) end
     end)
-    GUI.CreateSlider(MCon, "Fly Speed", 10, 200, 50, function(v)
+    GUI.CreateSliderWithInput(MCon, "Fly Speed", 10, 200, 50, function(v)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("FlySpeed", v) end
     end)
@@ -514,6 +549,8 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateLabel(CCon, "Live color refresh ✓", true)
     GUI.CreateLabel(CCon, "Sticky target + priority modes ✓", true)
     GUI.CreateLabel(CCon, "Improved smoothness curve ✓", true)
+    GUI.CreateLabel(CCon, "Slider number inputs ✓", true)
+    GUI.CreateLabel(CCon, "Fly method warnings ✓", true)
 
     -- ============================================================
     -- Activate default tab

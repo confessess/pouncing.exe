@@ -1,7 +1,7 @@
--- Pouncing.exe | GUI Framework v2.3
+-- Pouncing.exe | GUI Framework v3.0
 -- Cute Pink Neon UI Components
--- HSV Wheel: accurate mouse tracking, dense dot rendering
--- Added: Click-outside-to-close + Escape-to-close + better picker positioning
+-- Fixed: Slider divide-by-zero guard + SetValue for config sync
+-- Added: CreateSliderWithInput for precise number entry
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -10,10 +10,6 @@ local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
-
--- ============================================================
--- Color Palette — Cute Pink Neon
--- ============================================================
 
 local Theme = {
     BG = Color3.fromRGB(22, 12, 20),
@@ -36,18 +32,14 @@ local Theme = {
     Shadow = Color3.fromRGB(0, 0, 0),
     White = Color3.fromRGB(255, 255, 255),
     Black = Color3.fromRGB(0, 0, 0),
+    Warning = Color3.fromRGB(255, 80, 80),
 }
 
 local GUI = {}
 GUI.Theme = Theme
 
--- ============================================================
--- CreateWindow — Main Draggable Window
--- ============================================================
-
 function GUI.CreateWindow(parent, title, size)
     size = size or UDim2.new(0, 540, 0, 380)
-
     local MF = Instance.new("Frame")
     MF.Name = "PouncingMain"
     MF.Size = size
@@ -136,7 +128,7 @@ function GUI.CreateWindow(parent, title, size)
     VT.Size = UDim2.new(0, 60, 0, 20)
     VT.Position = UDim2.new(1, -95, 0, 10)
     VT.BackgroundTransparency = 1
-    VT.Text = "v2.3"
+    VT.Text = "v3.0"
     VT.TextColor3 = Theme.SubText
     VT.TextSize = 11
     VT.Font = Enum.Font.Gotham
@@ -248,10 +240,6 @@ function GUI.CreateWindow(parent, title, size)
     }
 end
 
--- ============================================================
--- CreateTab
--- ============================================================
-
 function GUI.CreateTab(window, name, icon)
     local order = window.TabCount
     local B = Instance.new("TextButton")
@@ -326,10 +314,6 @@ function GUI.CreateTab(window, name, icon)
 
     return F
 end
-
--- ============================================================
--- CreateToggle
--- ============================================================
 
 function GUI.CreateToggle(parent, text, default, colorKey, callback)
     local F = Instance.new("Frame")
@@ -441,7 +425,7 @@ function GUI.CreateToggle(parent, text, default, colorKey, callback)
 end
 
 -- ============================================================
--- CreateSlider
+-- CreateSlider — Fixed: zero-width guard + SetValue return
 -- ============================================================
 
 function GUI.CreateSlider(parent, text, min, max, default, callback)
@@ -530,7 +514,9 @@ function GUI.CreateSlider(parent, text, min, max, default, callback)
     local Drag = false
 
     local function Upd(input)
-        local pos = math.clamp((input.Position.X - Tr.AbsolutePosition.X) / Tr.AbsoluteSize.X, 0, 1)
+        local trackWidth = Tr.AbsoluteSize.X
+        if trackWidth <= 0 then trackWidth = 1 end
+        local pos = math.clamp((input.Position.X - Tr.AbsolutePosition.X) / trackWidth, 0, 1)
         local val = math.floor(min + (pos * (max - min)))
         Fi.Size = UDim2.new(pos, 0, 1, 0)
         Kn.Position = UDim2.new(pos, -7, 0.5, -7)
@@ -554,12 +540,180 @@ function GUI.CreateSlider(parent, text, min, max, default, callback)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then Upd(input) end
     end)
 
-    return F
+    local function SetValue(val)
+        val = math.clamp(math.floor(val), min, max)
+        local pos = (val - min) / (max - min)
+        Fi.Size = UDim2.new(pos, 0, 1, 0)
+        Kn.Position = UDim2.new(pos, -7, 0.5, -7)
+        VL.Text = tostring(val)
+        if callback then callback(val) end
+    end
+
+    return F, SetValue
 end
 
 -- ============================================================
--- CreateButton
+-- CreateSliderWithInput — Slider + number textbox for precision
 -- ============================================================
+
+function GUI.CreateSliderWithInput(parent, text, min, max, default, callback)
+    local F = Instance.new("Frame")
+    F.Size = UDim2.new(1, -10, 0, 56)
+    F.BackgroundColor3 = Theme.ElementBG
+    F.BorderSizePixel = 0
+    F.Parent = parent
+
+    local FC = Instance.new("UICorner")
+    FC.CornerRadius = UDim.new(0, 8)
+    FC.Parent = F
+
+    local fStroke = Instance.new("UIStroke")
+    fStroke.Color = Theme.Border
+    fStroke.Thickness = 1
+    fStroke.Transparency = 0.5
+    fStroke.Parent = F
+
+    local L = Instance.new("TextLabel")
+    L.Size = UDim2.new(1, -160, 0, 22)
+    L.Position = UDim2.new(0, 14, 0, 6)
+    L.BackgroundTransparency = 1
+    L.Text = text
+    L.TextColor3 = Theme.Text
+    L.TextSize = 12
+    L.Font = Enum.Font.Gotham
+    L.TextXAlignment = Enum.TextXAlignment.Left
+    L.Parent = F
+
+    local InputBox = Instance.new("TextBox")
+    InputBox.Size = UDim2.new(0, 55, 0, 22)
+    InputBox.Position = UDim2.new(1, -120, 0, 6)
+    InputBox.BackgroundColor3 = Theme.BG
+    InputBox.BorderSizePixel = 0
+    InputBox.Text = tostring(default)
+    InputBox.TextColor3 = Theme.Primary
+    InputBox.TextSize = 12
+    InputBox.Font = Enum.Font.GothamBold
+    InputBox.ClearTextOnFocus = false
+    InputBox.Parent = F
+
+    local InputBoxC = Instance.new("UICorner")
+    InputBoxC.CornerRadius = UDim.new(0, 6)
+    InputBoxC.Parent = InputBox
+
+    local InputBoxS = Instance.new("UIStroke")
+    InputBoxS.Color = Theme.BorderGlow
+    InputBoxS.Thickness = 1
+    InputBoxS.Transparency = 0.5
+    InputBoxS.Parent = InputBox
+
+    local VL = Instance.new("TextLabel")
+    VL.Size = UDim2.new(0, 40, 0, 22)
+    VL.Position = UDim2.new(1, -60, 0, 6)
+    VL.BackgroundTransparency = 1
+    VL.Text = tostring(default)
+    VL.TextColor3 = Theme.SubText
+    VL.TextSize = 11
+    VL.Font = Enum.Font.Gotham
+    VL.Parent = F
+
+    local Tr = Instance.new("Frame")
+    Tr.Size = UDim2.new(1, -28, 0, 5)
+    Tr.Position = UDim2.new(0, 14, 0, 38)
+    Tr.BackgroundColor3 = Theme.Border
+    Tr.BorderSizePixel = 0
+    Tr.Parent = F
+
+    local TrC = Instance.new("UICorner")
+    TrC.CornerRadius = UDim.new(1, 0)
+    TrC.Parent = Tr
+
+    local Fi = Instance.new("Frame")
+    local frac = (default - min) / (max - min)
+    Fi.Size = UDim2.new(frac, 0, 1, 0)
+    Fi.BackgroundColor3 = Theme.Primary
+    Fi.BorderSizePixel = 0
+    Fi.Parent = Tr
+
+    local FiC = Instance.new("UICorner")
+    FiC.CornerRadius = UDim.new(1, 0)
+    FiC.Parent = Fi
+
+    local FiGlow = Instance.new("UIStroke")
+    FiGlow.Color = Theme.Neon
+    FiGlow.Thickness = 2
+    FiGlow.Transparency = 0.6
+    FiGlow.Parent = Fi
+
+    local Kn = Instance.new("Frame")
+    Kn.Size = UDim2.new(0, 14, 0, 14)
+    Kn.Position = UDim2.new(frac, -7, 0.5, -7)
+    Kn.BackgroundColor3 = Theme.White
+    Kn.BorderSizePixel = 0
+    Kn.Parent = Tr
+
+    local KnC = Instance.new("UICorner")
+    KnC.CornerRadius = UDim.new(1, 0)
+    KnC.Parent = Kn
+
+    local KnGlow = Instance.new("UIStroke")
+    KnGlow.Color = Theme.Primary
+    KnGlow.Thickness = 2
+    KnGlow.Transparency = 0.4
+    KnGlow.Parent = Kn
+
+    local Drag = false
+
+    local function UpdVisuals(pos, val)
+        Fi.Size = UDim2.new(pos, 0, 1, 0)
+        Kn.Position = UDim2.new(pos, -7, 0.5, -7)
+        VL.Text = tostring(val)
+        InputBox.Text = tostring(val)
+    end
+
+    local function Upd(input)
+        local trackWidth = Tr.AbsoluteSize.X
+        if trackWidth <= 0 then trackWidth = 1 end
+        local pos = math.clamp((input.Position.X - Tr.AbsolutePosition.X) / trackWidth, 0, 1)
+        local val = math.floor(min + (pos * (max - min)))
+        UpdVisuals(pos, val)
+        if callback then callback(val) end
+    end
+
+    Kn.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then Drag = true end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then Drag = false end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if Drag and input.UserInputType == Enum.UserInputType.MouseMovement then Upd(input) end
+    end)
+
+    Tr.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then Upd(input) end
+    end)
+
+    local function SetValue(val)
+        val = math.clamp(math.floor(val), min, max)
+        local pos = (val - min) / (max - min)
+        UpdVisuals(pos, val)
+        if callback then callback(val) end
+    end
+
+    InputBox.FocusLost:Connect(function()
+        local num = tonumber(InputBox.Text)
+        if num then
+            SetValue(num)
+        else
+            local currentVal = tonumber(VL.Text) or default
+            InputBox.Text = tostring(currentVal)
+        end
+    end)
+
+    return F, SetValue
+end
 
 function GUI.CreateButton(parent, text, callback)
     local F = Instance.new("TextButton")
@@ -602,10 +756,6 @@ function GUI.CreateButton(parent, text, callback)
     return F
 end
 
--- ============================================================
--- CreateLabel
--- ============================================================
-
 function GUI.CreateLabel(parent, text, isSub)
     local L = Instance.new("TextLabel")
     L.Size = UDim2.new(1, -10, 0, 22)
@@ -618,10 +768,6 @@ function GUI.CreateLabel(parent, text, isSub)
     L.Parent = parent
     return L
 end
-
--- ============================================================
--- CreateDropdown
--- ============================================================
 
 function GUI.CreateDropdown(parent, text, options, default, callback)
     local F = Instance.new("Frame")
@@ -756,10 +902,6 @@ function GUI.CreateDropdown(parent, text, options, default, callback)
     return F, function() return selected end
 end
 
--- ============================================================
--- CreateKeybind — Actually works
--- ============================================================
-
 function GUI.CreateKeybind(parent, text, defaultKey, callback)
     local F = Instance.new("Frame")
     F.Size = UDim2.new(1, -10, 0, 38)
@@ -859,11 +1001,6 @@ function GUI.CreateKeybind(parent, text, defaultKey, callback)
     return F, function() return currentKey end
 end
 
--- ============================================================
--- CreateColorPicker — Rainbow Sliders + Hex Input
--- No wheel, no mouse offset issues. Clean and accurate.
--- ============================================================
-
 function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     local CWFrame = Instance.new("Frame")
     CWFrame.Name = "ColorPicker"
@@ -907,34 +1044,16 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     CWClose.ZIndex = 201
     CWClose.Parent = CWFrame
 
-    -- ============================================================
-    -- State (per-picker, isolated)
-    -- ============================================================
     local State = {
-        Hue = 0,
-        Sat = 1,
-        Val = 1,
-        Callback = nil,
-        IsOpen = false,
-        JustOpened = false,
-        Dragging = nil,
+        Hue = 0, Sat = 1, Val = 1,
+        Callback = nil, IsOpen = false, JustOpened = false, Dragging = nil,
     }
-
     local UpdatingHex = false
-
-    -- UI references
     local UI = {}
 
-    -- ============================================================
-    -- UpdateColor: updates preview, hex, gradients, fires callback
-    -- ============================================================
     local function UpdateColor(skipCallback)
         local color = Color3.fromHSV(State.Hue, State.Sat, State.Val)
-
-        if UI.Preview then
-            UI.Preview.BackgroundColor3 = color
-        end
-
+        if UI.Preview then UI.Preview.BackgroundColor3 = color end
         if UI.HexBox and not UpdatingHex then
             UpdatingHex = true
             local r = math.floor(color.R * 255 + 0.5)
@@ -943,29 +1062,21 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
             UI.HexBox.Text = string.format("#%02X%02X%02X", r, g, b)
             UpdatingHex = false
         end
-
         if UI.SatGrad then
             UI.SatGrad.Color = ColorSequence.new({
                 ColorSequenceKeypoint.new(0, Color3.fromHSV(State.Hue, 0, State.Val)),
                 ColorSequenceKeypoint.new(1, Color3.fromHSV(State.Hue, 1, State.Val))
             })
         end
-
         if UI.ValGrad then
             UI.ValGrad.Color = ColorSequence.new({
                 ColorSequenceKeypoint.new(0, Color3.fromHSV(State.Hue, State.Sat, 0)),
                 ColorSequenceKeypoint.new(1, Color3.fromHSV(State.Hue, State.Sat, 1))
             })
         end
-
-        if not skipCallback and State.Callback then
-            State.Callback(color)
-        end
+        if not skipCallback and State.Callback then State.Callback(color) end
     end
 
-    -- ============================================================
-    -- MakeSlider: creates track + knob, returns setters
-    -- ============================================================
     local function MakeSlider(y, labelText)
         local label = Instance.new("TextLabel")
         label.Size = UDim2.new(0, 100, 0, 14)
@@ -1017,9 +1128,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         return gradient, SetKnobPos, track
     end
 
-    -- ============================================================
-    -- Create sliders
-    -- ============================================================
     local hueGrad, SetHuePos, hueTrack = MakeSlider(38, "Hue")
     hueGrad.Color = ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
@@ -1037,9 +1145,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
     UI.SatGrad = satGrad
     UI.ValGrad = valGrad
 
-    -- ============================================================
-    -- Preview box
-    -- ============================================================
     local previewLabel = Instance.new("TextLabel")
     previewLabel.Size = UDim2.new(0, 60, 0, 14)
     previewLabel.Position = UDim2.new(0, 14, 0, 158)
@@ -1070,9 +1175,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
 
     UI.Preview = previewBox
 
-    -- ============================================================
-    -- Hex input
-    -- ============================================================
     local hexLabel = Instance.new("TextLabel")
     hexLabel.Size = UDim2.new(0, 60, 0, 14)
     hexLabel.Position = UDim2.new(0, 80, 0, 158)
@@ -1108,9 +1210,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
 
     UI.HexBox = hexBox
 
-    -- ============================================================
-    -- Drag logic using RunService.RenderStepped
-    -- ============================================================
     local function GetSliderPos(track)
         local size = track.AbsoluteSize.X
         if size <= 0 then return nil end
@@ -1118,7 +1217,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         return math.clamp((mousePos.X - track.AbsolutePosition.X) / size, 0, 1)
     end
 
-    -- Auto-bump saturation so user can see color changes from white/gray
     local function EnsureVisibleColor()
         if State.Sat < 0.05 then
             State.Sat = 0.5
@@ -1134,26 +1232,13 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         dragConn = RunService.RenderStepped:Connect(function()
             if State.Dragging == "hue" then
                 local pos = GetSliderPos(hueTrack)
-                if pos then
-                    State.Hue = pos
-                    SetHuePos(pos)
-                    EnsureVisibleColor()
-                    UpdateColor()
-                end
+                if pos then State.Hue = pos; SetHuePos(pos); EnsureVisibleColor(); UpdateColor() end
             elseif State.Dragging == "sat" then
                 local pos = GetSliderPos(satTrack)
-                if pos then
-                    State.Sat = pos
-                    SetSatPos(pos)
-                    UpdateColor()
-                end
+                if pos then State.Sat = pos; SetSatPos(pos); UpdateColor() end
             elseif State.Dragging == "val" then
                 local pos = GetSliderPos(valTrack)
-                if pos then
-                    State.Val = pos
-                    SetValPos(pos)
-                    UpdateColor()
-                end
+                if pos then State.Val = pos; SetValPos(pos); UpdateColor() end
             end
         end)
     end
@@ -1163,32 +1248,20 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         if dragConn then dragConn:Disconnect() dragConn = nil end
     end
 
-    -- Wire up mouse events on tracks
     hueTrack.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            StartDrag("hue")
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then StartDrag("hue") end
     end)
     satTrack.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            StartDrag("sat")
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then StartDrag("sat") end
     end)
     valTrack.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            StartDrag("val")
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then StartDrag("val") end
     end)
 
     UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            EndDrag()
-        end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then EndDrag() end
     end)
 
-    -- ============================================================
-    -- Hex → Sliders
-    -- ============================================================
     local function ParseHex()
         local text = hexBox.Text:gsub("#", ""):upper()
         if #text == 3 then
@@ -1221,7 +1294,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
 
     hexBox.FocusLost:Connect(ApplyHexColor)
 
-    -- Real-time hex typing (debounced, ignores self-updates)
     local hexTypingConn = nil
     hexBox:GetPropertyChangedSignal("Text"):Connect(function()
         if UpdatingHex then return end
@@ -1232,9 +1304,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         end)
     end)
 
-    -- ============================================================
-    -- Close handlers
-    -- ============================================================
     CWClose.MouseButton1Click:Connect(function()
         CWFrame.Visible = false
         State.IsOpen = false
@@ -1266,9 +1335,6 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         end
     end)
 
-    -- ============================================================
-    -- Picker API
-    -- ============================================================
     local Picker = {}
 
     function Picker:Open(setCallback, setDefaultColor)
@@ -1284,9 +1350,7 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         CWFrame.Visible = true
         State.IsOpen = true
         State.JustOpened = true
-        task.delay(0.2, function()
-            State.JustOpened = false
-        end)
+        task.delay(0.2, function() State.JustOpened = false end)
     end
 
     function Picker:Close()
@@ -1295,16 +1359,12 @@ function GUI.CreateColorPicker(parent, titleText, defaultColor, callback)
         EndDrag()
     end
 
-    function Picker:IsOpen()
-        return State.IsOpen
-    end
-
-    function Picker:GetFrame()
-        return CWFrame
-    end
+    function Picker:IsOpen() return State.IsOpen end
+    function Picker:GetFrame() return CWFrame end
 
     return Picker
 end
+
 function GUI.CreateSeparator(parent)
     local F = Instance.new("Frame")
     F.Size = UDim2.new(1, -20, 0, 1)
@@ -1315,10 +1375,6 @@ function GUI.CreateSeparator(parent)
     F.Parent = parent
     return F
 end
-
--- ============================================================
--- CreateSection
--- ============================================================
 
 function GUI.CreateSection(parent, title)
     local F = Instance.new("Frame")
