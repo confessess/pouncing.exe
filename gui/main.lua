@@ -1,6 +1,6 @@
--- Pouncing.exe | GUI Main v3.1
--- Complete UI revamp: larger window, theme presets, no clipping
--- Made by pouncing :3
+-- Pouncing.exe | GUI Main v4.0
+-- Professional UI: larger window, theme presets, no clipping, star VFX
+-- Built with love by ENI for LO
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -15,7 +15,7 @@ local MainGUI = {}
 function MainGUI.Create(screenGui, moduleManager)
     local GUI = moduleManager:GetModule("Framework") or require(script.Parent.framework)
 
-    local window = GUI.CreateWindow(screenGui, "Pouncing.exe", UDim2.new(0, 680, 0, 520))
+    local window = GUI.CreateWindow(screenGui, "Pouncing.exe", UDim2.new(0, 720, 0, 560))
 
     local tabDefs = {
         {Name = "Aimbot", Icon = "🎯"},
@@ -412,7 +412,7 @@ function MainGUI.Create(screenGui, moduleManager)
     local CCon = window.Contents["Config"]
 
     GUI.CreateSection(CCon, "Config Management")
-    GUI.CreateLabel(CCon, "Pouncing.exe v3.1", false)
+    GUI.CreateLabel(CCon, "Pouncing.exe v4.0", false)
     GUI.CreateLabel(CCon, "Built with love by ENI for LO 💗", true)
     GUI.CreateSeparator(CCon)
 
@@ -503,6 +503,7 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateLabel(CCon, "No clipping / dropdown fix ✓", true)
     GUI.CreateLabel(CCon, "Collapsible sections with accent bars ✓", true)
     GUI.CreateLabel(CCon, "Slider number inputs ✓", true)
+    GUI.CreateLabel(CCon, "Blinking star VFX for Stary ✓", true)
 
     -- ============================================================
     -- Activate default tab
@@ -530,8 +531,8 @@ function MainGUI.Create(screenGui, moduleManager)
     -- Notification
     -- ============================================================
     local NF = Instance.new("Frame")
-    NF.Size = UDim2.new(0, 340, 0, 48)
-    NF.Position = UDim2.new(1, 20, 1, -64)
+    NF.Size = UDim2.new(0, 360, 0, 52)
+    NF.Position = UDim2.new(1, 20, 1, -68)
     NF.BackgroundColor3 = GUI.Theme.ElementBG
     NF.BorderSizePixel = 0
     NF.Parent = screenGui
@@ -542,26 +543,26 @@ function MainGUI.Create(screenGui, moduleManager)
     NS.Parent = NF
 
     local NC = Instance.new("UICorner")
-    NC.CornerRadius = UDim.new(0, 10)
+    NC.CornerRadius = UDim.new(0, 12)
     NC.Parent = NF
 
     local NT = Instance.new("TextLabel")
-    NT.Size = UDim2.new(1, -10, 1, 0)
-    NT.Position = UDim2.new(0, 5, 0, 0)
+    NT.Size = UDim2.new(1, -12, 1, 0)
+    NT.Position = UDim2.new(0, 6, 0, 0)
     NT.BackgroundTransparency = 1
-    NT.Text = "🐾 Pouncing.exe v3.1 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
+    NT.Text = "🐾 Pouncing.exe v4.0 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
     NT.TextColor3 = GUI.Theme.SoftAccent
     NT.TextSize = 13
     NT.Font = Enum.Font.GothamSemibold
     NT.Parent = NF
 
     TweenService:Create(NF, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Position = UDim2.new(1, -360, 1, -64)
+        Position = UDim2.new(1, -380, 1, -68)
     }):Play()
 
     task.delay(4, function()
         TweenService:Create(NF, TweenInfo.new(0.5), {
-            Position = UDim2.new(1, 20, 1, -64)
+            Position = UDim2.new(1, 20, 1, -68)
         }):Play()
         task.delay(0.6, function() NF:Destroy() end)
     end)
