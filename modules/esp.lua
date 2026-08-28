@@ -183,7 +183,12 @@ local function UpdatePlayer(player)
     local hum = char:FindFirstChildOfClass("Humanoid")
     local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
     if not hum or not root or hum.Health <= 0 then HideAll(o) return end
-    if ESP.TeamCheck and LocalPlayer.Team and player.Team == LocalPlayer.Team then HideAll(o) return end
+    if ESP.TeamCheck then
+        local isTeammate = false
+        if LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team then isTeammate = true end
+        if LocalPlayer.TeamColor and player.TeamColor and LocalPlayer.TeamColor == player.TeamColor then isTeammate = true end
+        if isTeammate then HideAll(o) return end
+    end
     local dist = (root.Position - Camera.CFrame.Position).Magnitude
     if dist > ESP.MaxDistance then HideAll(o) return end
     local box = Utils.GetBoxData(char)
