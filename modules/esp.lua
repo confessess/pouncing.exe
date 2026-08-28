@@ -1,484 +1,660 @@
--- Pouncing.exe | ESP Module v2.4
--- Full player ESP with boxes, names, health, skeleton, chams, tracers, head dots
--- Added: Separate WeaponNames toggle, Cleanup function
+-- Pouncing.exe | ESP Module v6.3
+-- FIXED: GetBoxData height calc (was botScr.Y - botScr.Y = 0), improved character handling
 -- ============================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
-
-local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
-local Utils = getfenv()["PouncingUtils"]
-if not Utils then
-    Utils = {}
-    function Utils.MakeDrawing(type, props)
-        local s, obj = pcall(Drawing.new, type)
-        if not s or not obj then return nil end
-        for k, v in pairs(props or {}) do pcall(function() obj[k] = v end) end
-        return obj
-    end
-    function Utils.SetDrawing(obj, key, value)
-        if obj then pcall(function() obj[key] = value end) end
-    end
-    function Utils.RemoveDrawing(obj)
-        if obj then pcall(function() obj:Remove() end) end
-    end
-    function Utils.W2S(position)
-        local s, x, y, z = pcall(function()
-            local v = Camera:WorldToViewportPoint(position)
-            return v.X, v.Y, v.Z
-        end)
-        if s and z and z > 0 then return Vector2.new(x, y), true, z end
-        return Vector2.new(-999, -999), false, 0
-    end
-    function Utils.GetBoxData(character)
-        local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
-        if not root then return nil end
-        local s, extents = pcall(function() return character:GetExtentsSize() end)
-        if not s or not extents then return nil end
-        local size = extents * 1.1
-        local topPos = root.Position + Vector3.new(0, size.Y / 2, 0)
-        local botPos = root.Position - Vector3.new(0, size.Y / 2, 0)
-        local topScr, topVis, topZ = Utils.W2S(topPos)
-        local botScr, botVis, botZ = Utils.W2S(botPos)
-        if (not topVis and not botVis) or topZ <= 0 or botZ <= 0 then return nil end
-        local h = math.abs(botScr.Y - topScr.Y)
-        local w = h * 0.6
-        if h <= 1 or w <= 1 then return nil end
-        return {TL = Vector2.new(topScr.X - w / 2, topScr.Y), BR = Vector2.new(topScr.X + w / 2, botScr.Y), Size = Vector2.new(w, h), Center = Vector2.new(topScr.X, (topScr.Y + botScr.Y) / 2), Pos = root.Position, Extents = extents}
-    end
-    function Utils.Get3DCorners(character)
-        local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
-        if not root then return nil end
-        local s, extents = pcall(function() return character:GetExtentsSize() end)
-        if not s or not extents then return nil end
-        local p = root.Position
-        local hx, hy, hz = extents.X / 2, extents.Y / 2, extents.Z / 2
-        local corners = {p + Vector3.new(-hx, -hy, -hz), p + Vector3.new(hx, -hy, -hz), p + Vector3.new(hx, -hy, hz), p + Vector3.new(-hx, -hy, hz), p + Vector3.new(-hx, hy, -hz), p + Vector3.new(hx, hy, -hz), p + Vector3.new(hx, hy, hz), p + Vector3.new(-hx, hy, hz)}
-        local screenCorners = {}
-        for i = 1, 8 do
-            local sp, vis, z = Utils.W2S(corners[i])
-            if not vis or z <= 0 then return nil end
-            screenCorners[i] = sp
-        end
-        return screenCorners
-    end
-    Utils.Box3DEdges = {{1,2},{2,3},{3,4},{4,1},{5,6},{6,7},{7,8},{8,5},{1,5},{2,6},{3,7},{4,8}}
-    Utils.SkeletonConnections = {{"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"}, {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"}, {"UpperTorso", "RightUpperArm"}, {"RightUpperArm", "RightLowerArm"}, {"RightLowerArm", "RightHand"}, {"LowerTorso", "LeftUpperLeg"}, {"LeftUpperLeg", "LeftLowerLeg"}, {"LeftLowerLeg", "LeftFoot"}, {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"}, {"Torso", "Left Arm"}, {"Torso", "Right Arm"}, {"Torso", "Left Leg"}, {"Torso", "Right Leg"}, {"Torso", "Head"}}
-end
-
 local ESP = {
-    Enabled = false, Boxes = false, Box3D = false, Names = false, Distance = false, Health = false,
-    Skeleton = false, Chams = false, Tracers = false, HeadDot = false, WeaponNames = false, TeamCheck = false,
-    MaxDistance = 2000, BoxThickness = 1, TracerOrigin = 0.5, HeadDotThickness = 1, HeadDotSize = 0.5,
-    Colors = {Box = Color3.fromRGB(255, 105, 180), Name = Color3.fromRGB(255, 255, 255), Distance = Color3.fromRGB(200, 200, 200), Health = Color3.fromRGB(0, 255, 100), Skeleton = Color3.fromRGB(255, 255, 255), ChamsFill = Color3.fromRGB(255, 105, 180), ChamsOutline = Color3.fromRGB(255, 255, 255), Tracers = Color3.fromRGB(255, 105, 180), HeadDot = Color3.fromRGB(255, 255, 255)}
+    Enabled = false,
+    Boxes = false,
+    Box3D = false,
+    Tracers = false,
+    Names = false,
+    Health = false,
+    Distance = false,
+    Chams = false,
+    Skeleton = false,
+    TeamCheck = false,
+    MaxDistance = 1000,
+    BoxColor = Color3.fromRGB(255, 80, 160),
+    TracerColor = Color3.fromRGB(255, 80, 160),
+    NameColor = Color3.fromRGB(255, 255, 255),
+    HealthColor = Color3.fromRGB(0, 255, 100),
+    DistanceColor = Color3.fromRGB(200, 200, 200),
+    SkeletonColor = Color3.fromRGB(255, 80, 160),
+    BoxThickness = 1,
+    TracerThickness = 1,
+    SkeletonThickness = 1,
+    TextSize = 13,
+    Font = Drawing.Fonts.Plex,
+    TracerOrigin = "Bottom",
+    BoxFilled = false,
+    BoxFillTransparency = 0.7,
+    ShowTeam = false,
+    ShowLocalPlayer = false,
+    HighlightFillColor = Color3.fromRGB(255, 80, 160),
+    HighlightOutlineColor = Color3.fromRGB(255, 255, 255),
+    HighlightFillTransparency = 0.5,
+    HighlightOutlineTransparency = 0,
 }
 
-local DrawingObjects = {}
-local RenderConnection = nil
+local PlayerObjects = {}
 local PlayerAddedConnection = nil
 local PlayerRemovingConnection = nil
+local RenderConnection = nil
 
-local function InitPlayer(player)
-    if player == LocalPlayer or DrawingObjects[player] then return end
-    local skel = {}
-    for i = 1, #Utils.SkeletonConnections do
-        table.insert(skel, Utils.MakeDrawing("Line", {Visible = false, Thickness = 1.5, Color = ESP.Colors.Skeleton, Transparency = 0.8}))
-        table.insert(skel, Utils.MakeDrawing("Line", {Visible = false, Thickness = 3, Color = Color3.fromRGB(0,0,0), Transparency = 0.5}))
+local Utils = nil
+local function GetUtils()
+    if Utils then return Utils end
+    local success, result = pcall(function()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/confessess/pouncing.exe/main/utils/core.lua"))()
+    end)
+    if success and result then
+        Utils = result
+        return Utils
     end
-    local b3d, b3do = {}, {}
-    for i = 1, 12 do
-        table.insert(b3d, Utils.MakeDrawing("Line", {Visible = false, Thickness = 1.5, Color = ESP.Colors.Box, Transparency = 0.9}))
-        table.insert(b3do, Utils.MakeDrawing("Line", {Visible = false, Thickness = 3, Color = Color3.fromRGB(0,0,0), Transparency = 0.5}))
-    end
-    DrawingObjects[player] = {
-        Box = Utils.MakeDrawing("Square", {Visible = false, Thickness = ESP.BoxThickness, Color = ESP.Colors.Box, Transparency = 0.9, Filled = false}),
-        B3D = b3d, B3DO = b3do,
-        Name = Utils.MakeDrawing("Text", {Visible = false, Text = player.Name, Size = 13, Center = true, Outline = true, OutlineColor = Color3.fromRGB(0,0,0), Color = ESP.Colors.Name}),
-        HB = Utils.MakeDrawing("Square", {Visible = false, Thickness = 1, Filled = true, Color = ESP.Colors.Health}),
-        HBO = Utils.MakeDrawing("Square", {Visible = false, Thickness = 1, Filled = true, Color = Color3.fromRGB(0,0,0)}),
-        HT = Utils.MakeDrawing("Text", {Visible = false, Text = "100", Size = 11, Center = false, Outline = true, OutlineColor = Color3.fromRGB(0,0,0), Color = Color3.fromRGB(255,255,255)}),
-        Skel = skel,
-        Dist = Utils.MakeDrawing("Text", {Visible = false, Text = "", Size = 11, Center = true, Outline = true, OutlineColor = Color3.fromRGB(0,0,0), Color = ESP.Colors.Distance}),
-        Tracer = Utils.MakeDrawing("Line", {Visible = false, Thickness = 1.5, Color = ESP.Colors.Tracers, Transparency = 0.7}),
-        TracerO = Utils.MakeDrawing("Line", {Visible = false, Thickness = 3, Color = Color3.fromRGB(0,0,0), Transparency = 0.4}),
-        HeadDot = Utils.MakeDrawing("Circle", {Visible = false, Thickness = ESP.HeadDotThickness, Color = ESP.Colors.HeadDot, Transparency = 0.9, NumSides = 16, Filled = true}),
-        HeadDotO = Utils.MakeDrawing("Circle", {Visible = false, Thickness = ESP.HeadDotThickness + 1, Color = Color3.fromRGB(0,0,0), Transparency = 0.5, NumSides = 16, Filled = false}),
-        Weapon = Utils.MakeDrawing("Text", {Visible = false, Text = "", Size = 10, Center = true, Outline = true, OutlineColor = Color3.fromRGB(0,0,0), Color = Color3.fromRGB(255, 200, 100)})
-    }
-end
-
-local function ClearPlayer(player)
-    if not DrawingObjects[player] then return end
-    for k, v in pairs(DrawingObjects[player]) do
-        if k == "Skel" or k == "B3D" or k == "B3DO" then for _, o in pairs(v) do Utils.RemoveDrawing(o) end else Utils.RemoveDrawing(v) end
-    end
-    DrawingObjects[player] = nil
-    local char = player.Character
-    if char then local h = char:FindFirstChild("Pouncing_Highlight"); if h then h:Destroy() end end
-end
-
-local function HideAll(o)
-    Utils.SetDrawing(o.Box, "Visible", false)
-    Utils.SetDrawing(o.Name, "Visible", false)
-    Utils.SetDrawing(o.Dist, "Visible", false)
-    Utils.SetDrawing(o.HB, "Visible", false)
-    Utils.SetDrawing(o.HBO, "Visible", false)
-    Utils.SetDrawing(o.HT, "Visible", false)
-    Utils.SetDrawing(o.Tracer, "Visible", false)
-    Utils.SetDrawing(o.TracerO, "Visible", false)
-    Utils.SetDrawing(o.HeadDot, "Visible", false)
-    Utils.SetDrawing(o.HeadDotO, "Visible", false)
-    Utils.SetDrawing(o.Weapon, "Visible", false)
-    for _, l in pairs(o.Skel) do Utils.SetDrawing(l, "Visible", false) end
-    for _, l in pairs(o.B3D) do Utils.SetDrawing(l, "Visible", false) end
-    for _, l in pairs(o.B3DO) do Utils.SetDrawing(l, "Visible", false) end
-end
-
-local function GetPlayerWeapon(player)
-    local char = player.Character
-    if not char then return nil end
-    local tool = char:FindFirstChildOfClass("Tool")
-    if tool then return tool.Name end
     return nil
 end
 
-local function RefreshColors()
-    for player, o in pairs(DrawingObjects) do
-        if o.Box then Utils.SetDrawing(o.Box, "Color", ESP.Colors.Box); Utils.SetDrawing(o.Box, "Thickness", ESP.BoxThickness) end
-        if o.Name then Utils.SetDrawing(o.Name, "Color", ESP.Colors.Name) end
-        if o.Dist then Utils.SetDrawing(o.Dist, "Color", ESP.Colors.Distance) end
-        if o.Tracer then Utils.SetDrawing(o.Tracer, "Color", ESP.Colors.Tracers) end
-        if o.HeadDot then Utils.SetDrawing(o.HeadDot, "Color", ESP.Colors.HeadDot); Utils.SetDrawing(o.HeadDot, "Thickness", ESP.HeadDotThickness) end
-        if o.HB then Utils.SetDrawing(o.HB, "Color", ESP.Colors.Health) end
-        if o.Skel then
-            for i = 1, #o.Skel, 2 do
-                if o.Skel[i] then Utils.SetDrawing(o.Skel[i], "Color", ESP.Colors.Skeleton) end
+if not Utils then
+    Utils = GetUtils()
+end
+
+if not Utils then
+    Utils = {}
+    function Utils.GetCharacter(player)
+        return player and player.Character
+    end
+    function Utils.GetHumanoid(character)
+        if not character then return nil end
+        return character:FindFirstChildOfClass("Humanoid")
+    end
+    function Utils.GetRootPart(character)
+        if not character then return nil end
+        return character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
+    end
+    function Utils.GetHead(character)
+        if not character then return nil end
+        return character:FindFirstChild("Head")
+    end
+    function Utils.IsAlive(character)
+        if not character then return false end
+        local humanoid = Utils.GetHumanoid(character)
+        return humanoid and humanoid.Health > 0
+    end
+    function Utils.GetDistance(pos1, pos2)
+        if not pos1 or not pos2 then return math.huge end
+        return (pos1 - pos2).Magnitude
+    end
+    function Utils.WorldToScreen(position)
+        local pos, onScreen = Camera:WorldToViewportPoint(position)
+        return Vector2.new(pos.X, pos.Y), onScreen, pos.Z
+    end
+    function Utils.GetBoxData(character)
+        if not character then return nil end
+        local head = Utils.GetHead(character)
+        local root = Utils.GetRootPart(character)
+        if not head or not root then return nil end
+        local headPos, headOnScreen = Camera:WorldToViewportPoint(head.Position)
+        local rootPos, rootOnScreen = Camera:WorldToViewportPoint(root.Position - Vector3.new(0, 3, 0))
+        if not headOnScreen and not rootOnScreen then return nil end
+        local topScr = Vector2.new(headPos.X, headPos.Y)
+        local botScr = Vector2.new(rootPos.X, rootPos.Y)
+        local h = math.abs(botScr.Y - topScr.Y)  -- FIXED: was botScr.Y - botScr.Y (always 0)
+        local w = h * 0.55
+        if h <= 1 then return nil end
+        return {
+            TopLeft = Vector2.new(topScr.X - w / 2, topScr.Y),
+            TopRight = Vector2.new(topScr.X + w / 2, topScr.Y),
+            BottomLeft = Vector2.new(botScr.X - w / 2, botScr.Y),
+            BottomRight = Vector2.new(botScr.X + w / 2, botScr.Y),
+            Center = Vector2.new(topScr.X, (topScr.Y + botScr.Y) / 2),
+            Size = Vector2.new(w, h),
+            HeadPos = topScr,
+            RootPos = botScr,
+            OnScreen = headOnScreen or rootOnScreen,
+        }
+    end
+    function Utils.Get3DCorners(character)
+        if not character then return nil end
+        local root = Utils.GetRootPart(character)
+        if not root then return nil end
+        local size = character:GetExtentsSize()
+        local cf = root.CFrame
+        local corners = {}
+        for x = -1, 1, 2 do
+            for y = -1, 1, 2 do
+                for z = -1, 1, 2 do
+                    local corner = cf * CFrame.new(size.X / 2 * x, size.Y / 2 * y, size.Z / 2 * z)
+                    local pos, onScreen = Camera:WorldToViewportPoint(corner.Position)
+                    table.insert(corners, {Position = Vector2.new(pos.X, pos.Y), OnScreen = onScreen, Depth = pos.Z})
+                end
             end
         end
-        if o.B3D then
-            for _, line in pairs(o.B3D) do
-                if line then Utils.SetDrawing(line, "Color", ESP.Colors.Box) end
-            end
+        return corners
+    end
+    function Utils.IsTeammate(player)
+        local LocalPlayer = Players.LocalPlayer
+        return player.Team == LocalPlayer.Team
+    end
+    function Utils.GetHealth(character)
+        local humanoid = Utils.GetHumanoid(character)
+        if humanoid then
+            return humanoid.Health, humanoid.MaxHealth
         end
-        local char = player.Character
-        if char then
-            local hl = char:FindFirstChild("Pouncing_Highlight")
-            if hl then
-                hl.FillColor = ESP.Colors.ChamsFill
-                hl.OutlineColor = ESP.Colors.ChamsOutline
+        return 0, 100
+    end
+end
+
+local LocalPlayer = Players.LocalPlayer
+
+local function CreateDrawing(type, properties)
+    local drawing = Drawing.new(type)
+    for property, value in pairs(properties) do
+        drawing[property] = value
+    end
+    return drawing
+end
+
+local function RemovePlayerObjects(player)
+    local objects = PlayerObjects[player]
+    if not objects then return end
+    for _, obj in pairs(objects) do
+        if typeof(obj) == "table" then
+            for _, subObj in pairs(obj) do
+                if subObj and subObj.Remove then
+                    pcall(function() subObj:Remove() end)
+                end
             end
+        elseif obj and obj.Remove then
+            pcall(function() obj:Remove() end)
         end
     end
+    PlayerObjects[player] = nil
+end
+
+local function CreatePlayerObjects(player)
+    if PlayerObjects[player] then return end
+    PlayerObjects[player] = {
+        Box = CreateDrawing("Square", {
+            Visible = false,
+            Thickness = ESP.BoxThickness,
+            Color = ESP.BoxColor,
+            Filled = ESP.BoxFilled,
+            Transparency = ESP.BoxFillTransparency,
+            ZIndex = 1,
+        }),
+        BoxOutline = CreateDrawing("Square", {
+            Visible = false,
+            Thickness = ESP.BoxThickness + 2,
+            Color = Color3.fromRGB(0, 0, 0),
+            Filled = false,
+            Transparency = 1,
+            ZIndex = 0,
+        }),
+        Tracer = CreateDrawing("Line", {
+            Visible = false,
+            Thickness = ESP.TracerThickness,
+            Color = ESP.TracerColor,
+            ZIndex = 1,
+        }),
+        TracerOutline = CreateDrawing("Line", {
+            Visible = false,
+            Thickness = ESP.TracerThickness + 2,
+            Color = Color3.fromRGB(0, 0, 0),
+            ZIndex = 0,
+        }),
+        Name = CreateDrawing("Text", {
+            Visible = false,
+            Text = player.Name,
+            Size = ESP.TextSize,
+            Font = ESP.Font,
+            Color = ESP.NameColor,
+            Outline = true,
+            OutlineColor = Color3.fromRGB(0, 0, 0),
+            Center = true,
+            ZIndex = 2,
+        }),
+        Health = CreateDrawing("Text", {
+            Visible = false,
+            Text = "100",
+            Size = ESP.TextSize - 2,
+            Font = ESP.Font,
+            Color = ESP.HealthColor,
+            Outline = true,
+            OutlineColor = Color3.fromRGB(0, 0, 0),
+            Center = true,
+            ZIndex = 2,
+        }),
+        Distance = CreateDrawing("Text", {
+            Visible = false,
+            Text = "0m",
+            Size = ESP.TextSize - 2,
+            Font = ESP.Font,
+            Color = ESP.DistanceColor,
+            Outline = true,
+            OutlineColor = Color3.fromRGB(0, 0, 0),
+            Center = true,
+            ZIndex = 2,
+        }),
+        Box3D = {},
+        Skeleton = {},
+        Chams = nil,
+    }
 end
 
 local function UpdatePlayer(player)
-    if player == LocalPlayer then return end
-    local o = DrawingObjects[player]
-    if not o then return end
-    local char = player.Character
-    if not char then HideAll(o) return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
-    if not hum or not root or hum.Health <= 0 then HideAll(o) return end
-    if ESP.TeamCheck then
-        local isTeammate = false
-        if LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team then isTeammate = true end
-        if LocalPlayer.TeamColor and player.TeamColor and LocalPlayer.TeamColor == player.TeamColor then isTeammate = true end
-        if isTeammate then HideAll(o) return end
-    end
-    local dist = (root.Position - Camera.CFrame.Position).Magnitude
-    if dist > ESP.MaxDistance then HideAll(o) return end
-    local box = Utils.GetBoxData(char)
-    if not box then HideAll(o) return end
-    Utils.SetDrawing(o.Box, "Thickness", ESP.BoxThickness)
-    if ESP.Boxes and not ESP.Box3D and ESP.Enabled then
-        Utils.SetDrawing(o.Box, "Size", box.Size)
-        Utils.SetDrawing(o.Box, "Position", box.TL)
-        Utils.SetDrawing(o.Box, "Color", ESP.Colors.Box)
-        Utils.SetDrawing(o.Box, "Thickness", ESP.BoxThickness)
-        Utils.SetDrawing(o.Box, "Visible", true)
-    else
-        Utils.SetDrawing(o.Box, "Visible", false)
-    end
-    if ESP.Boxes and ESP.Box3D and ESP.Enabled then
-        local c = Utils.Get3DCorners(char)
-        if c then
-            for i, e in ipairs(Utils.Box3DEdges) do
-                Utils.SetDrawing(o.B3D[i], "From", c[e[1]])
-                Utils.SetDrawing(o.B3D[i], "To", c[e[2]])
-                Utils.SetDrawing(o.B3D[i], "Color", ESP.Colors.Box)
-                Utils.SetDrawing(o.B3D[i], "Visible", true)
-                Utils.SetDrawing(o.B3DO[i], "From", c[e[1]])
-                Utils.SetDrawing(o.B3DO[i], "To", c[e[2]])
-                Utils.SetDrawing(o.B3DO[i], "Visible", true)
-            end
-        else
-            for _, l in pairs(o.B3D) do Utils.SetDrawing(l, "Visible", false) end
-            for _, l in pairs(o.B3DO) do Utils.SetDrawing(l, "Visible", false) end
-        end
-    else
-        for _, l in pairs(o.B3D) do Utils.SetDrawing(l, "Visible", false) end
-        for _, l in pairs(o.B3DO) do Utils.SetDrawing(l, "Visible", false) end
-    end
-    if ESP.Names and ESP.Enabled then
-        Utils.SetDrawing(o.Name, "Position", Vector2.new(box.Center.X, box.TL.Y - 16))
-        Utils.SetDrawing(o.Name, "Text", player.Name)
-        Utils.SetDrawing(o.Name, "Color", ESP.Colors.Name)
-        Utils.SetDrawing(o.Name, "Visible", true)
-    else
-        Utils.SetDrawing(o.Name, "Visible", false)
-    end
-    if ESP.Distance and ESP.Enabled then
-        Utils.SetDrawing(o.Dist, "Position", Vector2.new(box.Center.X, box.BR.Y + 4))
-        Utils.SetDrawing(o.Dist, "Text", math.floor(dist) .. "m")
-        Utils.SetDrawing(o.Dist, "Color", ESP.Colors.Distance)
-        Utils.SetDrawing(o.Dist, "Visible", true)
-    else
-        Utils.SetDrawing(o.Dist, "Visible", false)
-    end
-    if ESP.Health and ESP.Enabled then
-        local ok = pcall(function()
-            local mh = hum.MaxHealth
-            local ch = hum.Health
-            if not mh or mh <= 0 or not ch or ch < 0 then
-                Utils.SetDrawing(o.HB, "Visible", false)
-                Utils.SetDrawing(o.HBO, "Visible", false)
-                Utils.SetDrawing(o.HT, "Visible", false)
-                return
-            end
-            local pct = math.clamp(ch / mh, 0, 1)
-            local bh = math.max(box.Size.Y * pct, 2)
-            local bw = 4
-            if box.Size.Y <= 0 then
-                Utils.SetDrawing(o.HB, "Visible", false)
-                Utils.SetDrawing(o.HBO, "Visible", false)
-                Utils.SetDrawing(o.HT, "Visible", false)
-                return
-            end
-            Utils.SetDrawing(o.HBO, "Size", Vector2.new(bw + 2, box.Size.Y + 2))
-            Utils.SetDrawing(o.HBO, "Position", Vector2.new(box.TL.X - bw - 6, box.TL.Y - 1))
-            Utils.SetDrawing(o.HBO, "Visible", true)
-            Utils.SetDrawing(o.HB, "Size", Vector2.new(bw, bh))
-            Utils.SetDrawing(o.HB, "Position", Vector2.new(box.TL.X - bw - 5, box.BR.Y - bh))
-            local fullColor = ESP.Colors.Health
-            local emptyColor = Color3.fromRGB(255, 0, 0)
-            local healthColor = emptyColor:Lerp(fullColor, pct)
-            Utils.SetDrawing(o.HB, "Color", healthColor)
-            Utils.SetDrawing(o.HB, "Visible", true)
-            Utils.SetDrawing(o.HT, "Position", Vector2.new(box.TL.X - bw - 28, box.BR.Y - bh - 6))
-            Utils.SetDrawing(o.HT, "Text", math.floor(ch))
-            Utils.SetDrawing(o.HT, "Visible", true)
-        end)
-        if not ok then
-            Utils.SetDrawing(o.HB, "Visible", false)
-            Utils.SetDrawing(o.HBO, "Visible", false)
-            Utils.SetDrawing(o.HT, "Visible", false)
-        end
-    else
-        Utils.SetDrawing(o.HB, "Visible", false)
-        Utils.SetDrawing(o.HBO, "Visible", false)
-        Utils.SetDrawing(o.HT, "Visible", false)
-    end
-    if ESP.Skeleton and ESP.Enabled then
-        local idx = 1
-        for _, conn in ipairs(Utils.SkeletonConnections) do
-            local p1 = char:FindFirstChild(conn[1])
-            local p2 = char:FindFirstChild(conn[2])
-            local line = o.Skel[idx]
-            local outline = o.Skel[idx + 1]
-            idx = idx + 2
-            if p1 and p2 and line and outline then
-                local s1, v1 = Utils.W2S(p1.Position)
-                local s2, v2 = Utils.W2S(p2.Position)
-                if v1 and v2 then
-                    Utils.SetDrawing(line, "From", s1)
-                    Utils.SetDrawing(line, "To", s2)
-                    Utils.SetDrawing(line, "Color", ESP.Colors.Skeleton)
-                    Utils.SetDrawing(line, "Visible", true)
-                    Utils.SetDrawing(outline, "From", s1)
-                    Utils.SetDrawing(outline, "To", s2)
-                    Utils.SetDrawing(outline, "Visible", true)
-                else
-                    Utils.SetDrawing(line, "Visible", false)
-                    Utils.SetDrawing(outline, "Visible", false)
+    if not ESP.Enabled then return end
+    if player == LocalPlayer and not ESP.ShowLocalPlayer then return end
+    local objects = PlayerObjects[player]
+    if not objects then return end
+    local character = Utils.GetCharacter(player)
+    if not character then
+        for _, obj in pairs(objects) do
+            if typeof(obj) == "table" then
+                for _, subObj in pairs(obj) do
+                    if subObj and subObj.Visible ~= nil then subObj.Visible = false end
                 end
-            else
-                if line then Utils.SetDrawing(line, "Visible", false) end
-                if outline then Utils.SetDrawing(outline, "Visible", false) end
+            elseif obj and obj.Visible ~= nil then
+                obj.Visible = false
             end
-        end
-    else
-        for _, l in pairs(o.Skel) do Utils.SetDrawing(l, "Visible", false) end
-    end
-    if ESP.Tracers and ESP.Enabled then
-        local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y * ESP.TracerOrigin)
-        local targetPos, onScreen = Utils.W2S(root.Position)
-        if onScreen then
-            Utils.SetDrawing(o.Tracer, "From", screenCenter)
-            Utils.SetDrawing(o.Tracer, "To", targetPos)
-            Utils.SetDrawing(o.Tracer, "Color", ESP.Colors.Tracers)
-            Utils.SetDrawing(o.Tracer, "Visible", true)
-            Utils.SetDrawing(o.TracerO, "From", screenCenter)
-            Utils.SetDrawing(o.TracerO, "To", targetPos)
-            Utils.SetDrawing(o.TracerO, "Visible", true)
-        else
-            Utils.SetDrawing(o.Tracer, "Visible", false)
-            Utils.SetDrawing(o.TracerO, "Visible", false)
-        end
-    else
-        Utils.SetDrawing(o.Tracer, "Visible", false)
-        Utils.SetDrawing(o.TracerO, "Visible", false)
-    end
-    if ESP.HeadDot and ESP.Enabled then
-        local head = char:FindFirstChild("Head")
-        if head then
-            local headPos, onScreen = Utils.W2S(head.Position)
-            if onScreen then
-                local radius = math.clamp(3000 / dist, 3, 12) * ESP.HeadDotSize
-                Utils.SetDrawing(o.HeadDot, "Position", headPos)
-                Utils.SetDrawing(o.HeadDot, "Radius", radius)
-                Utils.SetDrawing(o.HeadDot, "Color", ESP.Colors.HeadDot)
-                Utils.SetDrawing(o.HeadDot, "Thickness", ESP.HeadDotThickness)
-                Utils.SetDrawing(o.HeadDot, "Visible", true)
-                Utils.SetDrawing(o.HeadDotO, "Position", headPos)
-                Utils.SetDrawing(o.HeadDotO, "Radius", radius + 1)
-                Utils.SetDrawing(o.HeadDotO, "Thickness", ESP.HeadDotThickness + 1)
-                Utils.SetDrawing(o.HeadDotO, "Visible", true)
-            else
-                Utils.SetDrawing(o.HeadDot, "Visible", false)
-                Utils.SetDrawing(o.HeadDotO, "Visible", false)
-            end
-        else
-            Utils.SetDrawing(o.HeadDot, "Visible", false)
-            Utils.SetDrawing(o.HeadDotO, "Visible", false)
-        end
-    else
-        Utils.SetDrawing(o.HeadDot, "Visible", false)
-        Utils.SetDrawing(o.HeadDotO, "Visible", false)
-    end
-    -- Weapon Names — now independent of Names toggle
-    if ESP.WeaponNames and ESP.Enabled then
-        local weapon = GetPlayerWeapon(player)
-        if weapon then
-            Utils.SetDrawing(o.Weapon, "Position", Vector2.new(box.Center.X, box.BR.Y + 18))
-            Utils.SetDrawing(o.Weapon, "Text", "[" .. weapon .. "]")
-            Utils.SetDrawing(o.Weapon, "Visible", true)
-        else
-            Utils.SetDrawing(o.Weapon, "Visible", false)
-        end
-    else
-        Utils.SetDrawing(o.Weapon, "Visible", false)
-    end
-    if ESP.Chams and ESP.Enabled then
-        local hl = char:FindFirstChild("Pouncing_Highlight")
-        if not hl then
-            hl = Instance.new("Highlight")
-            hl.Name = "Pouncing_Highlight"
-            hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-            hl.Parent = char
-        end
-        hl.FillColor = ESP.Colors.ChamsFill
-        hl.OutlineColor = ESP.Colors.ChamsOutline
-        hl.FillTransparency = 0.6
-        hl.OutlineTransparency = 0.2
-        hl.Enabled = true
-    else
-        local hl = char:FindFirstChild("Pouncing_Highlight")
-        if hl then hl.Enabled = false end
-    end
-end
-
-local function ESPUpdate()
-    if not ESP.Enabled then
-        for player, o in pairs(DrawingObjects) do
-            HideAll(o)
-            local c = player.Character
-            if c then local h = c:FindFirstChild("Pouncing_Highlight"); if h then h.Enabled = false end end
         end
         return
     end
-    for _, p in pairs(Players:GetPlayers()) do
-        pcall(function() UpdatePlayer(p) end)
+    if not Utils.IsAlive(character) then
+        for _, obj in pairs(objects) do
+            if typeof(obj) == "table" then
+                for _, subObj in pairs(obj) do
+                    if subObj and subObj.Visible ~= nil then subObj.Visible = false end
+                end
+            elseif obj and obj.Visible ~= nil then
+                obj.Visible = false
+            end
+        end
+        return
+    end
+    if ESP.TeamCheck and Utils.IsTeammate(player) then
+        for _, obj in pairs(objects) do
+            if typeof(obj) == "table" then
+                for _, subObj in pairs(obj) do
+                    if subObj and subObj.Visible ~= nil then subObj.Visible = false end
+                end
+            elseif obj and obj.Visible ~= nil then
+                obj.Visible = false
+            end
+        end
+        return
+    end
+    local root = Utils.GetRootPart(character)
+    if not root then return end
+    local distance = Utils.GetDistance(LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position or Vector3.new(), root.Position)
+    if distance > ESP.MaxDistance then
+        for _, obj in pairs(objects) do
+            if typeof(obj) == "table" then
+                for _, subObj in pairs(obj) do
+                    if subObj and subObj.Visible ~= nil then subObj.Visible = false end
+                end
+            elseif obj and obj.Visible ~= nil then
+                obj.Visible = false
+            end
+        end
+        return
+    end
+    local boxData = Utils.GetBoxData(character)
+    if not boxData then
+        for _, obj in pairs(objects) do
+            if typeof(obj) == "table" then
+                for _, subObj in pairs(obj) do
+                    if subObj and subObj.Visible ~= nil then subObj.Visible = false end
+                end
+            elseif obj and obj.Visible ~= nil then
+                obj.Visible = false
+            end
+        end
+        return
+    end
+    local color = ESP.BoxColor
+    if player.Team then
+        color = player.TeamColor.Color
+    end
+    if ESP.Boxes and not ESP.Box3D then
+        objects.Box.Visible = true
+        objects.BoxOutline.Visible = true
+        objects.Box.Size = boxData.Size
+        objects.Box.Position = boxData.TopLeft
+        objects.Box.Color = color
+        objects.Box.Thickness = ESP.BoxThickness
+        objects.Box.Filled = ESP.BoxFilled
+        objects.Box.Transparency = ESP.BoxFillTransparency
+        objects.BoxOutline.Size = boxData.Size
+        objects.BoxOutline.Position = boxData.TopLeft
+        objects.BoxOutline.Thickness = ESP.BoxThickness + 2
+    else
+        objects.Box.Visible = false
+        objects.BoxOutline.Visible = false
+    end
+    if ESP.Tracers then
+        objects.Tracer.Visible = true
+        objects.TracerOutline.Visible = true
+        objects.Tracer.Color = ESP.TracerColor
+        objects.Tracer.Thickness = ESP.TracerThickness
+        local tracerStart = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y)
+        if ESP.TracerOrigin == "Top" then
+            tracerStart = Vector2.new(Camera.ViewportSize.X / 2, 0)
+        elseif ESP.TracerOrigin == "Center" then
+            tracerStart = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+        elseif ESP.TracerOrigin == "Mouse" then
+            tracerStart = game:GetService("UserInputService"):GetMouseLocation()
+        end
+        objects.Tracer.From = tracerStart
+        objects.Tracer.To = boxData.Center
+        objects.TracerOutline.From = tracerStart
+        objects.TracerOutline.To = boxData.Center
+        objects.TracerOutline.Thickness = ESP.TracerThickness + 2
+    else
+        objects.Tracer.Visible = false
+        objects.TracerOutline.Visible = false
+    end
+    if ESP.Names then
+        objects.Name.Visible = true
+        objects.Name.Text = player.Name
+        objects.Name.Size = ESP.TextSize
+        objects.Name.Color = ESP.NameColor
+        objects.Name.Position = Vector2.new(boxData.Center.X, boxData.TopLeft.Y - 18)
+    else
+        objects.Name.Visible = false
+    end
+    if ESP.Health then
+        local health, maxHealth = Utils.GetHealth(character)
+        local healthPercent = math.clamp(health / maxHealth, 0, 1)
+        objects.Health.Visible = true
+        objects.Health.Text = string.format("%.0f%%", healthPercent * 100)
+        objects.Health.Size = ESP.TextSize - 2
+        objects.Health.Color = ESP.HealthColor
+        objects.Health.Position = Vector2.new(boxData.Center.X, boxData.BottomLeft.Y + 4)
+    else
+        objects.Health.Visible = false
+    end
+    if ESP.Distance then
+        objects.Distance.Visible = true
+        objects.Distance.Text = string.format("%.0fm", distance)
+        objects.Distance.Size = ESP.TextSize - 2
+        objects.Distance.Color = ESP.DistanceColor
+        objects.Distance.Position = Vector2.new(boxData.Center.X, boxData.BottomLeft.Y + (ESP.Health and 18 or 4))
+    else
+        objects.Distance.Visible = false
+    end
+    if ESP.Box3D then
+        local corners = Utils.Get3DCorners(character)
+        if corners then
+            local edges = {
+                {1, 2}, {2, 4}, {4, 3}, {3, 1},
+                {5, 6}, {6, 8}, {8, 7}, {7, 5},
+                {1, 5}, {2, 6}, {3, 7}, {4, 8}
+            }
+            for i, edge in ipairs(edges) do
+                local line = objects.Box3D[i]
+                if not line then
+                    line = CreateDrawing("Line", {
+                        Visible = false,
+                        Thickness = ESP.BoxThickness,
+                        Color = color,
+                        ZIndex = 1,
+                    })
+                    objects.Box3D[i] = line
+                end
+                local corner1 = corners[edge[1]]
+                local corner2 = corners[edge[2]]
+                if corner1 and corner2 and corner1.OnScreen and corner2.OnScreen then
+                    line.Visible = true
+                    line.From = corner1.Position
+                    line.To = corner2.Position
+                    line.Color = color
+                    line.Thickness = ESP.BoxThickness
+                else
+                    line.Visible = false
+                end
+            end
+            for i = #edges + 1, #objects.Box3D do
+                if objects.Box3D[i] then
+                    objects.Box3D[i].Visible = false
+                end
+            end
+        end
+    else
+        for _, line in pairs(objects.Box3D) do
+            if line then line.Visible = false end
+        end
+    end
+    if ESP.Skeleton then
+        local skeletonParts = {
+            {"Head", "UpperTorso"},
+            {"UpperTorso", "LowerTorso"},
+            {"UpperTorso", "LeftUpperArm"},
+            {"LeftUpperArm", "LeftLowerArm"},
+            {"LeftLowerArm", "LeftHand"},
+            {"UpperTorso", "RightUpperArm"},
+            {"RightUpperArm", "RightLowerArm"},
+            {"RightLowerArm", "RightHand"},
+            {"LowerTorso", "LeftUpperLeg"},
+            {"LeftUpperLeg", "LeftLowerLeg"},
+            {"LeftLowerLeg", "LeftFoot"},
+            {"LowerTorso", "RightUpperLeg"},
+            {"RightUpperLeg", "RightLowerLeg"},
+            {"RightLowerLeg", "RightFoot"},
+        }
+        local rigType = "R15"
+        local humanoid = Utils.GetHumanoid(character)
+        if humanoid then
+            rigType = tostring(humanoid.RigType)
+        end
+        if rigType == "Enum.HumanoidRigType.R6" then
+            skeletonParts = {
+                {"Head", "Torso"},
+                {"Torso", "Left Arm"},
+                {"Left Arm", "Left Leg"},
+                {"Torso", "Right Arm"},
+                {"Right Arm", "Right Leg"},
+                {"Torso", "Left Leg"},
+                {"Torso", "Right Leg"},
+            }
+        end
+        for i, partPair in ipairs(skeletonParts) do
+            local line = objects.Skeleton[i]
+            if not line then
+                line = CreateDrawing("Line", {
+                    Visible = false,
+                    Thickness = ESP.SkeletonThickness,
+                    Color = ESP.SkeletonColor,
+                    ZIndex = 1,
+                })
+                objects.Skeleton[i] = line
+            end
+            local part1 = character:FindFirstChild(partPair[1])
+            local part2 = character:FindFirstChild(partPair[2])
+            if part1 and part2 then
+                local pos1, onScreen1 = Camera:WorldToViewportPoint(part1.Position)
+                local pos2, onScreen2 = Camera:WorldToViewportPoint(part2.Position)
+                if onScreen1 and onScreen2 then
+                    line.Visible = true
+                    line.From = Vector2.new(pos1.X, pos1.Y)
+                    line.To = Vector2.new(pos2.X, pos2.Y)
+                    line.Color = ESP.SkeletonColor
+                    line.Thickness = ESP.SkeletonThickness
+                else
+                    line.Visible = false
+                end
+            else
+                line.Visible = false
+            end
+        end
+        for i = #skeletonParts + 1, #objects.Skeleton do
+            if objects.Skeleton[i] then
+                objects.Skeleton[i].Visible = false
+            end
+        end
+    else
+        for _, line in pairs(objects.Skeleton) do
+            if line then line.Visible = false end
+        end
+    end
+    if ESP.Chams then
+        if not objects.Chams or not objects.Chams.Parent then
+            objects.Chams = Instance.new("Highlight")
+            objects.Chams.Name = "Pouncing_ESP_Highlight"
+            objects.Chams.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            objects.Chams.FillColor = ESP.HighlightFillColor
+            objects.Chams.OutlineColor = ESP.HighlightOutlineColor
+            objects.Chams.FillTransparency = ESP.HighlightFillTransparency
+            objects.Chams.OutlineTransparency = ESP.HighlightOutlineTransparency
+            objects.Chams.Parent = character
+        end
+        objects.Chams.Enabled = true
+        objects.Chams.FillColor = ESP.HighlightFillColor
+        objects.Chams.OutlineColor = ESP.HighlightOutlineColor
+        objects.Chams.FillTransparency = ESP.HighlightFillTransparency
+        objects.Chams.OutlineTransparency = ESP.HighlightOutlineTransparency
+    else
+        if objects.Chams then
+            objects.Chams.Enabled = false
+        end
     end
 end
 
+local function ClearPlayer(player)
+    RemovePlayerObjects(player)
+end
+
+local function InitPlayer(player)
+    if player == LocalPlayer and not ESP.ShowLocalPlayer then return end
+    CreatePlayerObjects(player)
+    player.CharacterAdded:Connect(function(char)
+        task.wait(0.1)
+        if ESP.Chams then
+            local objects = PlayerObjects[player]
+            if objects then
+                if objects.Chams then
+                    pcall(function() objects.Chams:Destroy() end)
+                end
+                objects.Chams = Instance.new("Highlight")
+                objects.Chams.Name = "Pouncing_ESP_Highlight"
+                objects.Chams.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                objects.Chams.FillColor = ESP.HighlightFillColor
+                objects.Chams.OutlineColor = ESP.HighlightOutlineColor
+                objects.Chams.FillTransparency = ESP.HighlightFillTransparency
+                objects.Chams.OutlineTransparency = ESP.HighlightOutlineTransparency
+                objects.Chams.Parent = char
+            end
+        end
+    end)
+end
+
 local Module = {}
+Module.Name = "ESP"
+Module.Description = "Extra Sensory Perception - See players through walls"
+Module.Category = "Visual"
+Module.Version = "6.3"
+Module.Author = "Pouncing.exe"
 
 function Module.Init(manager)
-    for _, p in pairs(Players:GetPlayers()) do InitPlayer(p) end
+    for _, p in pairs(Players:GetPlayers()) do
+        InitPlayer(p)
+    end
     PlayerAddedConnection = Players.PlayerAdded:Connect(function(p)
         InitPlayer(p)
-        p.CharacterAdded:Connect(function()
-            task.wait(0.1)
-            if ESP.Chams then
-                local hl = Instance.new("Highlight")
-                hl.Name = "Pouncing_Highlight"
-                hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-                hl.Parent = p.Character
-            end
-        end)
     end)
     PlayerRemovingConnection = Players.PlayerRemoving:Connect(ClearPlayer)
+    RenderConnection = RunService.RenderStepped:Connect(function()
+        if not ESP.Enabled then
+            for _, objects in pairs(PlayerObjects) do
+                for _, obj in pairs(objects) do
+                    if typeof(obj) == "table" then
+                        for _, subObj in pairs(obj) do
+                            if subObj and subObj.Visible ~= nil then subObj.Visible = false end
+                        end
+                    elseif obj and obj.Visible ~= nil then
+                        obj.Visible = false
+                    elseif obj and typeof(obj) == "Instance" and obj:IsA("Highlight") then
+                        obj.Enabled = false
+                    end
+                end
+            end
+            return
+        end
+        for _, player in ipairs(Players:GetPlayers()) do
+            pcall(function() UpdatePlayer(player) end)
+        end
+    end)
 end
 
 function Module.Enable()
     ESP.Enabled = true
-    if not RenderConnection then RenderConnection = RunService.RenderStepped:Connect(ESPUpdate) end
+    print("[Pouncing] ESP Enabled")
 end
 
 function Module.Disable()
     ESP.Enabled = false
-    if RenderConnection then RenderConnection:Disconnect(); RenderConnection = nil end
-    for player, o in pairs(DrawingObjects) do
-        HideAll(o)
-        local c = player.Character
-        if c then local h = c:FindFirstChild("Pouncing_Highlight"); if h then h.Enabled = false end end
-    end
-end
-
-function Module.SetConfig(key, value)
-    if key:sub(1, 6) == "Color_" then
-        local colorKey = key:sub(7)
-        if ESP.Colors[colorKey] then
-            ESP.Colors[colorKey] = value
-            RefreshColors()
+    for _, objects in pairs(PlayerObjects) do
+        for _, obj in pairs(objects) do
+            if typeof(obj) == "table" then
+                for _, subObj in pairs(obj) do
+                    if subObj and subObj.Visible ~= nil then subObj.Visible = false end
+                end
+            elseif obj and obj.Visible ~= nil then
+                obj.Visible = false
+            elseif obj and typeof(obj) == "Instance" and obj:IsA("Highlight") then
+                obj.Enabled = false
+            end
         end
-    elseif key == "MaxDistance" then ESP.MaxDistance = value
-    elseif key == "TeamCheck" then ESP.TeamCheck = value
-    elseif key == "BoxThickness" then ESP.BoxThickness = value
-    elseif key == "TracerOrigin" then ESP.TracerOrigin = value
-    elseif key == "HeadDotThickness" then ESP.HeadDotThickness = value
-    elseif key == "HeadDotSize" then ESP.HeadDotSize = value
-    elseif key == "WeaponNames" then ESP.WeaponNames = value
-    elseif ESP[key] ~= nil then ESP[key] = value
+    end
+    print("[Pouncing] ESP Disabled")
+end
+
+function Module.Toggle()
+    if ESP.Enabled then
+        Module.Disable()
+    else
+        Module.Enable()
     end
 end
 
-function Module.GetConfig()
-    return ESP
+function Module.SetOption(option, value)
+    if ESP[option] ~= nil then
+        ESP[option] = value
+        print("[Pouncing] ESP option '" .. tostring(option) .. "' set to: " .. tostring(value))
+    else
+        warn("[Pouncing] Unknown ESP option: " .. tostring(option))
+    end
 end
 
-function Module.ResetConfig()
-    ESP.Enabled = false; ESP.Boxes = false; ESP.Box3D = false; ESP.Names = false; ESP.Distance = false; ESP.Health = false
-    ESP.Skeleton = false; ESP.Chams = false; ESP.Tracers = false; ESP.HeadDot = false; ESP.WeaponNames = false; ESP.TeamCheck = false
-    ESP.MaxDistance = 2000; ESP.BoxThickness = 1; ESP.TracerOrigin = 0.5; ESP.HeadDotThickness = 1; ESP.HeadDotSize = 0.5
-    ESP.Colors.Box = Color3.fromRGB(255, 105, 180); ESP.Colors.Name = Color3.fromRGB(255, 255, 255); ESP.Colors.Distance = Color3.fromRGB(200, 200, 200)
-    ESP.Colors.Health = Color3.fromRGB(0, 255, 100); ESP.Colors.Skeleton = Color3.fromRGB(255, 255, 255); ESP.Colors.ChamsFill = Color3.fromRGB(255, 105, 180)
-    ESP.Colors.ChamsOutline = Color3.fromRGB(255, 255, 255); ESP.Colors.Tracers = Color3.fromRGB(255, 105, 180); ESP.Colors.HeadDot = Color3.fromRGB(255, 255, 255)
-    RefreshColors()
+function Module.GetOption(option)
+    return ESP[option]
+end
+
+function Module.GetState()
+    return ESP.Enabled
 end
 
 function Module.Cleanup()
-    Module.Disable()
-    if PlayerAddedConnection then PlayerAddedConnection:Disconnect(); PlayerAddedConnection = nil end
-    if PlayerRemovingConnection then PlayerRemovingConnection:Disconnect(); PlayerRemovingConnection = nil end
-    for player, _ in pairs(DrawingObjects) do
+    if RenderConnection then
+        RenderConnection:Disconnect()
+        RenderConnection = nil
+    end
+    if PlayerAddedConnection then
+        PlayerAddedConnection:Disconnect()
+        PlayerAddedConnection = nil
+    end
+    if PlayerRemovingConnection then
+        PlayerRemovingConnection:Disconnect()
+        PlayerRemovingConnection = nil
+    end
+    for player, _ in pairs(PlayerObjects) do
         ClearPlayer(player)
     end
-    DrawingObjects = {}
+    PlayerObjects = {}
 end
 
 return Module
