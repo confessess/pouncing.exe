@@ -13,6 +13,7 @@ local LocalPlayer = Players.LocalPlayer
 local MainGUI = {}
 
 function MainGUI.Create(screenGui, moduleManager)
+    local uiToggleKey = Enum.KeyCode.RightShift
     local GUI = moduleManager:GetModule("Framework") or require(script.Parent.framework)
 
     local window = GUI.CreateWindow(screenGui, "Pouncing.exe", UDim2.new(0, 780, 0, 600))
@@ -529,7 +530,6 @@ function MainGUI.Create(screenGui, moduleManager)
     -- ============================================================
     -- UI Toggle System
     -- ============================================================
-    local uiToggleKey = Enum.KeyCode.RightShift
     UserInputService.InputBegan:Connect(function(input, gp)
         if gp then return end
         local isMatch = false
