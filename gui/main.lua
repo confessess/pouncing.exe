@@ -89,7 +89,7 @@ function MainGUI.Create(screenGui, moduleManager)
             end
         end
 
-        if window.ActiveTab then
+        if window.ActiveTab and TaggedTabs[window.ActiveTab] then
             local currentTab = TaggedTabs[window.ActiveTab]
             if currentTab and not ShouldShowForPreset(currentTab.presets) then
                 for _, name in ipairs(AllTabNames) do

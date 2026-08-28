@@ -1,6 +1,7 @@
--- Pouncing.exe | Utils Core v3.0
+-- Pouncing.exe | Utils Core v3.1
 -- Shared utilities + Unified Hook Manager
--- Added: FindPartOnRay hooks, __index hooks, handler priority system
+-- Fixed: pcall-wrapped Workspace method replacement (prevents Install crash)
+-- Fixed: nil ActiveTab guard in preset visibility
 -- ============================================================
 
 local Workspace = game:GetService("Workspace")
@@ -128,7 +129,7 @@ Utils.SkeletonConnections = {
 }
 
 -- ============================================================
--- UNIFIED HOOK MANAGER v3.0
+-- UNIFIED HOOK MANAGER v3.1
 -- ============================================================
 local HookManager = {
     -- Raycast
@@ -208,23 +209,33 @@ function HookManager:Install()
 
     local LocalPlayer = Players.LocalPlayer
 
-    -- Raycast hook (direct function replacement)
-    local oldRaycast = Workspace.Raycast
-    self.OriginalRaycast = oldRaycast
-    Workspace.Raycast = function(ws, origin, direction, params, ...)
-        local finalOrigin, finalDirection, finalParams = origin, direction, params
-        for _, entry in ipairs(GetSortedHandlers(self.RaycastHandlers)) do
-            local ok, newOrigin, newDirection, newParams = pcall(entry.handler, finalOrigin, finalDirection, finalParams)
-            if ok and newOrigin ~= nil then
-                finalOrigin = newOrigin
-                finalDirection = newDirection or finalDirection
-                finalParams = newParams or finalParams
+    -- Raycast hook (direct function replacement) — WRAPPED IN PCALL
+    -- If direct assignment fails (e.g., Raycast not exposed as settable property),
+    -- the __namecall hook below will still catch workspace:Raycast() calls.
+    local okRaycast, oldRaycast = pcall(function() return Workspace.Raycast end)
+    if okRaycast and oldRaycast then
+        self.OriginalRaycast = oldRaycast
+        local okSet = pcall(function()
+            Workspace.Raycast = function(ws, origin, direction, params, ...)
+                local finalOrigin, finalDirection, finalParams = origin, direction, params
+                for _, entry in ipairs(GetSortedHandlers(self.RaycastHandlers)) do
+                    local ok, newOrigin, newDirection, newParams = pcall(entry.handler, finalOrigin, finalDirection, finalParams)
+                    if ok and newOrigin ~= nil then
+                        finalOrigin = newOrigin
+                        finalDirection = newDirection or finalDirection
+                        finalParams = newParams or finalParams
+                    end
+                end
+                return oldRaycast(ws, finalOrigin, finalDirection, finalParams, ...)
             end
+        end)
+        if not okSet then
+            warn("[Pouncing HookManager] Direct Raycast hook failed, falling back to __namecall only")
+            self.OriginalRaycast = nil
         end
-        return oldRaycast(ws, finalOrigin, finalDirection, finalParams, ...)
     end
 
-    -- FindPartOnRay hooks
+    -- FindPartOnRay hooks — WRAPPED IN PCALL
     local function HookFindPartOnRay(methodName, original)
         if not original then return nil end
         return function(ws, ray, ...)
@@ -239,15 +250,24 @@ function HookManager:Install()
         end
     end
 
-    self.OriginalFindPartOnRay = Workspace.FindPartOnRay
-    self.OriginalFindPartOnRayWithIgnoreList = Workspace.FindPartOnRayWithIgnoreList
-    self.OriginalFindPartOnRayWithWhitelist = Workspace.FindPartOnRayWithWhitelist
+    local okFPR, oldFPR = pcall(function() return Workspace.FindPartOnRay end)
+    local okFPRIL, oldFPRIL = pcall(function() return Workspace.FindPartOnRayWithIgnoreList end)
+    local okFPRWL, oldFPRWL = pcall(function() return Workspace.FindPartOnRayWithWhitelist end)
 
-    Workspace.FindPartOnRay = HookFindPartOnRay("FindPartOnRay", self.OriginalFindPartOnRay)
-    Workspace.FindPartOnRayWithIgnoreList = HookFindPartOnRay("FindPartOnRayWithIgnoreList", self.OriginalFindPartOnRayWithIgnoreList)
-    Workspace.FindPartOnRayWithWhitelist = HookFindPartOnRay("FindPartOnRayWithWhitelist", self.OriginalFindPartOnRayWithWhitelist)
+    if okFPR and oldFPR then
+        self.OriginalFindPartOnRay = oldFPR
+        pcall(function() Workspace.FindPartOnRay = HookFindPartOnRay("FindPartOnRay", oldFPR) end)
+    end
+    if okFPRIL and oldFPRIL then
+        self.OriginalFindPartOnRayWithIgnoreList = oldFPRIL
+        pcall(function() Workspace.FindPartOnRayWithIgnoreList = HookFindPartOnRay("FindPartOnRayWithIgnoreList", oldFPRIL) end)
+    end
+    if okFPRWL and oldFPRWL then
+        self.OriginalFindPartOnRayWithWhitelist = oldFPRWL
+        pcall(function() Workspace.FindPartOnRayWithWhitelist = HookFindPartOnRay("FindPartOnRayWithWhitelist", oldFPRWL) end)
+    end
 
-    -- __namecall hook
+    -- __namecall hook — THIS IS THE CRITICAL ONE
     local ok, mt = pcall(getrawmetatable, game)
     if ok and mt then
         self.Mt = mt
@@ -262,22 +282,22 @@ function HookManager:Install()
 
                 if method == "FireServer" or method == "InvokeServer" then
                     for _, entry in ipairs(GetSortedHandlers(self.NamecallHandlers)) do
-                        local ok, newArgs, wasModified = pcall(entry.handler, args, method, self_obj)
-                        if ok and newArgs then
+                        local ok2, newArgs, wasModified = pcall(entry.handler, args, method, self_obj)
+                        if ok2 and newArgs then
                             args = newArgs
                             if wasModified then modified = true end
                         end
                     end
                 end
 
-                -- Also catch FindPartOnRay via __namecall
+                -- Catch FindPartOnRay via __namecall
                 if method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
                     local ray = args[1]
                     if ray and typeof(ray) == "Ray" then
                         local finalRay = ray
                         for _, entry in ipairs(GetSortedHandlers(self.FindPartOnRayHandlers)) do
-                            local ok, newRay = pcall(entry.handler, finalRay, method, unpack(args, 2))
-                            if ok and newRay ~= nil then
+                            local ok2, newRay = pcall(entry.handler, finalRay, method, unpack(args, 2))
+                            if ok2 and newRay ~= nil then
                                 finalRay = newRay
                             end
                         end
@@ -288,7 +308,7 @@ function HookManager:Install()
                     end
                 end
 
-                -- Catch Raycast via __namecall too
+                -- Catch Raycast via __namecall (fallback when direct hook fails)
                 if method == "Raycast" then
                     local origin = args[1]
                     local direction = args[2]
@@ -296,8 +316,8 @@ function HookManager:Install()
                     if origin and direction then
                         local finalOrigin, finalDirection, finalParams = origin, direction, params
                         for _, entry in ipairs(GetSortedHandlers(self.RaycastHandlers)) do
-                            local ok, newOrigin, newDirection, newParams = pcall(entry.handler, finalOrigin, finalDirection, finalParams)
-                            if ok and newOrigin ~= nil then
+                            local ok2, newOrigin, newDirection, newParams = pcall(entry.handler, finalOrigin, finalDirection, finalParams)
+                            if ok2 and newOrigin ~= nil then
                                 finalOrigin = newOrigin
                                 finalDirection = newDirection or finalDirection
                                 finalParams = newParams or finalParams
@@ -331,8 +351,8 @@ function HookManager:Install()
             setreadonly(mt2, false)
             mt2.__index = newcclosure(function(self_obj, key)
                 for _, entry in ipairs(GetSortedHandlers(self.IndexHandlers)) do
-                    local ok, result = pcall(entry.handler, self_obj, key)
-                    if ok and result ~= nil then
+                    local ok3, result = pcall(entry.handler, self_obj, key)
+                    if ok3 and result ~= nil then
                         return result
                     end
                 end
@@ -346,10 +366,18 @@ end
 function HookManager:Uninstall()
     if not self.Hooked then return end
 
-    if self.OriginalRaycast then Workspace.Raycast = self.OriginalRaycast end
-    if self.OriginalFindPartOnRay then Workspace.FindPartOnRay = self.OriginalFindPartOnRay end
-    if self.OriginalFindPartOnRayWithIgnoreList then Workspace.FindPartOnRayWithIgnoreList = self.OriginalFindPartOnRayWithIgnoreList end
-    if self.OriginalFindPartOnRayWithWhitelist then Workspace.FindPartOnRayWithWhitelist = self.OriginalFindPartOnRayWithWhitelist end
+    if self.OriginalRaycast then
+        pcall(function() Workspace.Raycast = self.OriginalRaycast end)
+    end
+    if self.OriginalFindPartOnRay then
+        pcall(function() Workspace.FindPartOnRay = self.OriginalFindPartOnRay end)
+    end
+    if self.OriginalFindPartOnRayWithIgnoreList then
+        pcall(function() Workspace.FindPartOnRayWithIgnoreList = self.OriginalFindPartOnRayWithIgnoreList end)
+    end
+    if self.OriginalFindPartOnRayWithWhitelist then
+        pcall(function() Workspace.FindPartOnRayWithWhitelist = self.OriginalFindPartOnRayWithWhitelist end)
+    end
 
     if self.Mt and self.OriginalNamecall then
         setreadonly(self.Mt, false)
