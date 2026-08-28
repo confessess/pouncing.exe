@@ -495,8 +495,16 @@ function MainGUI.Create(screenGui, moduleManager)
     end)
 
     GUI.CreateSeparator(CCon)
+    GUI.CreateSection(CCon, "UI Toggle")
+    local toggleKeyLabel = GUI.CreateLabel(CCon, "Toggle Key: RightShift", true)
+    GUI.CreateKeybind(CCon, "UI Toggle Key", Enum.KeyCode.RightShift, function(newKey)
+        uiToggleKey = newKey
+        toggleKeyLabel.Text = "Toggle Key: " .. (newKey.Name or tostring(newKey))
+    end)
+
+    GUI.CreateSeparator(CCon)
     GUI.CreateSection(CCon, "Info")
-    GUI.CreateLabel(CCon, "RightShift to toggle GUI", true)
+    GUI.CreateLabel(CCon, "Press UI Toggle Key to show/hide GUI", true)
     GUI.CreateLabel(CCon, "Modules load on-demand from GitHub", true)
     GUI.CreateLabel(CCon, "Theme presets: Pink | Icy | Stary", true)
     GUI.CreateLabel(CCon, "Cyberpunk HUD design v6.3", true)
@@ -519,10 +527,20 @@ function MainGUI.Create(screenGui, moduleManager)
     end
 
     -- ============================================================
-    -- RightShift toggle
+    -- UI Toggle System
     -- ============================================================
+    local uiToggleKey = Enum.KeyCode.RightShift
     UserInputService.InputBegan:Connect(function(input, gp)
-        if not gp and input.KeyCode == Enum.KeyCode.RightShift then
+        if gp then return end
+        local isMatch = false
+        if typeof(uiToggleKey) == "EnumItem" then
+            if uiToggleKey.EnumType == Enum.KeyCode and input.KeyCode == uiToggleKey then
+                isMatch = true
+            elseif uiToggleKey.EnumType == Enum.UserInputType and input.UserInputType == uiToggleKey then
+                isMatch = true
+            end
+        end
+        if isMatch then
             window.MainFrame.Visible = not window.MainFrame.Visible
         end
     end)
@@ -552,7 +570,7 @@ function MainGUI.Create(screenGui, moduleManager)
     NT.Size = UDim2.new(1, -16, 1, 0)
     NT.Position = UDim2.new(0, 8, 0, 0)
     NT.BackgroundTransparency = 1
-    NT.Text = "Pouncing.exe v6.3 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
+    NT.Text = "Pouncing.exe v6.3 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | UI Toggle: RightShift"
     NT.TextColor3 = GUI.Theme.SoftAccent
     NT.TextSize = 13
     NT.Font = Enum.Font.GothamSemibold
