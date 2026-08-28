@@ -1,6 +1,6 @@
--- Pouncing.exe | Aimbot Module v3.0
+-- Pouncing.exe | Aimbot Module v3.1
 -- Lock-on, silent aim, triggerbot, toggle, sticky target
--- Fixed: Sticky mode persistence, priority modes, smoothness curve
+-- Fixed: Sticky target now ONLY activates when aimbot is actively engaged
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -168,9 +168,16 @@ end
 -- Target selection
 -- ============================================================
 
+local function IsAimbotActive()
+    -- Sticky target only applies when aimbot is actively engaged
+    -- Active = holding aim key (Aiming) OR silent aim is on
+    return Config.Aiming or Config.SilentAim
+end
+
 local function GetBestTarget()
     -- Sticky mode: try to keep current target with relaxed validation
-    if Config.Enabled and Config.CurrentTarget then
+    -- ONLY when aimbot is actively engaged (holding key or silent aim on)
+    if Config.Enabled and Config.StickyTarget and Config.CurrentTarget and IsAimbotActive() then
         if IsTargetValidSticky(Config.CurrentTarget) then
             -- Update position and part reference
             local part = Config.CurrentTarget.Character:FindFirstChild(Config.CurrentTarget.Part.Name)
@@ -181,7 +188,7 @@ local function GetBestTarget()
                 return Config.CurrentTarget
             end
         else
-            -- Target failed sticky validation — start grace period
+            -- Target failed sticky validation -- start grace period
             if Config.StickyLostTime == 0 then
                 Config.StickyLostTime = tick()
             elseif tick() - Config.StickyLostTime < Config.StickyGracePeriod then
