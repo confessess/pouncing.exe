@@ -1,7 +1,7 @@
--- Pouncing.exe | Aimbot Module v5.0
+-- Pouncing.exe | Aimbot Module v6.0
 -- Lock-on, silent aim, triggerbot, toggle, sticky target
--- Silent Aim: Post-execution FindPartOnRay + Raycast + __namecall + Mouse.Hit
--- Arsenal-ready: lets original raycast run, then replaces miss with target hit
+-- Silent Aim: Camera Snap (primary) + Mouse.Hit + Raycast + __namecall
+-- FOV capped at 100, visual circle bounded
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -21,7 +21,7 @@ local Config = {
     Triggerbot = false,
     TeamCheck = false,
     WallCheck = false,
-    FOV = 120,
+    FOV = 60,
     Smoothness = 15,
     MaxDistance = 1000,
     TriggerDelay = 50,
@@ -36,7 +36,7 @@ local Config = {
     HitChance = 100,
     LegitMode = false,
     LegitThreshold = 30,
-    WeaponOnly = false,
+    SnapDuration = 2, -- frames to keep camera snapped
 
     -- Visuals
     FOVColor = Color3.fromRGB(255, 105, 180),
@@ -49,6 +49,7 @@ local Config = {
     StickyLostTime = 0,
     StickyGracePeriod = 0.6,
     LastClickTime = 0,
+    SnapRestorePending = false,
 }
 
 local RenderConnection = nil
@@ -111,7 +112,9 @@ local function GetFOVRadiusPixels()
     local fovAngle = math.rad(Config.FOV / 2)
     local camFov = math.rad(Camera.FieldOfView / 2)
     if camFov <= 0 then return 9999 end
-    return math.tan(fovAngle) / math.tan(camFov) * (Camera.ViewportSize.Y / 2)
+    local radius = math.tan(fovAngle) / math.tan(camFov) * (Camera.ViewportSize.Y / 2)
+    -- Cap visual radius so it doesn't go off screen
+    return math.min(radius, Camera.ViewportSize.Y * 0.8)
 end
 
 local function IsInFOV(targetPos)
@@ -146,7 +149,6 @@ end
 local function GetSilentAimTarget()
     if not Config.SilentAim or not Config.Enabled then return nil end
 
-    -- Hit chance check
     if Config.HitChance < 100 and math.random(1, 100) > Config.HitChance then
         return nil
     end
@@ -173,7 +175,6 @@ local function GetSilentAimTarget()
 
         if not CanSee(targetPos, character) then continue end
 
-        -- Legit mode: only redirect if already close to crosshair
         if Config.LegitMode and fovDist > Config.LegitThreshold then
             continue
         end
@@ -211,49 +212,37 @@ local function AimAt(target)
 end
 
 -- ============================================================
--- Silent Aim: POST-EXECUTION FindPartOnRay Handler
--- This is the KEY for Arsenal: let the raycast run, then replace miss with target
+-- Silent Aim: CAMERA SNAP (Primary Method)
+-- Briefly snaps camera to target when firing, then restores
+-- This produces 100% legitimate rays for server validation
 -- ============================================================
 
-local function SilentAimFindPartOnRayPostHandler(result, ray, methodName, ...)
-    if not Config.SilentAim or not Config.Enabled then return nil end
+local function DoCameraSnap()
+    if not Config.SilentAim or not Config.Enabled then return end
+    if Config.Aiming then return end -- don't interfere with lock-on
+    if Config.SnapRestorePending then return end -- already snapping
 
     local target = GetSilentAimTarget()
-    if not target or not target.Part then return nil end
+    if not target or not target.Part then return end
 
-    -- result is a table from the original function: {part, position, normal, ...}
-    local hitPart = result[1]
+    local savedCF = Camera.CFrame
+    local aimPos = target.Position
 
-    -- If we already hit a valid enemy part, don't override
-    if hitPart and hitPart:IsA("BasePart") then
-        local hitModel = hitPart:FindFirstAncestorOfClass("Model")
-        if hitModel and hitModel ~= LocalPlayer.Character then
-            local hitPlayer = Players:GetPlayerFromCharacter(hitModel)
-            if hitPlayer and (not Config.TeamCheck or not IsTeammate(hitPlayer)) then
-                return nil -- already hitting an enemy, let it through
-            end
+    -- Snap camera to target
+    Camera.CFrame = CFrame.new(Camera.CFrame.Position, aimPos)
+    Config.SnapRestorePending = true
+
+    -- Restore after N frames
+    local frames = math.clamp(Config.SnapDuration, 1, 10)
+    task.defer(function()
+        for i = 1, frames do
+            RunService.RenderStepped:Wait()
         end
-    end
-
-    -- Replace miss / wall / teammate hit with target
-    local aimPos = target.Position
-    local normal = (ray.Origin - aimPos).Unit
-
-    return {target.Part, aimPos, normal}
-end
-
--- ============================================================
--- Silent Aim: Raycast Handler (pre-execution)
--- ============================================================
-
-local function SilentAimRaycastHandler(origin, direction, params)
-    if not Config.SilentAim or not Config.Enabled then return nil end
-
-    local target = GetSilentAimTarget()
-    if not target or not target.Part then return nil end
-
-    local aimPos = target.Position
-    return origin, aimPos - origin, params
+        if Config.Enabled then
+            Camera.CFrame = savedCF
+        end
+        Config.SnapRestorePending = false
+    end)
 end
 
 -- ============================================================
@@ -276,6 +265,48 @@ local function SilentAimIndexHandler(self_obj, key)
     end
 
     return nil
+end
+
+-- ============================================================
+-- Silent Aim: Raycast Handler (pre-execution)
+-- ============================================================
+
+local function SilentAimRaycastHandler(origin, direction, params)
+    if not Config.SilentAim or not Config.Enabled then return nil end
+
+    local target = GetSilentAimTarget()
+    if not target or not target.Part then return nil end
+
+    local aimPos = target.Position
+    return origin, aimPos - origin, params
+end
+
+-- ============================================================
+-- Silent Aim: FindPartOnRay POST-Execution Handler
+-- ============================================================
+
+local function SilentAimFindPartOnRayPostHandler(result, ray, methodName, ...)
+    if not Config.SilentAim or not Config.Enabled then return nil end
+
+    local target = GetSilentAimTarget()
+    if not target or not target.Part then return nil end
+
+    local hitPart = result[1]
+
+    -- If already hitting an enemy, don't override
+    if hitPart and hitPart:IsA("BasePart") then
+        local hitModel = hitPart:FindFirstAncestorOfClass("Model")
+        if hitModel and hitModel ~= LocalPlayer.Character then
+            local hitPlayer = Players:GetPlayerFromCharacter(hitModel)
+            if hitPlayer and (not Config.TeamCheck or not IsTeammate(hitPlayer)) then
+                return nil
+            end
+        end
+    end
+
+    local aimPos = target.Position
+    local normal = (ray.Origin - aimPos).Unit
+    return {target.Part, aimPos, normal}
 end
 
 -- ============================================================
@@ -598,7 +629,7 @@ local function OnRenderStep()
 
     if target then
         if Config.SilentAim then
-            -- Silent aim handles aiming via hooks
+            -- Silent aim uses camera snap + hooks
         elseif Config.Aiming then
             AimAt(target)
         end
@@ -618,9 +649,13 @@ end
 
 local function OnInputBegan(input, gp)
     if gp then return end
+
+    -- CAMERA SNAP SILENT AIM: trigger on mouse click
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         Config.LastClickTime = tick()
+        DoCameraSnap()
     end
+
     if input.UserInputType == Config.AimKey or input.KeyCode == Config.AimKey then
         if Config.ToggleMode then
             Config.Aiming = not Config.Aiming
@@ -670,8 +705,8 @@ end
 function Module.Enable()
     Config.Enabled = true
     if Config.SilentAim and Utils and Utils.HookManager then
-        Utils.HookManager:RegisterFindPartOnRayPostHandler("Aimbot", SilentAimFindPartOnRayPostHandler, 10)
         Utils.HookManager:RegisterRaycastHandler("Aimbot", SilentAimRaycastHandler, 10)
+        Utils.HookManager:RegisterFindPartOnRayPostHandler("Aimbot", SilentAimFindPartOnRayPostHandler, 10)
         Utils.HookManager:RegisterNamecallHandler("Aimbot", SilentAimNamecallHandler, 10)
         Utils.HookManager:RegisterIndexHandler("Aimbot", SilentAimIndexHandler, 10)
         Utils.HookManager:Install()
@@ -686,9 +721,10 @@ function Module.Disable()
     Config.Aiming = false
     Config.CurrentTarget = nil
     Config.StickyLostTime = 0
+    Config.SnapRestorePending = false
     if Utils and Utils.HookManager then
-        Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
         Utils.HookManager:UnregisterRaycastHandler("Aimbot")
+        Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
         Utils.HookManager:UnregisterNamecallHandler("Aimbot")
         Utils.HookManager:UnregisterIndexHandler("Aimbot")
     end
@@ -705,14 +741,14 @@ function Module.SetConfig(key, value)
         Config.SilentAim = value
         if Config.Enabled and Utils and Utils.HookManager then
             if value then
-                Utils.HookManager:RegisterFindPartOnRayPostHandler("Aimbot", SilentAimFindPartOnRayPostHandler, 10)
                 Utils.HookManager:RegisterRaycastHandler("Aimbot", SilentAimRaycastHandler, 10)
+                Utils.HookManager:RegisterFindPartOnRayPostHandler("Aimbot", SilentAimFindPartOnRayPostHandler, 10)
                 Utils.HookManager:RegisterNamecallHandler("Aimbot", SilentAimNamecallHandler, 10)
                 Utils.HookManager:RegisterIndexHandler("Aimbot", SilentAimIndexHandler, 10)
                 Utils.HookManager:Install()
             else
-                Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
                 Utils.HookManager:UnregisterRaycastHandler("Aimbot")
+                Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
                 Utils.HookManager:UnregisterNamecallHandler("Aimbot")
                 Utils.HookManager:UnregisterIndexHandler("Aimbot")
             end
@@ -720,7 +756,7 @@ function Module.SetConfig(key, value)
     elseif key == "Triggerbot" then Config.Triggerbot = value
     elseif key == "TeamCheck" then Config.TeamCheck = value
     elseif key == "WallCheck" then Config.WallCheck = value
-    elseif key == "FOV" then Config.FOV = math.clamp(value, 10, 360)
+    elseif key == "FOV" then Config.FOV = math.clamp(value, 10, 100)
     elseif key == "Smoothness" then Config.Smoothness = math.clamp(value, 0, 100)
     elseif key == "MaxDistance" then Config.MaxDistance = math.clamp(value, 50, 5000)
     elseif key == "TriggerDelay" then Config.TriggerDelay = math.clamp(value, 0, 5000)
@@ -735,7 +771,7 @@ function Module.SetConfig(key, value)
     elseif key == "HitChance" then Config.HitChance = math.clamp(value, 0, 100)
     elseif key == "LegitMode" then Config.LegitMode = value
     elseif key == "LegitThreshold" then Config.LegitThreshold = value
-    elseif key == "WeaponOnly" then Config.WeaponOnly = value
+    elseif key == "SnapDuration" then Config.SnapDuration = math.clamp(value, 1, 10)
     elseif key == "FOVColor" then 
         Config.FOVColor = value
         if FOVCircle then FOVCircle.Color = value end
@@ -753,7 +789,7 @@ function Module.ResetConfig()
     Config.Triggerbot = false
     Config.TeamCheck = false
     Config.WallCheck = false
-    Config.FOV = 120
+    Config.FOV = 60
     Config.Smoothness = 15
     Config.MaxDistance = 1000
     Config.TriggerDelay = 50
@@ -769,12 +805,13 @@ function Module.ResetConfig()
     Config.HitChance = 100
     Config.LegitMode = false
     Config.LegitThreshold = 30
-    Config.WeaponOnly = false
+    Config.SnapDuration = 2
     Config.FOVColor = Color3.fromRGB(255, 105, 180)
     Config.ShowFOV = true
+    Config.SnapRestorePending = false
     if Utils and Utils.HookManager then
-        Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
         Utils.HookManager:UnregisterRaycastHandler("Aimbot")
+        Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
         Utils.HookManager:UnregisterNamecallHandler("Aimbot")
         Utils.HookManager:UnregisterIndexHandler("Aimbot")
     end

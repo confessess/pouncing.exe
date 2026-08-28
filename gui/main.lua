@@ -26,6 +26,7 @@ function MainGUI.Create(screenGui, moduleManager)
         {Name = "Gun", Icon = ""},
         {Name = "Misc", Icon = ""},
         {Name = "Hitbox", Icon = ""},
+        {Name = "Da Hood", Icon = ""},
         {Name = "Settings", Icon = ""}
     }
     for _, tabInfo in ipairs(tabDefs) do
@@ -45,17 +46,9 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("SilentAim", v) end
     end)
-    GUI.CreateToggle(ACon, "Weapon Only", true, nil, function(v)
-        local mod = moduleManager:GetModule("Aimbot")
-        if mod and mod.SetConfig then mod.SetConfig("WeaponOnly", v) end
-    end)
     GUI.CreateToggle(ACon, "Legit Mode", false, nil, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("LegitMode", v) end
-    end)
-    GUI.CreateDropdown(ACon, "Silent Aim Mode", {"Raycast", "Mouse", "Hybrid"}, "Raycast", function(v)
-        local mod = moduleManager:GetModule("Aimbot")
-        if mod and mod.SetConfig then mod.SetConfig("SilentAimMode", v) end
     end)
     GUI.CreateSlider(ACon, "Hit Chance %", 0, 100, 100, function(v)
         local mod = moduleManager:GetModule("Aimbot")
@@ -64,6 +57,10 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateSlider(ACon, "Legit Threshold", 5, 100, 30, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("LegitThreshold", v) end
+    end)
+    GUI.CreateSlider(ACon, "Snap Duration (frames)", 1, 10, 2, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("SnapDuration", v) end
     end)
     GUI.CreateToggle(ACon, "Triggerbot", false, nil, function(v)
         local mod = moduleManager:GetModule("Aimbot")
@@ -80,7 +77,7 @@ function MainGUI.Create(screenGui, moduleManager)
 
     GUI.CreateSeparator(ACon)
     GUI.CreateSection(ACon, "Aimbot Settings")
-    GUI.CreateSlider(ACon, "FOV", 10, 360, 120, function(v)
+    GUI.CreateSlider(ACon, "FOV", 10, 100, 60, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("FOV", v) end
     end)
@@ -459,9 +456,109 @@ function MainGUI.Create(screenGui, moduleManager)
     end)
 
     -- ============================================================
+    -- DA HOOD EXTRAS TAB
+    -- ============================================================
+    local DCon = window.Contents["Da Hood"]
+
+    GUI.CreateSection(DCon, "Da Hood Tools")
+    GUI.CreateToggle(DCon, "Enabled", false, nil, function(v)
+        moduleManager:Toggle("DaHoodExtras", v)
+    end)
+    GUI.CreateToggle(DCon, "Knock Check", false, nil, function(v)
+        local mod = moduleManager:GetModule("DaHoodExtras")
+        if mod and mod.SetConfig then mod.SetConfig("KnockCheck", v) end
+    end)
+    GUI.CreateToggle(DCon, "HP Display", false, nil, function(v)
+        local mod = moduleManager:GetModule("DaHoodExtras")
+        if mod and mod.SetConfig then mod.SetConfig("HPDisplay", v) end
+    end)
+    GUI.CreateToggle(DCon, "Auto Stomp", false, nil, function(v)
+        local mod = moduleManager:GetModule("DaHoodExtras")
+        if mod and mod.SetConfig then mod.SetConfig("AutoStomp", v) end
+    end)
+    GUI.CreateToggle(DCon, "Auto Drop", false, nil, function(v)
+        local mod = moduleManager:GetModule("DaHoodExtras")
+        if mod and mod.SetConfig then mod.SetConfig("AutoDrop", v) end
+    end)
+
+    GUI.CreateSeparator(DCon)
+    GUI.CreateSection(DCon, "Settings")
+    GUI.CreateSlider(DCon, "Stomp Range", 2, 20, 8, function(v)
+        local mod = moduleManager:GetModule("DaHoodExtras")
+        if mod and mod.SetConfig then mod.SetConfig("StompRange", v) end
+    end)
+    GUI.CreateSlider(DCon, "Drop Amount", 100, 5000, 500, function(v)
+        local mod = moduleManager:GetModule("DaHoodExtras")
+        if mod and mod.SetConfig then mod.SetConfig("DropAmount", v) end
+    end)
+
+    -- ============================================================
     -- CONFIG TAB
     -- ============================================================
     local CCon = window.Contents["Settings"]
+
+    GUI.CreateSection(CCon, "Game Detection")
+    local gameName = "Universal"
+    local placeId = game.PlaceId
+    local detector = moduleManager:GetModule("GameDetector")
+    if not detector then
+        local s, d = pcall(function()
+            return require(script.Parent.Parent.games.detector)
+        end)
+        if s and d then
+            gameName = d.GetPresetName()
+            detector = d
+        end
+    else
+        gameName = detector.GetPresetName()
+    end
+
+    local detectedLabel = GUI.CreateLabel(CCon, "Detected Game: " .. gameName, false)
+    GUI.CreateLabel(CCon, "PlaceId: " .. tostring(placeId), true)
+
+    -- Manual game override dropdown
+    local selectedPreset = gameName
+    local presetDropdown, getPreset = GUI.CreateDropdown(CCon, "Manual Override", {"Auto-Detect", "Arsenal", "Da Hood", "Zee Hood", "Universal"}, "Auto-Detect", function(v)
+        if v == "Auto-Detect" then
+            selectedPreset = gameName
+        else
+            selectedPreset = v
+        end
+        detectedLabel.Text = "Active Preset: " .. selectedPreset
+        print("[Pouncing] Manual preset selected: " .. selectedPreset)
+    end)
+
+    GUI.CreateButton(CCon, "Load Selected Preset", function()
+        local presetName = selectedPreset
+        if presetName == "Auto-Detect" then presetName = gameName end
+
+        local s, preset = pcall(function()
+            return require(script.Parent.Parent.games.universal)
+        end)
+        if presetName == "Arsenal" then
+            s, preset = pcall(function()
+                return require(script.Parent.Parent.games.arsenal)
+            end)
+        elseif presetName == "Da Hood" or presetName == "Zee Hood" then
+            s, preset = pcall(function()
+                return require(script.Parent.Parent.games.da_hood)
+            end)
+        end
+        if s and preset and preset.Configs then
+            for modName, cfg in pairs(preset.Configs) do
+                local mod = moduleManager:GetModule(modName)
+                if mod and mod.SetConfig then
+                    for k, v in pairs(cfg) do
+                        pcall(function() mod.SetConfig(k, v) end)
+                    end
+                end
+            end
+            print("[Pouncing] Loaded " .. presetName .. " preset")
+        else
+            warn("[Pouncing] Failed to load preset for " .. presetName)
+        end
+    end)
+    GUI.CreateSeparator(CCon)
 
     GUI.CreateSection(CCon, "Config Management")
     GUI.CreateLabel(CCon, "Pouncing.exe v7.0", false)
@@ -586,6 +683,8 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateLabel(CCon, "Modules load on-demand from GitHub", true)
     GUI.CreateLabel(CCon, "Theme presets: Pink | Icy | Stary", true)
     GUI.CreateLabel(CCon, "Cyberpunk HUD design v7.0", true)
+    GUI.CreateLabel(CCon, "Game-specific presets", true)
+    GUI.CreateLabel(CCon, "Arsenal | Da Hood | Zee Hood | Universal", true)
     GUI.CreateLabel(CCon, "Contained star VFX for Stary", true)
     GUI.CreateLabel(CCon, "Contained snow VFX for Icy", true)
     GUI.CreateLabel(CCon, "Live theme switching", true)

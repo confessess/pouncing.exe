@@ -1,5 +1,6 @@
--- Pouncing.exe | Gun Module v2.1
+-- Pouncing.exe | Gun Module v2.2
 -- Weapon modifications and firing logic
+-- Fixed: AlwaysHeadshot now uses unified HookManager
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -10,11 +11,13 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
 
+local Utils = getfenv()["PouncingUtils"]
+
 local Config = {
     Enabled = false, AutoFire = false, NoRecoil = false, NoSpread = false,
     InstantReload = false, RapidFire = false, InfiniteAmmo = false, AlwaysHeadshot = false,
     FireRate = 50, DamageMult = 1, RecoilReduction = 100,
-    OriginalValues = {}, Connections = {}, AmmoHooks = {}, HeadshotHooked = false
+    OriginalValues = {}, Connections = {}, AmmoHooks = {}
 }
 
 local function GetCurrentTool()
@@ -106,40 +109,41 @@ local function RemoveInfiniteAmmo()
     Config.AmmoHooks = {}
 end
 
-local function SetupAlwaysHeadshot()
-    if Config.HeadshotHooked then return end
-    Config.HeadshotHooked = true
-    local mt = getrawmetatable(game)
-    if not mt then return end
-    local oldNamecall = mt.__namecall
-    setreadonly(mt, false)
-    mt.__namecall = newcclosure(function(self, ...)
-        local method = getnamecallmethod()
-        if Config.Enabled and Config.AlwaysHeadshot then
-            if method == "FireServer" or method == "InvokeServer" then
-                local args = {...}
-                if #args >= 2 and typeof(args[2]) == "Vector3" then
-                    for _, player in pairs(Players:GetPlayers()) do
-                        if player ~= LocalPlayer and player.Character then
-                            local head = player.Character:FindFirstChild("Head")
-                            if head then
-                                local dist = (args[2] - head.Position).Magnitude
-                                if dist < 10 then args[2] = head.Position; return oldNamecall(self, unpack(args)) end
-                            end
+-- ============================================================
+-- Always Headshot — HookManager Handler
+-- ============================================================
+
+local function GunNamecallHandler(args, method, self_obj)
+    if not Config.Enabled or not Config.AlwaysHeadshot then
+        return args, false
+    end
+
+    local modified = false
+    for i = 1, #args do
+        local arg = args[i]
+        if typeof(arg) == "Vector3" then
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= LocalPlayer and player.Character then
+                    local head = player.Character:FindFirstChild("Head")
+                    if head then
+                        local dist = (arg - head.Position).Magnitude
+                        if dist < 10 then
+                            args[i] = head.Position
+                            modified = true
+                            break
                         end
                     end
                 end
-                if #args >= 2 and typeof(args[2]) == "string" then
-                    if args[2]:lower():match("torso") or args[2]:lower():match("body") or args[2]:lower():match("limb") then
-                        args[2] = "Head"
-                        return oldNamecall(self, unpack(args))
-                    end
-                end
+            end
+        elseif typeof(arg) == "string" then
+            if arg:lower():match("torso") or arg:lower():match("body") or arg:lower():match("limb") then
+                args[i] = "Head"
+                modified = true
             end
         end
-        return oldNamecall(self, ...)
-    end)
-    setreadonly(mt, true)
+    end
+
+    return args, modified
 end
 
 local AutoFireConn = nil
@@ -189,7 +193,10 @@ function Module.Enable()
     if tool then ApplyGunMods(tool) end
     if Config.AutoFire and not AutoFireConn then AutoFireConn = RunService.RenderStepped:Connect(OnAutoFire) end
     if Config.InfiniteAmmo then SetupInfiniteAmmo() end
-    if Config.AlwaysHeadshot then SetupAlwaysHeadshot() end
+    if Config.AlwaysHeadshot and Utils and Utils.HookManager then
+        Utils.HookManager:RegisterNamecallHandler("Gun", GunNamecallHandler)
+        Utils.HookManager:Install()
+    end
     if not Config.Connections.InputBegan then
         Config.Connections.InputBegan = UserInputService.InputBegan:Connect(function(input, gp) if gp then return end; if input.UserInputType == Enum.UserInputType.MouseButton1 then MouseDown = true end end)
         Config.Connections.InputEnded = UserInputService.InputEnded:Connect(function(input, gp) if gp then return end; if input.UserInputType == Enum.UserInputType.MouseButton1 then MouseDown = false end end)
@@ -204,6 +211,9 @@ function Module.Disable()
     if AutoFireConn then AutoFireConn:Disconnect(); AutoFireConn = nil end
     for name, conn in pairs(Config.Connections) do conn:Disconnect() end
     Config.Connections = {}
+    if Utils and Utils.HookManager then
+        Utils.HookManager:UnregisterNamecallHandler("Gun")
+    end
 end
 
 function Module.SetConfig(key, value)
@@ -213,7 +223,16 @@ function Module.SetConfig(key, value)
     elseif key == "InstantReload" then Config.InstantReload = value
     elseif key == "RapidFire" then Config.RapidFire = value
     elseif key == "InfiniteAmmo" then Config.InfiniteAmmo = value; if Config.Enabled then if value then SetupInfiniteAmmo() else RemoveInfiniteAmmo() end end
-    elseif key == "AlwaysHeadshot" then Config.AlwaysHeadshot = value; if Config.Enabled and value then SetupAlwaysHeadshot() end
+    elseif key == "AlwaysHeadshot" then
+        Config.AlwaysHeadshot = value
+        if Config.Enabled and Utils and Utils.HookManager then
+            if value then
+                Utils.HookManager:RegisterNamecallHandler("Gun", GunNamecallHandler)
+                Utils.HookManager:Install()
+            else
+                Utils.HookManager:UnregisterNamecallHandler("Gun")
+            end
+        end
     elseif key == "FireRate" then Config.FireRate = value
     elseif key == "DamageMult" then Config.DamageMult = value
     elseif key == "RecoilReduction" then Config.RecoilReduction = value
@@ -226,6 +245,15 @@ function Module.GetConfig() return Config end
 function Module.ResetConfig()
     Config.Enabled = false; Config.AutoFire = false; Config.NoRecoil = false; Config.NoSpread = false; Config.InstantReload = false
     Config.RapidFire = false; Config.InfiniteAmmo = false; Config.AlwaysHeadshot = false; Config.FireRate = 50; Config.DamageMult = 1; Config.RecoilReduction = 100
+    if Utils and Utils.HookManager then
+        Utils.HookManager:UnregisterNamecallHandler("Gun")
+    end
+end
+
+function Module.Cleanup()
+    Module.Disable()
+    if ToolEquippedConn then ToolEquippedConn:Disconnect(); ToolEquippedConn = nil end
+    if ToolUnequippedConn then ToolUnequippedConn:Disconnect(); ToolUnequippedConn = nil end
 end
 
 return Module
