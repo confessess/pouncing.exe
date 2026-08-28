@@ -1,7 +1,8 @@
--- Pouncing.exe | Aimbot Module v7.2
--- Lock-on, silent aim, triggerbot, toggle, sticky target
--- Bullet Redirect: Mouse.Hit + Camera.CFrame + Raycast + FindPartOnRay + Remote deep-scan
--- Hitbox Expansion: continuous loop with proper thread management
+-- Pouncing.exe | Aimbot Module v7.4
+-- Silent Aim = Bullet Redirect. No separate toggle.
+-- Hooks: Raycast, FindPartOnRay (pre), __namecall remote args
+-- Hitbox: Malrand-style continuous expansion
+-- Removed dead __index hooks — Instance properties can't be hooked via Lua metatables
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -11,7 +12,6 @@ local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
-local Mouse = LocalPlayer:GetMouse()
 
 local Utils = getfenv()["PouncingUtils"]
 
@@ -32,26 +32,26 @@ local Config = {
     ToggleMode = false,
     StickyTarget = false,
 
-    -- Silent Aim
+    -- Silent Aim settings
     HitChance = 100,
     LegitMode = false,
     LegitThreshold = 30,
     SnapDuration = 2,
 
-    -- Bullet Redirect (universal hook-based silent aim)
-    BulletRedirect = false,
-
-    -- Arsenal Mode (legacy flag, kept for compatibility)
+    -- Arsenal Mode (for preset compatibility)
     ArsenalMode = false,
 
-    -- Arsenal Silent Aim (hitbox expansion)
+    -- Hitbox Expansion — Malrand exact
     ArsenalHitboxExpand = true,
     ArsenalHitboxSize = 13,
-    ArsenalHitboxParts = {"RightUpperLeg", "LeftUpperLeg", "HeadHB", "HumanoidRootPart", "Head", "UpperTorso"},
+    ArsenalHitboxParts = {"RightUpperLeg", "LeftUpperLeg", "HeadHB", "HumanoidRootPart"},
 
     -- Visuals
     FOVColor = Color3.fromRGB(255, 105, 180),
     ShowFOV = true,
+
+    -- Debug
+    DebugMode = false,
 
     -- Internal
     CurrentTarget = nil,
@@ -61,8 +61,6 @@ local Config = {
     StickyGracePeriod = 0.6,
     LastClickTime = 0,
     SnapRestorePending = false,
-
-    -- Arsenal hitbox storage
     ArsenalOriginalSizes = {},
 }
 
@@ -161,10 +159,20 @@ end
 -- Silent Aim: Target Selection
 -- ============================================================
 
+local CachedTarget = nil
+local CachedTargetTime = 0
+
 local function GetSilentAimTarget()
     if not Config.SilentAim or not Config.Enabled then return nil end
 
+    -- Cache target for 1 frame to avoid recomputing in every hook
+    if CachedTarget and (tick() - CachedTargetTime) < 0.016 then
+        return CachedTarget
+    end
+
     if Config.HitChance < 100 and math.random(1, 100) > Config.HitChance then
+        CachedTarget = nil
+        CachedTargetTime = tick()
         return nil
     end
 
@@ -206,6 +214,8 @@ local function GetSilentAimTarget()
         end
     end
 
+    CachedTarget = bestTarget
+    CachedTargetTime = tick()
     return bestTarget
 end
 
@@ -227,12 +237,12 @@ local function AimAt(target)
 end
 
 -- ============================================================
--- NON-REDIRECT: Camera Snap (fallback only)
+-- NON-REDIRECT: Camera Snap (fallback when Silent Aim is off)
 -- ============================================================
 
 local function DoCameraSnap()
-    if Config.ArsenalMode or Config.BulletRedirect then return end
-    if not Config.SilentAim or not Config.Enabled then return end
+    if Config.SilentAim then return end
+    if not Config.Enabled then return end
     if Config.Aiming then return end
     if Config.SnapRestorePending then return end
 
@@ -258,100 +268,40 @@ local function DoCameraSnap()
 end
 
 -- ============================================================
--- BULLET REDIRECT: Aggressive Hooks
+-- BULLET REDIRECT HOOKS
 -- ============================================================
 
 local function ShouldRedirect()
-    return Config.ArsenalMode or Config.BulletRedirect
-end
-
--- Mouse.Hit / Mouse.UnitRay / Mouse.Origin
-local function RedirectMouseHook(self_obj, key)
-    if not ShouldRedirect() then return nil end
-    if not Config.SilentAim or not Config.Enabled then return nil end
-    if self_obj ~= Mouse then return nil end
-
-    local target = GetSilentAimTarget()
-    if not target or not target.Part then return nil end
-
-    if key == "Hit" then
-        return CFrame.new(target.Position)
-    elseif key == "Target" then
-        return target.Part
-    elseif key == "TargetSurface" then
-        return Enum.NormalId.Top
-    elseif key == "UnitRay" then
-        local origin = Camera.CFrame.Position
-        return Ray.new(origin, (target.Position - origin).Unit)
-    elseif key == "Origin" then
-        return Camera.CFrame.Position
-    end
-
-    return nil
-end
-
--- Camera.CFrame — only redirect when game reads it for raycast context
-local LastCameraRead = 0
-local function RedirectCameraHook(self_obj, key)
-    if not ShouldRedirect() then return nil end
-    if not Config.SilentAim or not Config.Enabled then return nil end
-    if self_obj ~= Camera then return nil end
-    if key ~= "CFrame" then return nil end
-
-    -- Only redirect within 0.15s of a click (fire window)
-    if tick() - Config.LastClickTime > 0.15 then return nil end
-
-    local target = GetSilentAimTarget()
-    if not target or not target.Part then return nil end
-
-    LastCameraRead = tick()
-    -- Return camera at same position but looking at target
-    return CFrame.new(Camera.CFrame.Position, target.Position)
+    return Config.SilentAim and Config.Enabled
 end
 
 -- Raycast: redirect to target
 local function RedirectRaycastHandler(origin, direction, params)
     if not ShouldRedirect() then return nil end
-    if not Config.SilentAim or not Config.Enabled then return nil end
-
     local target = GetSilentAimTarget()
     if not target or not target.Part then return nil end
-
-    local aimPos = target.Position
-    return origin, aimPos - origin, params
+    if Config.DebugMode then
+        print("[Pouncing Aimbot] Raycast redirected to " .. target.Player.Name)
+    end
+    return origin, target.Position - origin, params
 end
 
--- FindPartOnRay POST: replace miss with target
-local function RedirectFindPartOnRayPostHandler(result, ray, methodName, ...)
+-- FindPartOnRay PRE-hook: replace ray direction to point at target
+local function RedirectFindPartOnRayHandler(ray, methodName, ...)
     if not ShouldRedirect() then return nil end
-    if not Config.SilentAim or not Config.Enabled then return nil end
-
     local target = GetSilentAimTarget()
     if not target or not target.Part then return nil end
-
-    local hitPart = result[1]
-
-    -- If already hitting an enemy, don't override
-    if hitPart and hitPart:IsA("BasePart") then
-        local hitModel = hitPart:FindFirstAncestorOfClass("Model")
-        if hitModel and hitModel ~= LocalPlayer.Character then
-            local hitPlayer = Players:GetPlayerFromCharacter(hitModel)
-            if hitPlayer and (not Config.TeamCheck or not IsTeammate(hitPlayer)) then
-                return nil
-            end
-        end
+    if Config.DebugMode then
+        print("[Pouncing Aimbot] FindPartOnRay redirected to " .. target.Player.Name)
     end
-
-    local aimPos = target.Position
-    local normal = (ray.Origin - aimPos).Unit
-    return {target.Part, aimPos, normal}
+    return Ray.new(ray.Origin, target.Position - ray.Origin)
 end
 
 -- __namecall deep scan for remotes
 local function IsHitPosition(pos)
     local camPos = Camera.CFrame.Position
     local d = (pos - camPos).Magnitude
-    return d > 0.5 and d < Config.MaxDistance * 2
+    return d > 0.5 and d < Config.MaxDistance * 3
 end
 
 local function DeepScanAndReplace(t, targetPos, targetPart)
@@ -397,7 +347,12 @@ end
 
 local function RedirectNamecallHandler(args, method, self_obj)
     if not ShouldRedirect() then return args, false end
-    if not Config.SilentAim or not Config.Enabled then return args, false end
+    if method ~= "FireServer" and method ~= "InvokeServer" then return args, false end
+
+    -- Only process RemoteEvent and RemoteFunction
+    local objType = typeof(self_obj)
+    if objType ~= "Instance" then return args, false end
+    if not (self_obj:IsA("RemoteEvent") or self_obj:IsA("RemoteFunction")) then return args, false end
 
     local target = GetSilentAimTarget()
     if not target or not target.Part then return args, false end
@@ -410,12 +365,14 @@ local function RedirectNamecallHandler(args, method, self_obj)
         local argType = typeof(arg)
 
         if argType == "Vector3" then
-            if IsHitPosition(arg) then
+            local dist = (arg - Camera.CFrame.Position).Magnitude
+            if dist > 0.5 and dist < Config.MaxDistance * 3 then
                 args[i] = aimPos
                 modified = true
             end
         elseif argType == "CFrame" then
-            if IsHitPosition(arg.Position) then
+            local dist = (arg.Position - Camera.CFrame.Position).Magnitude
+            if dist > 0.5 and dist < Config.MaxDistance * 3 then
                 args[i] = CFrame.new(aimPos)
                 modified = true
             end
@@ -425,8 +382,11 @@ local function RedirectNamecallHandler(args, method, self_obj)
         elseif argType == "Instance" and arg:IsA("BasePart") then
             local model = arg:FindFirstAncestorOfClass("Model")
             if model and model ~= LocalPlayer.Character then
-                args[i] = target.Part
-                modified = true
+                local plr = Players:GetPlayerFromCharacter(model)
+                if plr then
+                    args[i] = target.Part
+                    modified = true
+                end
             end
         elseif argType == "table" then
             if DeepScanAndReplace(arg, aimPos, target.Part) then
@@ -440,11 +400,15 @@ local function RedirectNamecallHandler(args, method, self_obj)
         end
     end
 
+    if modified and Config.DebugMode then
+        print("[Pouncing Aimbot] Remote " .. self_obj.Name .. ":" .. method .. " redirected to " .. target.Player.Name)
+    end
+
     return args, modified
 end
 
 -- ============================================================
--- HITBOX EXPANSION (Arsenal / Universal)
+-- HITBOX EXPANSION — Malrand Style
 -- ============================================================
 
 local function RestoreArsenalHitboxes(player)
@@ -498,7 +462,7 @@ local function ExpandArsenalHitboxes(player)
                 }
             end
             part.CanCollide = false
-            part.Transparency = 1
+            part.Transparency = 10
             part.Size = Vector3.new(Config.ArsenalHitboxSize, Config.ArsenalHitboxSize, Config.ArsenalHitboxSize)
         end
     end
@@ -516,24 +480,18 @@ local function OnArsenalHitboxLoop()
         ClearAllArsenalHitboxes()
         return
     end
-    -- Run for ArsenalMode OR BulletRedirect games
-    if not Config.ArsenalMode and not Config.BulletRedirect then
-        ClearAllArsenalHitboxes()
-        return
-    end
 
     for _, player in pairs(Players:GetPlayers()) do
         pcall(function() ExpandArsenalHitboxes(player) end)
     end
 end
 
--- Proper thread management for hitbox loop
 local function StartArsenalHitboxLoop()
     if ArsenalHitboxRunning then return end
     ArsenalHitboxRunning = true
     ArsenalHitboxThread = task.spawn(function()
         while ArsenalHitboxRunning do
-            if Config.Enabled and Config.ArsenalHitboxExpand and (Config.ArsenalMode or Config.BulletRedirect) then
+            if Config.Enabled and Config.ArsenalHitboxExpand then
                 OnArsenalHitboxLoop()
             else
                 ClearAllArsenalHitboxes()
@@ -773,7 +731,7 @@ local function OnRenderStep()
 
     if target then
         if Config.SilentAim then
-            -- Silent aim uses hooks (bullet redirect) or camera snap (fallback)
+            -- Silent aim uses hooks (bullet redirect)
         elseif Config.Aiming then
             AimAt(target)
         end
@@ -796,7 +754,7 @@ local function OnInputBegan(input, gp)
 
     if input.UserInputType == Enum.UserInputType.MouseButton1 then
         Config.LastClickTime = tick()
-        if not Config.ArsenalMode and not Config.BulletRedirect then
+        if not Config.SilentAim then
             DoCameraSnap()
         end
     end
@@ -850,16 +808,17 @@ end
 function Module.Enable()
     Config.Enabled = true
     if Config.SilentAim and Utils and Utils.HookManager then
-        Utils.HookManager:RegisterIndexHandler("Aimbot_Mouse", RedirectMouseHook, 10)
-        Utils.HookManager:RegisterIndexHandler("Aimbot_Camera", RedirectCameraHook, 9)
+        -- Working hooks: Raycast, FindPartOnRay (pre), __namecall remotes
         Utils.HookManager:RegisterRaycastHandler("Aimbot", RedirectRaycastHandler, 10)
-        Utils.HookManager:RegisterFindPartOnRayPostHandler("Aimbot", RedirectFindPartOnRayPostHandler, 10)
+        Utils.HookManager:RegisterFindPartOnRayHandler("Aimbot", RedirectFindPartOnRayHandler, 10)
         Utils.HookManager:RegisterNamecallHandler("Aimbot", RedirectNamecallHandler, 10)
         Utils.HookManager:Install()
+        if Config.DebugMode then
+            print("[Pouncing Aimbot] Hooks installed: Raycast, FindPartOnRay, Namecall")
+        end
     end
 
-    -- Start hitbox expansion loop
-    if Config.ArsenalHitboxExpand and (Config.ArsenalMode or Config.BulletRedirect) then
+    if Config.ArsenalHitboxExpand then
         StartArsenalHitboxLoop()
     end
 
@@ -875,10 +834,8 @@ function Module.Disable()
     Config.StickyLostTime = 0
     Config.SnapRestorePending = false
     if Utils and Utils.HookManager then
-        Utils.HookManager:UnregisterIndexHandler("Aimbot_Mouse")
-        Utils.HookManager:UnregisterIndexHandler("Aimbot_Camera")
         Utils.HookManager:UnregisterRaycastHandler("Aimbot")
-        Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
+        Utils.HookManager:UnregisterFindPartOnRayHandler("Aimbot")
         Utils.HookManager:UnregisterNamecallHandler("Aimbot")
     end
 
@@ -897,28 +854,14 @@ function Module.SetConfig(key, value)
         Config.SilentAim = value
         if Config.Enabled and Utils and Utils.HookManager then
             if value then
-                Utils.HookManager:RegisterIndexHandler("Aimbot_Mouse", RedirectMouseHook, 10)
-                Utils.HookManager:RegisterIndexHandler("Aimbot_Camera", RedirectCameraHook, 9)
                 Utils.HookManager:RegisterRaycastHandler("Aimbot", RedirectRaycastHandler, 10)
-                Utils.HookManager:RegisterFindPartOnRayPostHandler("Aimbot", RedirectFindPartOnRayPostHandler, 10)
+                Utils.HookManager:RegisterFindPartOnRayHandler("Aimbot", RedirectFindPartOnRayHandler, 10)
                 Utils.HookManager:RegisterNamecallHandler("Aimbot", RedirectNamecallHandler, 10)
                 Utils.HookManager:Install()
             else
-                Utils.HookManager:UnregisterIndexHandler("Aimbot_Mouse")
-                Utils.HookManager:UnregisterIndexHandler("Aimbot_Camera")
                 Utils.HookManager:UnregisterRaycastHandler("Aimbot")
-                Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
+                Utils.HookManager:UnregisterFindPartOnRayHandler("Aimbot")
                 Utils.HookManager:UnregisterNamecallHandler("Aimbot")
-            end
-        end
-    elseif key == "BulletRedirect" then
-        Config.BulletRedirect = value
-        -- Manage hitbox loop when BulletRedirect toggles
-        if Config.Enabled then
-            if value and Config.ArsenalHitboxExpand then
-                StartArsenalHitboxLoop()
-            elseif not value and not Config.ArsenalMode then
-                StopArsenalHitboxLoop()
             end
         end
     elseif key == "Triggerbot" then Config.Triggerbot = value
@@ -942,16 +885,10 @@ function Module.SetConfig(key, value)
     elseif key == "SnapDuration" then Config.SnapDuration = math.clamp(value, 1, 10)
     elseif key == "ArsenalMode" then 
         Config.ArsenalMode = value
-        if Config.Enabled then
-            if value and Config.ArsenalHitboxExpand then
-                StartArsenalHitboxLoop()
-            elseif not value and not Config.BulletRedirect then
-                StopArsenalHitboxLoop()
-            end
-        end
+        -- Legacy flag, no longer gates hitbox expander
     elseif key == "ArsenalHitboxExpand" then
         Config.ArsenalHitboxExpand = value
-        if Config.Enabled and (Config.ArsenalMode or Config.BulletRedirect) then
+        if Config.Enabled then
             if value then
                 StartArsenalHitboxLoop()
             else
@@ -964,6 +901,7 @@ function Module.SetConfig(key, value)
         Config.FOVColor = value
         if FOVCircle then FOVCircle.Color = value end
     elseif key == "ShowFOV" then Config.ShowFOV = value
+    elseif key == "DebugMode" then Config.DebugMode = value
     end
 end
 
@@ -974,7 +912,6 @@ end
 function Module.ResetConfig()
     Config.Enabled = false
     Config.SilentAim = false
-    Config.BulletRedirect = false
     Config.Triggerbot = false
     Config.TeamCheck = false
     Config.WallCheck = false
@@ -1001,12 +938,11 @@ function Module.ResetConfig()
     Config.FOVColor = Color3.fromRGB(255, 105, 180)
     Config.ShowFOV = true
     Config.SnapRestorePending = false
+    Config.DebugMode = false
     StopArsenalHitboxLoop()
     if Utils and Utils.HookManager then
-        Utils.HookManager:UnregisterIndexHandler("Aimbot_Mouse")
-        Utils.HookManager:UnregisterIndexHandler("Aimbot_Camera")
         Utils.HookManager:UnregisterRaycastHandler("Aimbot")
-        Utils.HookManager:UnregisterFindPartOnRayPostHandler("Aimbot")
+        Utils.HookManager:UnregisterFindPartOnRayHandler("Aimbot")
         Utils.HookManager:UnregisterNamecallHandler("Aimbot")
     end
 end

@@ -1,5 +1,4 @@
--- Pouncing.exe | Da Hood / Zee Hood Preset v1.0
--- Optimized for hood games: lock-on aimbot + ESP + hitbox
+-- Pouncing.exe | Da Hood / Zee Hood Preset v1.2
 -- ============================================================
 
 return {
@@ -7,7 +6,6 @@ return {
         Aimbot = {
             Enabled = true,
             SilentAim = false,
-            BulletRedirect = false,
             ArsenalMode = false,
             TeamCheck = true,
             WallCheck = true,

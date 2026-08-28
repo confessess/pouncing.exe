@@ -1,13 +1,12 @@
--- Pouncing.exe | Arsenal Preset v1.0
--- Optimized for Arsenal: bullet redirect silent aim + hitbox expand
+-- Pouncing.exe | Arsenal Preset v1.2
+-- Silent Aim = Bullet Redirect. No separate flag needed.
 -- ============================================================
 
 return {
     Configs = {
         Aimbot = {
             Enabled = true,
-            SilentAim = true,
-            BulletRedirect = true,
+            SilentAim = true,           -- this IS bullet redirect now
             ArsenalMode = true,
             ArsenalHitboxExpand = true,
             ArsenalHitboxSize = 13,

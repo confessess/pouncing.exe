@@ -159,13 +159,6 @@ function MainGUI.Create(screenGui, moduleManager)
     end)
     TagControl(silentAimToggle, {"aim"})
 
-    -- NEW: Bullet Redirect toggle (universal hook-based silent aim)
-    local bulletRedirectToggle = GUI.CreateToggle(ACon, "Bullet Redirect", false, nil, function(v)
-        local mod = moduleManager:GetModule("Aimbot")
-        if mod and mod.SetConfig then mod.SetConfig("BulletRedirect", v) end
-    end)
-    TagControl(bulletRedirectToggle, {"aim"})
-
     -- Arsenal-only: Hitbox Expand
     local hitboxExpandToggle = GUI.CreateToggle(ACon, "Hitbox Expand", true, nil, function(v)
         local mod = moduleManager:GetModule("Aimbot")
