@@ -1,6 +1,6 @@
--- Pouncing.exe | Misc Module v3.0
+-- Pouncing.exe | Misc Module v3.1
 -- Movement, visual, combat tweaks + fly methods
--- Fixed: FlyMethod switch auto-restarts if was flying
+-- Fixed: Only Tween/Velocity/CFrame fly. Input boxes honor true values up to 500.
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -25,7 +25,6 @@ local Config = {
     State = {
         Jumping = false, StrafeDir = 1, LastSwitch = 0,
         Flying = false, NoClipping = false,
-        FlyLinearVelocity = nil, FlyAttachment = nil,
     }
 }
 
@@ -122,7 +121,6 @@ local function StartFly_Tween()
         hum.AutoRotate = false
     end
     Config.State.Flying = true
-    Config.State.FlyTweenTarget = nil
 end
 
 local function DoFly_Tween()
@@ -154,62 +152,9 @@ local function StopFly_Tween()
         end
     end
     Config.State.Flying = false
-    Config.State.FlyTweenTarget = nil
 end
 
--- ── Method 2: Humanoid (stealth — uses native movement) ──
-local function StartFly_Humanoid()
-    if Config.State.Flying then return end
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    if Config.OriginalValues.WalkSpeed == nil then Config.OriginalValues.WalkSpeed = hum.WalkSpeed end
-    if Config.OriginalValues.JumpPower == nil then Config.OriginalValues.JumpPower = hum.JumpPower end
-    hum.WalkSpeed = Config.FlySpeed
-    hum.JumpPower = 0
-    Config.State.Flying = true
-end
-
-local function DoFly_Humanoid()
-    if not Config.State.Flying then return end
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    local moveDir = Vector3.new(0, 0, 0)
-    if UserInputService:IsKeyDown(Enum.KeyCode.W) then moveDir = moveDir + Vector3.new(0, 0, -1) end
-    if UserInputService:IsKeyDown(Enum.KeyCode.S) then moveDir = moveDir + Vector3.new(0, 0, 1) end
-    if UserInputService:IsKeyDown(Enum.KeyCode.A) then moveDir = moveDir + Vector3.new(-1, 0, 0) end
-    if UserInputService:IsKeyDown(Enum.KeyCode.D) then moveDir = moveDir + Vector3.new(1, 0, 0) end
-    hum:Move(moveDir, true)
-    if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-        root.Velocity = Vector3.new(root.Velocity.X, math.clamp(Config.FlySpeed * 0.6, 10, 80), root.Velocity.Z)
-    elseif UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-        root.Velocity = Vector3.new(root.Velocity.X, math.clamp(-Config.FlySpeed * 0.6, -80, -10), root.Velocity.Z)
-    else
-        root.Velocity = Vector3.new(root.Velocity.X, 0, root.Velocity.Z)
-    end
-end
-
-local function StopFly_Humanoid()
-    if not Config.State.Flying then return end
-    local char = LocalPlayer.Character
-    if char then
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            if Config.OriginalValues.WalkSpeed ~= nil then hum.WalkSpeed = Config.OriginalValues.WalkSpeed end
-            if Config.OriginalValues.JumpPower ~= nil then hum.JumpPower = Config.OriginalValues.JumpPower end
-        end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if root then root.Velocity = Vector3.new(root.Velocity.X, 0, root.Velocity.Z) end
-    end
-    Config.State.Flying = false
-end
-
--- ── Method 3: Velocity (physics-based, no instances) ──
+-- ── Method 2: Velocity (physics-based, no instances) ──
 local function StartFly_Velocity()
     if Config.State.Flying then return end
     local char = LocalPlayer.Character
@@ -253,63 +198,7 @@ local function StopFly_Velocity()
     Config.State.Flying = false
 end
 
--- ── Method 4: LinearVelocity constraint ──
-local function StartFly_LinearVelocity()
-    if Config.State.Flying then return end
-    local char = LocalPlayer.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        hum.PlatformStand = true
-        hum.AutoRotate = false
-    end
-    local attachment = root:FindFirstChild("RootAttachment") or root:FindFirstChildOfClass("Attachment")
-    if not attachment then
-        attachment = Instance.new("Attachment")
-        attachment.Name = "PouncingFlyAttachment"
-        attachment.Parent = root
-    end
-    Config.State.FlyAttachment = attachment
-    local linVel = Instance.new("LinearVelocity")
-    linVel.Attachment0 = attachment
-    linVel.MaxForce = math.huge
-    linVel.VectorVelocity = Vector3.new(0, 0, 0)
-    linVel.Parent = root
-    Config.State.FlyLinearVelocity = linVel
-    Config.State.Flying = true
-end
-
-local function DoFly_LinearVelocity()
-    if not Config.State.Flying then return end
-    if Config.State.FlyLinearVelocity then
-        Config.State.FlyLinearVelocity.VectorVelocity = GetFlyInput()
-    end
-end
-
-local function StopFly_LinearVelocity()
-    if not Config.State.Flying then return end
-    if Config.State.FlyLinearVelocity then
-        Config.State.FlyLinearVelocity:Destroy()
-        Config.State.FlyLinearVelocity = nil
-    end
-    if Config.State.FlyAttachment and Config.State.FlyAttachment.Name == "PouncingFlyAttachment" then
-        Config.State.FlyAttachment:Destroy()
-        Config.State.FlyAttachment = nil
-    end
-    local char = LocalPlayer.Character
-    if char then
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.PlatformStand = false
-            hum.AutoRotate = true
-        end
-    end
-    Config.State.Flying = false
-end
-
--- ── Method 5: CFrame (fastest, highest detection risk) ──
+-- ── Method 3: CFrame (fastest, highest detection risk) ──
 local function StartFly_CFrame()
     if Config.State.Flying then return end
     local char = LocalPlayer.Character
@@ -358,26 +247,20 @@ end
 
 local function StartFly()
     if Config.FlyMethod == "Tween" then StartFly_Tween()
-    elseif Config.FlyMethod == "Humanoid" then StartFly_Humanoid()
     elseif Config.FlyMethod == "Velocity" then StartFly_Velocity()
-    elseif Config.FlyMethod == "LinearVelocity" then StartFly_LinearVelocity()
     elseif Config.FlyMethod == "CFrame" then StartFly_CFrame() end
 end
 
 local function DoFly()
     if not Config.Fly then return end
     if Config.FlyMethod == "Tween" then DoFly_Tween()
-    elseif Config.FlyMethod == "Humanoid" then DoFly_Humanoid()
     elseif Config.FlyMethod == "Velocity" then DoFly_Velocity()
-    elseif Config.FlyMethod == "LinearVelocity" then DoFly_LinearVelocity()
     elseif Config.FlyMethod == "CFrame" then DoFly_CFrame() end
 end
 
 local function StopFly()
     if Config.FlyMethod == "Tween" then StopFly_Tween()
-    elseif Config.FlyMethod == "Humanoid" then StopFly_Humanoid()
     elseif Config.FlyMethod == "Velocity" then StopFly_Velocity()
-    elseif Config.FlyMethod == "LinearVelocity" then StopFly_LinearVelocity()
     elseif Config.FlyMethod == "CFrame" then StopFly_CFrame() end
 end
 
@@ -579,8 +462,6 @@ function Module.Init()
         Config.OriginalValues.JumpPower = nil
         Config.State.Flying = false
         Config.State.NoClipping = false
-        Config.State.FlyLinearVelocity = nil
-        Config.State.FlyAttachment = nil
         if Config.Enabled then
             if Config.SpeedHack then
                 local hum = char:FindFirstChildOfClass("Humanoid")
@@ -663,7 +544,6 @@ function Module.SetConfig(key, value)
     elseif key == "SpeedKey" then Config.SpeedKey = value
     elseif key == "NoClipKey" then Config.NoClipKey = value
     elseif key == "FlyMethod" then
-        -- Fixed: stop old method BEFORE changing config, then restart if was flying
         local wasFlying = Config.State.Flying
         if wasFlying then StopFly() end
         Config.FlyMethod = value
@@ -682,6 +562,16 @@ function Module.ResetConfig()
     Config.WalkSpeed = 50; Config.JumpPower = 100; Config.FlySpeed = 50; Config.FlyKey = Enum.KeyCode.F
     Config.SpeedKey = Enum.KeyCode.LeftShift; Config.NoClipKey = Enum.KeyCode.N
     Config.FlyMethod = "Tween"; Config.Brightness = 2; Config.TimeOfDay = 12
+end
+
+function Module.Cleanup()
+    Module.Disable()
+    for name, conn in pairs(Config.Connections) do
+        if typeof(conn) == "RBXScriptConnection" then
+            pcall(function() conn:Disconnect() end)
+        end
+    end
+    Config.Connections = {}
 end
 
 return Module

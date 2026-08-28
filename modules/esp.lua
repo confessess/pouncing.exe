@@ -1,6 +1,6 @@
--- Pouncing.exe | ESP Module v2.3
+-- Pouncing.exe | ESP Module v2.4
 -- Full player ESP with boxes, names, health, skeleton, chams, tracers, head dots
--- Added: HeadDotThickness config support + Live color refresh
+-- Added: Separate WeaponNames toggle, Cleanup function
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -71,7 +71,7 @@ end
 
 local ESP = {
     Enabled = false, Boxes = false, Box3D = false, Names = false, Distance = false, Health = false,
-    Skeleton = false, Chams = false, Tracers = false, HeadDot = false, TeamCheck = false,
+    Skeleton = false, Chams = false, Tracers = false, HeadDot = false, WeaponNames = false, TeamCheck = false,
     MaxDistance = 2000, BoxThickness = 1, TracerOrigin = 0.5, HeadDotThickness = 1, HeadDotSize = 0.5,
     Colors = {Box = Color3.fromRGB(255, 105, 180), Name = Color3.fromRGB(255, 255, 255), Distance = Color3.fromRGB(200, 200, 200), Health = Color3.fromRGB(0, 255, 100), Skeleton = Color3.fromRGB(255, 255, 255), ChamsFill = Color3.fromRGB(255, 105, 180), ChamsOutline = Color3.fromRGB(255, 255, 255), Tracers = Color3.fromRGB(255, 105, 180), HeadDot = Color3.fromRGB(255, 255, 255)}
 }
@@ -145,9 +145,6 @@ local function GetPlayerWeapon(player)
     return nil
 end
 
--- ============================================================
--- RefreshColors: Immediately apply current colors to all objects
--- ============================================================
 local function RefreshColors()
     for player, o in pairs(DrawingObjects) do
         if o.Box then Utils.SetDrawing(o.Box, "Color", ESP.Colors.Box); Utils.SetDrawing(o.Box, "Thickness", ESP.BoxThickness) end
@@ -357,7 +354,8 @@ local function UpdatePlayer(player)
         Utils.SetDrawing(o.HeadDot, "Visible", false)
         Utils.SetDrawing(o.HeadDotO, "Visible", false)
     end
-    if ESP.Names and ESP.Enabled then
+    -- Weapon Names — now independent of Names toggle
+    if ESP.WeaponNames and ESP.Enabled then
         local weapon = GetPlayerWeapon(player)
         if weapon then
             Utils.SetDrawing(o.Weapon, "Position", Vector2.new(box.Center.X, box.BR.Y + 18))
@@ -449,6 +447,7 @@ function Module.SetConfig(key, value)
     elseif key == "TracerOrigin" then ESP.TracerOrigin = value
     elseif key == "HeadDotThickness" then ESP.HeadDotThickness = value
     elseif key == "HeadDotSize" then ESP.HeadDotSize = value
+    elseif key == "WeaponNames" then ESP.WeaponNames = value
     elseif ESP[key] ~= nil then ESP[key] = value
     end
 end
@@ -459,12 +458,22 @@ end
 
 function Module.ResetConfig()
     ESP.Enabled = false; ESP.Boxes = false; ESP.Box3D = false; ESP.Names = false; ESP.Distance = false; ESP.Health = false
-    ESP.Skeleton = false; ESP.Chams = false; ESP.Tracers = false; ESP.HeadDot = false; ESP.TeamCheck = false
+    ESP.Skeleton = false; ESP.Chams = false; ESP.Tracers = false; ESP.HeadDot = false; ESP.WeaponNames = false; ESP.TeamCheck = false
     ESP.MaxDistance = 2000; ESP.BoxThickness = 1; ESP.TracerOrigin = 0.5; ESP.HeadDotThickness = 1; ESP.HeadDotSize = 0.5
     ESP.Colors.Box = Color3.fromRGB(255, 105, 180); ESP.Colors.Name = Color3.fromRGB(255, 255, 255); ESP.Colors.Distance = Color3.fromRGB(200, 200, 200)
     ESP.Colors.Health = Color3.fromRGB(0, 255, 100); ESP.Colors.Skeleton = Color3.fromRGB(255, 255, 255); ESP.Colors.ChamsFill = Color3.fromRGB(255, 105, 180)
     ESP.Colors.ChamsOutline = Color3.fromRGB(255, 255, 255); ESP.Colors.Tracers = Color3.fromRGB(255, 105, 180); ESP.Colors.HeadDot = Color3.fromRGB(255, 255, 255)
     RefreshColors()
+end
+
+function Module.Cleanup()
+    Module.Disable()
+    if PlayerAddedConnection then PlayerAddedConnection:Disconnect(); PlayerAddedConnection = nil end
+    if PlayerRemovingConnection then PlayerRemovingConnection:Disconnect(); PlayerRemovingConnection = nil end
+    for player, _ in pairs(DrawingObjects) do
+        ClearPlayer(player)
+    end
+    DrawingObjects = {}
 end
 
 return Module

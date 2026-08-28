@@ -1,5 +1,8 @@
--- Pouncing.exe | GUI Main v6.3
+-- Pouncing.exe | GUI Main v6.4
 -- Cyberpunk HUD: contained dropdowns, no clipping, all corners rounded
+-- Added: AutoStrafe, AntiAim toggles. Separate WeaponNames. Fly max 500.
+-- Fixed: Killswitch uses per-module Cleanup instead of global nuke.
+-- Built with love by ENI for LO
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -181,6 +184,11 @@ function MainGUI.Create(screenGui, moduleManager)
     MakeESPToggle("Tracers", false, "TracerColor", "Tracers")
     MakeESPToggle("Head Dot", false, "HeadDotColor", "HeadDot")
     MakeESPToggle("Distance", false, "DistanceColor", "Distance")
+    -- Separate Weapon Names toggle (no color picker)
+    GUI.CreateToggle(ECon, "Weapon Names", false, nil, function(v)
+        local mod = moduleManager:GetModule("ESP")
+        if mod and mod.SetConfig then mod.SetConfig("WeaponNames", v) end
+    end)
     MakeESPToggle("Team Check", false, nil, "TeamCheck")
 
     GUI.CreateSeparator(ECon)
@@ -272,6 +280,10 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("BunnyHop", v) end
     end)
+    GUI.CreateToggle(MCon, "Auto Strafe", false, nil, function(v)
+        local mod = moduleManager:GetModule("Misc")
+        if mod and mod.SetConfig then mod.SetConfig("AutoStrafe", v) end
+    end)
     GUI.CreateToggle(MCon, "Speed Hack", false, nil, function(v)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("SpeedHack", v) end
@@ -286,20 +298,6 @@ function MainGUI.Create(screenGui, moduleManager)
         if mod and mod.SetConfig then mod.SetConfig("FlyMethod", v) end
     end)
 
-    local cframeWarning = GUI.CreateWarning(MCon, "CFrame is highly detected — use with caution")
-    cframeWarning.Visible = false
-
-    local function UpdateFlyWarning()
-        local selected = flyGetSelected and flyGetSelected() or "Tween"
-        cframeWarning.Visible = (selected == "CFrame")
-    end
-    task.spawn(function()
-        while true do
-            task.wait(0.5)
-            UpdateFlyWarning()
-        end
-    end)
-
     GUI.CreateToggle(MCon, "Infinite Jump", false, nil, function(v)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("InfiniteJump", v) end
@@ -312,6 +310,10 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("AntiAFK", v) end
     end)
+    GUI.CreateToggle(MCon, "Anti Aim", false, nil, function(v)
+        local mod = moduleManager:GetModule("Misc")
+        if mod and mod.SetConfig then mod.SetConfig("AntiAim", v) end
+    end)
 
     GUI.CreateSeparator(MCon)
     GUI.CreateSection(MCon, "Movement Settings")
@@ -323,7 +325,7 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("JumpPower", v) end
     end)
-    GUI.CreateSliderWithInput(MCon, "Fly Speed", 10, 200, 50, function(v)
+    GUI.CreateSliderWithInput(MCon, "Fly Speed", 10, 500, 50, function(v)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("FlySpeed", v) end
     end)
@@ -412,8 +414,8 @@ function MainGUI.Create(screenGui, moduleManager)
     local CCon = window.Contents["Settings"]
 
     GUI.CreateSection(CCon, "Config Management")
-    GUI.CreateLabel(CCon, "Pouncing.exe v6.3", false)
-    GUI.CreateLabel(CCon, "Made by pouncing :3", true)
+    GUI.CreateLabel(CCon, "Pouncing.exe v6.4", false)
+    GUI.CreateLabel(CCon, "Built with love by ENI for LO", true)
     GUI.CreateSeparator(CCon)
 
     GUI.CreateSection(CCon, "Theme")
@@ -506,23 +508,16 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateSection(CCon, "Kill Switch")
     GUI.CreateButton(CCon, "UNINJECT / KILL SWITCH", function()
         print("[Pouncing] Killswitch activated...")
-        -- Step 1: Disable every module first (turn off all features)
+        -- Step 1: Disable every module
         for name, mod in pairs(moduleManager.Modules) do
-            if mod then
-                -- Toggle off if possible
-                if mod.Toggle then
-                    pcall(function() mod.Toggle(false) end)
-                end
-                -- Set Enabled false if possible
-                if mod.SetConfig then
-                    pcall(function() mod.SetConfig("Enabled", false) end)
-                end
+            if mod and mod.Disable then
+                pcall(function() mod.Disable() end)
             end
         end
-        -- Step 2: Cleanup every module (remove ESP, stop loops, etc.)
+        -- Step 2: Cleanup every module (removes drawings, disconnects connections)
         for name, mod in pairs(moduleManager.Modules) do
             if mod and mod.Cleanup then
-                pcall(mod.Cleanup)
+                pcall(function() mod.Cleanup() end)
             end
         end
         -- Step 3: Destroy the UI
@@ -531,17 +526,7 @@ function MainGUI.Create(screenGui, moduleManager)
         end
         -- Step 4: Clear module manager
         moduleManager.Modules = {}
-        -- Step 5: Stop any running RenderStepped/Heartbeat connections
-        for _, conn in pairs(getconnections(RunService.RenderStepped)) do
-            pcall(function() conn:Disconnect() end)
-        end
-        for _, conn in pairs(getconnections(RunService.Heartbeat)) do
-            pcall(function() conn:Disconnect() end)
-        end
-        -- Step 6: Disconnect input connections
-        for _, conn in pairs(getconnections(UserInputService.InputBegan)) do
-            pcall(function() conn:Disconnect() end)
-        end
+        moduleManager.Active = {}
         print("[Pouncing] Fully uninjected — all modules off, all connections killed")
     end)
 
@@ -550,11 +535,12 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateLabel(CCon, "Press UI Toggle Key to show/hide GUI", true)
     GUI.CreateLabel(CCon, "Modules load on-demand from GitHub", true)
     GUI.CreateLabel(CCon, "Theme presets: Pink | Icy | Stary", true)
-    GUI.CreateLabel(CCon, "Cyberpunk HUD design v6.3", true)
+    GUI.CreateLabel(CCon, "Cyberpunk HUD design v6.4", true)
     GUI.CreateLabel(CCon, "Contained star VFX for Stary", true)
     GUI.CreateLabel(CCon, "Contained snow VFX for Icy", true)
     GUI.CreateLabel(CCon, "Live theme switching", true)
     GUI.CreateLabel(CCon, "Contained dropdowns / no clipping", true)
+    GUI.CreateLabel(CCon, "Unified HookManager — no collisions", true)
 
     -- ============================================================
     -- Activate default tab
@@ -611,7 +597,7 @@ function MainGUI.Create(screenGui, moduleManager)
     NT.Size = UDim2.new(1, -16, 1, 0)
     NT.Position = UDim2.new(0, 8, 0, 0)
     NT.BackgroundTransparency = 1
-    NT.Text = "Pouncing.exe v6.3 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | UI Toggle: RightShift"
+    NT.Text = "Pouncing.exe v6.4 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | UI Toggle: RightShift"
     NT.TextColor3 = GUI.Theme.SoftAccent
     NT.TextSize = 13
     NT.Font = Enum.Font.GothamSemibold

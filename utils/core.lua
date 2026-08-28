@@ -1,5 +1,5 @@
--- Pouncing.exe | Utils Core
--- Shared utilities for all modules
+-- Pouncing.exe | Utils Core v2.0
+-- Shared utilities + Unified Hook Manager for collision-free __namecall/Raycast
 -- ============================================================
 
 local Workspace = game:GetService("Workspace")
@@ -124,5 +124,104 @@ Utils.SkeletonConnections = {
     {"LowerTorso", "RightUpperLeg"}, {"RightUpperLeg", "RightLowerLeg"}, {"RightLowerLeg", "RightFoot"},
     {"Torso", "Left Arm"}, {"Torso", "Right Arm"}, {"Torso", "Left Leg"}, {"Torso", "Right Leg"}, {"Torso", "Head"}
 }
+
+-- ============================================================
+-- UNIFIED HOOK MANAGER
+-- Allows multiple modules to hook __namecall / Raycast safely
+-- ============================================================
+local HookManager = {
+    OriginalNamecall = nil,
+    OriginalRaycast = nil,
+    NamecallHandlers = {},
+    RaycastHandlers = {},
+    Hooked = false,
+    Mt = nil
+}
+
+function HookManager:RegisterNamecallHandler(name, handler)
+    self.NamecallHandlers[name] = handler
+end
+
+function HookManager:UnregisterNamecallHandler(name)
+    self.NamecallHandlers[name] = nil
+end
+
+function HookManager:RegisterRaycastHandler(name, handler)
+    self.RaycastHandlers[name] = handler
+end
+
+function HookManager:UnregisterRaycastHandler(name)
+    self.RaycastHandlers[name] = nil
+end
+
+function HookManager:Install()
+    if self.Hooked then return end
+    self.Hooked = true
+
+    -- Raycast hook
+    local oldRaycast = Workspace.Raycast
+    self.OriginalRaycast = oldRaycast
+    Workspace.Raycast = function(ws, origin, direction, params, ...)
+        local finalOrigin, finalDirection, finalParams = origin, direction, params
+        for _, handler in pairs(self.RaycastHandlers) do
+            local ok, newOrigin, newDirection, newParams = pcall(handler, finalOrigin, finalDirection, finalParams)
+            if ok and newOrigin ~= nil then
+                finalOrigin = newOrigin
+                finalDirection = newDirection or finalDirection
+                finalParams = newParams or finalParams
+            end
+        end
+        return oldRaycast(ws, finalOrigin, finalDirection, finalParams, ...)
+    end
+
+    -- __namecall hook
+    local ok, mt = pcall(getrawmetatable, game)
+    if ok and mt then
+        self.Mt = mt
+        local oldNamecall = mt.__namecall
+        if oldNamecall then
+            self.OriginalNamecall = oldNamecall
+            setreadonly(mt, false)
+            mt.__namecall = newcclosure(function(self_obj, ...)
+                local method = getnamecallmethod()
+                local args = {...}
+                local modified = false
+
+                if method == "FireServer" or method == "InvokeServer" then
+                    for _, handler in pairs(self.NamecallHandlers) do
+                        local ok, newArgs, wasModified = pcall(handler, args, method, self_obj)
+                        if ok and newArgs then
+                            args = newArgs
+                            if wasModified then modified = true end
+                        end
+                    end
+                end
+
+                if modified then
+                    return oldNamecall(self_obj, unpack(args))
+                else
+                    return oldNamecall(self_obj, ...)
+                end
+            end)
+            setreadonly(mt, true)
+        end
+    end
+end
+
+function HookManager:Uninstall()
+    if not self.Hooked then return end
+    if self.OriginalRaycast then Workspace.Raycast = self.OriginalRaycast end
+    if self.Mt and self.OriginalNamecall then
+        setreadonly(self.Mt, false)
+        self.Mt.__namecall = self.OriginalNamecall
+        setreadonly(self.Mt, true)
+    end
+    self.Hooked = false
+    self.OriginalRaycast = nil
+    self.OriginalNamecall = nil
+    self.Mt = nil
+end
+
+Utils.HookManager = HookManager
 
 return Utils
