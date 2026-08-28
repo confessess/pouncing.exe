@@ -58,8 +58,16 @@ local function IsAlive(character)
 end
 
 local function IsTeammate(player)
-    if not LocalPlayer.Team or not player.Team then return false end
-    return player.Team == LocalPlayer.Team
+    if player == LocalPlayer then return true end
+    -- Check Team object
+    if LocalPlayer.Team and player.Team then
+        if LocalPlayer.Team == player.Team then return true end
+    end
+    -- Check TeamColor fallback
+    if LocalPlayer.TeamColor and player.TeamColor then
+        if LocalPlayer.TeamColor == player.TeamColor then return true end
+    end
+    return false
 end
 
 local function GetDistance(position)

@@ -1,6 +1,9 @@
--- Pouncing.exe | Hitbox Module v2.0
--- Battle-tested hitbox expander for Arsenal, Da Hood, Zee Hood
--- Handles R6/R15, MeshParts, server reconciliation, character respawns
+-- Pouncing.exe | Hitbox Module v3.0
+-- Comprehensive hitbox expander with server-authoritative awareness
+-- Handles R6/R15, MeshParts, team detection via Team+TeamColor
+-- NOTE: Visual expansion always works. Actual hit registration depends
+-- on whether the game uses client-side or server-side hit validation.
+-- For server-authoritative games (Arsenal), use Silent Aim instead.
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -10,7 +13,7 @@ local LocalPlayer = Players.LocalPlayer
 
 local Config = {
     Enabled = false,
-    TeamCheck = true,
+    TeamCheck = false,
     ShowExpanded = true,
     HeadSize = 5,
     TorsoSize = 3,
@@ -18,21 +21,38 @@ local Config = {
     ExpandLimbs = false,
     LimbSize = 2,
     MaxDistance = 2000,
+    Comprehensive = false, -- expands ALL BaseParts in character
 
     -- Internal
     OriginalSizes = {},
     Connections = {},
-    CharacterMap = {}, -- maps Player -> Character (to detect respawns)
+    CharacterMap = {},
 }
 
 -- ============================================================
--- Helpers
+-- Team Detection (Team + TeamColor fallback)
 -- ============================================================
 
 local function IsTeammate(player)
-    if not LocalPlayer.Team or not player.Team then return false end
-    return player.Team == LocalPlayer.Team
+    if player == LocalPlayer then return true end
+
+    -- Check Team object
+    if LocalPlayer.Team and player.Team then
+        if LocalPlayer.Team == player.Team then return true end
+    end
+
+    -- Check TeamColor (used by some games instead of Team objects)
+    if LocalPlayer.TeamColor and player.TeamColor then
+        if LocalPlayer.TeamColor == player.TeamColor then return true end
+    end
+
+    -- If neither has a team, treat as non-teammate (FFA)
+    return false
 end
+
+-- ============================================================
+-- Part validation
+-- ============================================================
 
 local function IsValidPart(part)
     if not part then return false end
@@ -49,17 +69,27 @@ local function GetDistance(pos)
 end
 
 -- ============================================================
--- Part discovery — handles R6, R15, and custom rigs
+-- Part discovery
 -- ============================================================
+
+local function GetAllCharacterParts(character)
+    local parts = {}
+    for _, child in pairs(character:GetDescendants()) do
+        if child:IsA("BasePart") then
+            table.insert(parts, child)
+        end
+    end
+    return parts
+end
 
 local function GetTargetParts(character)
     local parts = {}
 
-    -- Head (always priority #1)
+    -- Head
     local head = character:FindFirstChild("Head")
     if head and IsValidPart(head) then parts.Head = head end
 
-    -- Torso — try multiple names for R6/R15 compatibility
+    -- Torso
     local torsoNames = {"HumanoidRootPart", "UpperTorso", "Torso", "LowerTorso", "Body"}
     for _, name in ipairs(torsoNames) do
         local part = character:FindFirstChild(name)
@@ -69,7 +99,7 @@ local function GetTargetParts(character)
         end
     end
 
-    -- Limbs (optional)
+    -- Limbs
     if Config.ExpandLimbs then
         local limbNames = {
             "LeftUpperArm", "LeftLowerArm", "LeftHand",
@@ -128,8 +158,6 @@ local function RestorePart(part)
 end
 
 local function ClearCharacter(character)
-    -- Remove all OriginalSizes entries belonging to this character
-    -- (don't try to restore — parts are being destroyed)
     for part, _ in pairs(Config.OriginalSizes) do
         if typeof(part) == "Instance" then
             local ok, parent = pcall(function() return part.Parent end)
@@ -151,9 +179,7 @@ local function ExpandPart(part, multiplier)
     local orig = Config.OriginalSizes[part]
     if not orig then return end
 
-    -- Clamp multiplier to prevent physics engine death
     multiplier = math.clamp(multiplier, 1, 25)
-
     local newSize = orig.Size * multiplier
 
     pcall(function()
@@ -174,38 +200,38 @@ local function UpdatePlayer(player)
 
     local character = player.Character
     if not character then return end
-
-    -- Wait for character to be ready
     local hum = character:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    if hum.Health <= 0 then return end
+    if not hum or hum.Health <= 0 then return end
 
-    -- Distance check (performance + stealth)
     local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
     if root then
         local dist = GetDistance(root.Position)
         if dist > Config.MaxDistance then return end
     end
 
-    local parts = GetTargetParts(character)
-
-    if parts.Head then
-        ExpandPart(parts.Head, Config.HeadSize)
-    end
-
-    if parts.Torso then
-        ExpandPart(parts.Torso, Config.TorsoSize)
-    end
-
-    if parts.Limbs then
-        for _, limb in ipairs(parts.Limbs) do
-            ExpandPart(limb, Config.LimbSize)
+    if Config.Comprehensive then
+        -- Expand ALL BaseParts in the character
+        for _, part in pairs(GetAllCharacterParts(character)) do
+            -- Skip accessories/tools
+            local parentName = part.Parent and part.Parent.Name or ""
+            if not parentName:match("Accessory") and not parentName:match("Tool") then
+                ExpandPart(part, Config.HeadSize)
+            end
+        end
+    else
+        local parts = GetTargetParts(character)
+        if parts.Head then ExpandPart(parts.Head, Config.HeadSize) end
+        if parts.Torso then ExpandPart(parts.Torso, Config.TorsoSize) end
+        if parts.Limbs then
+            for _, limb in ipairs(parts.Limbs) do
+                ExpandPart(limb, Config.LimbSize)
+            end
         end
     end
 end
 
 -- ============================================================
--- Render loop — re-applies every frame to beat server reconciliation
+-- Render loop
 -- ============================================================
 
 local RenderConnection = nil
@@ -222,10 +248,7 @@ end
 -- ============================================================
 
 local function OnCharacterAdded(player, character)
-    -- Clear any old entries for this player
     Config.CharacterMap[player] = character
-
-    -- When character loads, wait a tick then expand
     task.delay(0.1, function()
         if Config.Enabled then
             pcall(function() UpdatePlayer(player) end)
@@ -257,7 +280,6 @@ local function HookPlayer(player)
         Removing = charRemovingConn,
     }
 
-    -- If they already have a character, hook it now
     if player.Character then
         OnCharacterAdded(player, player.Character)
     end
@@ -283,14 +305,12 @@ end
 local Module = {}
 
 function Module.Init()
-    -- Hook all existing players
     for _, player in pairs(Players:GetPlayers()) do
         if player ~= LocalPlayer then
             pcall(function() HookPlayer(player) end)
         end
     end
 
-    -- Hook future players
     Config.Connections.PlayerAdded = Players.PlayerAdded:Connect(function(player)
         if player ~= LocalPlayer then
             pcall(function() HookPlayer(player) end)
@@ -307,7 +327,6 @@ function Module.Enable()
     if not RenderConnection then
         RenderConnection = RunService.RenderStepped:Connect(OnRenderStep)
     end
-    -- Force expand all visible players immediately
     for _, player in pairs(Players:GetPlayers()) do
         pcall(function() UpdatePlayer(player) end)
     end
@@ -319,9 +338,7 @@ function Module.Disable()
         RenderConnection:Disconnect()
         RenderConnection = nil
     end
-
-    -- Restore ALL expanded parts
-    for part, orig in pairs(Config.OriginalSizes) do
+    for part, _ in pairs(Config.OriginalSizes) do
         pcall(function() RestorePart(part) end)
     end
     Config.OriginalSizes = {}
@@ -336,6 +353,7 @@ function Module.SetConfig(key, value)
     elseif key == "ExpandLimbs" then Config.ExpandLimbs = value
     elseif key == "LimbSize" then Config.LimbSize = math.clamp(value, 1, 25)
     elseif key == "MaxDistance" then Config.MaxDistance = value
+    elseif key == "Comprehensive" then Config.Comprehensive = value
     end
 end
 
@@ -345,7 +363,7 @@ end
 
 function Module.ResetConfig()
     Module.Disable()
-    Config.TeamCheck = true
+    Config.TeamCheck = false
     Config.ShowExpanded = true
     Config.HeadSize = 5
     Config.TorsoSize = 3
@@ -353,24 +371,22 @@ function Module.ResetConfig()
     Config.ExpandLimbs = false
     Config.LimbSize = 2
     Config.MaxDistance = 2000
+    Config.Comprehensive = false
 end
 
 function Module.Cleanup()
     Module.Disable()
-
     for player, _ in pairs(Config.Connections) do
         if typeof(player) == "Instance" and player:IsA("Player") then
             pcall(function() UnhookPlayer(player) end)
         end
     end
-
     if Config.Connections.PlayerAdded then
         pcall(function() Config.Connections.PlayerAdded:Disconnect() end)
     end
     if Config.Connections.PlayerRemoving then
         pcall(function() Config.Connections.PlayerRemoving:Disconnect() end)
     end
-
     Config.Connections = {}
     Config.CharacterMap = {}
     Config.OriginalSizes = {}

@@ -49,7 +49,7 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("Triggerbot", v) end
     end)
-    GUI.CreateToggle(ACon, "Team Check", true, nil, function(v)
+    GUI.CreateToggle(ACon, "Team Check", false, nil, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("TeamCheck", v) end
     end)
@@ -384,13 +384,17 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateToggle(HCon, "Enabled", false, nil, function(v)
         moduleManager:Toggle("Hitbox", v)
     end)
-    GUI.CreateToggle(HCon, "Team Check", true, nil, function(v)
+    GUI.CreateToggle(HCon, "Team Check", false, nil, function(v)
         local mod = moduleManager:GetModule("Hitbox")
         if mod and mod.SetConfig then mod.SetConfig("TeamCheck", v) end
     end)
     GUI.CreateToggle(HCon, "Show Expanded", true, nil, function(v)
         local mod = moduleManager:GetModule("Hitbox")
         if mod and mod.SetConfig then mod.SetConfig("ShowExpanded", v) end
+    end)
+    GUI.CreateToggle(HCon, "Comprehensive Mode", false, nil, function(v)
+        local mod = moduleManager:GetModule("Hitbox")
+        if mod and mod.SetConfig then mod.SetConfig("Comprehensive", v) end
     end)
 
     GUI.CreateSeparator(HCon)
