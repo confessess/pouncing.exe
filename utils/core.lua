@@ -1,7 +1,7 @@
--- Pouncing.exe | Utils Core v3.1
+-- Pouncing.exe | Utils Core v3.2
 -- Shared utilities + Unified Hook Manager
--- Fixed: pcall-wrapped Workspace method replacement (prevents Install crash)
--- Fixed: nil ActiveTab guard in preset visibility
+-- CRITICAL FIX: Removed newcclosure (caused GUI freezes in some executors)
+-- Using regular closures + table.unpack for safe argument passing
 -- ============================================================
 
 local Workspace = game:GetService("Workspace")
@@ -10,18 +10,15 @@ local Camera = Workspace.CurrentCamera
 
 local Utils = {}
 
--- W2S (World to Screen)
 function Utils.W2S(position)
     local point, onScreen = Camera:WorldToViewportPoint(position)
     return Vector2.new(point.X, point.Y), onScreen, point.Z
 end
 
--- Distance between two positions
 function Utils.Dist(a, b)
     return (a - b).Magnitude
 end
 
--- Raycast with ignore list
 function Utils.Raycast(origin, direction, ignoreList)
     local raycastParams = RaycastParams.new()
     raycastParams.FilterDescendantsInstances = ignoreList or {}
@@ -29,7 +26,6 @@ function Utils.Raycast(origin, direction, ignoreList)
     return Workspace:Raycast(origin, direction, raycastParams)
 end
 
--- Create Drawing object with props
 function Utils.NewDrawing(type, props)
     local d = Drawing.new(type)
     for k, v in pairs(props or {}) do
@@ -38,7 +34,6 @@ function Utils.NewDrawing(type, props)
     return d
 end
 
--- Safe drawing property set
 function Utils.SetDrawing(obj, key, value)
     if obj then
         local ok = pcall(function()
@@ -49,7 +44,6 @@ function Utils.SetDrawing(obj, key, value)
     return false
 end
 
--- Safe drawing remove
 function Utils.RemoveDrawing(obj)
     if obj then
         pcall(function()
@@ -58,12 +52,10 @@ function Utils.RemoveDrawing(obj)
     end
 end
 
--- Make Drawing helper (alias for compatibility)
 function Utils.MakeDrawing(type, props)
     return Utils.NewDrawing(type, props)
 end
 
--- Get box data for ESP
 function Utils.GetBoxData(character)
     local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
     if not root then return nil end
@@ -88,7 +80,6 @@ function Utils.GetBoxData(character)
     }
 end
 
--- Get 3D corners for 3D box ESP
 function Utils.Get3DCorners(character)
     local root = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Torso")
     if not root then return nil end
@@ -111,14 +102,12 @@ function Utils.Get3DCorners(character)
     return screenCorners
 end
 
--- 3D box edge connections
 Utils.Box3DEdges = {
     {1,2},{2,3},{3,4},{4,1},
     {5,6},{6,7},{7,8},{8,5},
     {1,5},{2,6},{3,7},{4,8}
 }
 
--- Skeleton bone connections
 Utils.SkeletonConnections = {
     {"Head", "UpperTorso"}, {"UpperTorso", "LowerTorso"},
     {"UpperTorso", "LeftUpperArm"}, {"LeftUpperArm", "LeftLowerArm"}, {"LeftLowerArm", "LeftHand"},
@@ -129,32 +118,24 @@ Utils.SkeletonConnections = {
 }
 
 -- ============================================================
--- UNIFIED HOOK MANAGER v3.1
+-- UNIFIED HOOK MANAGER v3.2
+-- REMOVED newcclosure — using regular closures to prevent freezes
 -- ============================================================
 local HookManager = {
-    -- Raycast
     OriginalRaycast = nil,
     RaycastHandlers = {},
-
-    -- FindPartOnRay family
     OriginalFindPartOnRay = nil,
     OriginalFindPartOnRayWithIgnoreList = nil,
     OriginalFindPartOnRayWithWhitelist = nil,
     FindPartOnRayHandlers = {},
-
-    -- __namecall
     OriginalNamecall = nil,
     NamecallHandlers = {},
     Mt = nil,
-
-    -- __index (for Mouse.Hit, Mouse.Target, etc.)
     OriginalIndex = nil,
     IndexHandlers = {},
-
     Hooked = false,
 }
 
--- Priority-based handler iteration
 local function GetSortedHandlers(handlerTable)
     local sorted = {}
     for name, data in pairs(handlerTable) do
@@ -168,7 +149,6 @@ local function GetSortedHandlers(handlerTable)
     return sorted
 end
 
--- Raycast handlers
 function HookManager:RegisterRaycastHandler(name, handler, priority)
     self.RaycastHandlers[name] = {handler = handler, priority = priority or 0}
 end
@@ -176,7 +156,6 @@ function HookManager:UnregisterRaycastHandler(name)
     self.RaycastHandlers[name] = nil
 end
 
--- FindPartOnRay handlers
 function HookManager:RegisterFindPartOnRayHandler(name, handler, priority)
     self.FindPartOnRayHandlers[name] = {handler = handler, priority = priority or 0}
 end
@@ -184,7 +163,6 @@ function HookManager:UnregisterFindPartOnRayHandler(name)
     self.FindPartOnRayHandlers[name] = nil
 end
 
--- Namecall handlers
 function HookManager:RegisterNamecallHandler(name, handler, priority)
     self.NamecallHandlers[name] = {handler = handler, priority = priority or 0}
 end
@@ -192,7 +170,6 @@ function HookManager:UnregisterNamecallHandler(name)
     self.NamecallHandlers[name] = nil
 end
 
--- Index handlers
 function HookManager:RegisterIndexHandler(name, handler, priority)
     self.IndexHandlers[name] = {handler = handler, priority = priority or 0}
 end
@@ -200,22 +177,15 @@ function HookManager:UnregisterIndexHandler(name)
     self.IndexHandlers[name] = nil
 end
 
--- ============================================================
--- Install all hooks
--- ============================================================
 function HookManager:Install()
     if self.Hooked then return end
     self.Hooked = true
 
-    local LocalPlayer = Players.LocalPlayer
-
-    -- Raycast hook (direct function replacement) — WRAPPED IN PCALL
-    -- If direct assignment fails (e.g., Raycast not exposed as settable property),
-    -- the __namecall hook below will still catch workspace:Raycast() calls.
+    -- Raycast hook (direct function replacement) — PCALL WRAPPED
     local okRaycast, oldRaycast = pcall(function() return Workspace.Raycast end)
     if okRaycast and oldRaycast then
         self.OriginalRaycast = oldRaycast
-        local okSet = pcall(function()
+        pcall(function()
             Workspace.Raycast = function(ws, origin, direction, params, ...)
                 local finalOrigin, finalDirection, finalParams = origin, direction, params
                 for _, entry in ipairs(GetSortedHandlers(self.RaycastHandlers)) do
@@ -229,13 +199,9 @@ function HookManager:Install()
                 return oldRaycast(ws, finalOrigin, finalDirection, finalParams, ...)
             end
         end)
-        if not okSet then
-            warn("[Pouncing HookManager] Direct Raycast hook failed, falling back to __namecall only")
-            self.OriginalRaycast = nil
-        end
     end
 
-    -- FindPartOnRay hooks — WRAPPED IN PCALL
+    -- FindPartOnRay hooks — PCALL WRAPPED
     local function HookFindPartOnRay(methodName, original)
         if not original then return nil end
         return function(ws, ray, ...)
@@ -267,7 +233,7 @@ function HookManager:Install()
         pcall(function() Workspace.FindPartOnRayWithWhitelist = HookFindPartOnRay("FindPartOnRayWithWhitelist", oldFPRWL) end)
     end
 
-    -- __namecall hook — THIS IS THE CRITICAL ONE
+    -- __namecall hook — REGULAR CLOSURE (not newcclosure)
     local ok, mt = pcall(getrawmetatable, game)
     if ok and mt then
         self.Mt = mt
@@ -275,9 +241,16 @@ function HookManager:Install()
         if oldNamecall then
             self.OriginalNamecall = oldNamecall
             setreadonly(mt, false)
-            mt.__namecall = newcclosure(function(self_obj, ...)
-                local method = getnamecallmethod()
+            mt.__namecall = function(self_obj, ...)
                 local args = {...}
+                local method = nil
+                local methodOk, methodErr = pcall(function()
+                    method = getnamecallmethod()
+                end)
+                if not methodOk or not method then
+                    return oldNamecall(self_obj, table.unpack(args))
+                end
+
                 local modified = false
 
                 if method == "FireServer" or method == "InvokeServer" then
@@ -296,7 +269,7 @@ function HookManager:Install()
                     if ray and typeof(ray) == "Ray" then
                         local finalRay = ray
                         for _, entry in ipairs(GetSortedHandlers(self.FindPartOnRayHandlers)) do
-                            local ok2, newRay = pcall(entry.handler, finalRay, method, unpack(args, 2))
+                            local ok2, newRay = pcall(entry.handler, finalRay, method, table.unpack(args, 2))
                             if ok2 and newRay ~= nil then
                                 finalRay = newRay
                             end
@@ -308,7 +281,7 @@ function HookManager:Install()
                     end
                 end
 
-                -- Catch Raycast via __namecall (fallback when direct hook fails)
+                -- Catch Raycast via __namecall
                 if method == "Raycast" then
                     local origin = args[1]
                     local direction = args[2]
@@ -333,23 +306,23 @@ function HookManager:Install()
                 end
 
                 if modified then
-                    return oldNamecall(self_obj, unpack(args))
+                    return oldNamecall(self_obj, table.unpack(args))
                 else
-                    return oldNamecall(self_obj, ...)
+                    return oldNamecall(self_obj, table.unpack(args))
                 end
-            end)
+            end
             setreadonly(mt, true)
         end
     end
 
-    -- __index hook (for Mouse.Hit, Mouse.Target, etc.)
+    -- __index hook — REGULAR CLOSURE (not newcclosure)
     local ok2, mt2 = pcall(getrawmetatable, game)
     if ok2 and mt2 then
         local oldIndex = mt2.__index
         if oldIndex then
             self.OriginalIndex = oldIndex
             setreadonly(mt2, false)
-            mt2.__index = newcclosure(function(self_obj, key)
+            mt2.__index = function(self_obj, key)
                 for _, entry in ipairs(GetSortedHandlers(self.IndexHandlers)) do
                     local ok3, result = pcall(entry.handler, self_obj, key)
                     if ok3 and result ~= nil then
@@ -357,7 +330,7 @@ function HookManager:Install()
                     end
                 end
                 return oldIndex(self_obj, key)
-            end)
+            end
             setreadonly(mt2, true)
         end
     end
