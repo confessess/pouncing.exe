@@ -1,15 +1,18 @@
--- Pouncing.exe | Aimbot Module v3.2
+-- Pouncing.exe | Aimbot Module v4.0
 -- Lock-on, silent aim, triggerbot, toggle, sticky target
--- Fixed: Uses unified HookManager — no more __namecall collisions
+-- Silent Aim: Raycast + FindPartOnRay + Mouse.Hit + __namecall deep scan
+-- Handles Arsenal, Da Hood, Zee Hood
 -- ============================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
+local Mouse = LocalPlayer:GetMouse()
 
 local Utils = getfenv()["PouncingUtils"]
 
@@ -29,11 +32,25 @@ local Config = {
     Prediction = false,
     ToggleMode = false,
     StickyTarget = false,
+
+    -- Silent Aim specific
+    SilentAimMode = "Raycast", -- "Raycast", "Mouse", "Hybrid"
+    SilentAimFOV = 60,         -- separate FOV for silent aim (usually tighter)
+    HitChance = 100,           -- 0-100, chance to actually redirect
+    LegitMode = false,         -- if true, only redirect when close to target
+    LegitThreshold = 30,       -- pixels from target center to activate legit mode
+    WeaponOnly = true,         -- only silent aim when holding a tool
+    RecentClickWindow = 0.5,   -- seconds after mouse click to stay armed
+
     CurrentTarget = nil,
     LastTriggerTime = 0,
     Aiming = false,
     StickyLostTime = 0,
     StickyGracePeriod = 0.6,
+
+    -- Internal
+    LastClickTime = 0,
+    SilentAimArmed = false,
 }
 
 local RenderConnection = nil
@@ -59,14 +76,8 @@ end
 
 local function IsTeammate(player)
     if player == LocalPlayer then return true end
-    -- Check Team object
-    if LocalPlayer.Team and player.Team then
-        if LocalPlayer.Team == player.Team then return true end
-    end
-    -- Check TeamColor fallback
-    if LocalPlayer.TeamColor and player.TeamColor then
-        if LocalPlayer.TeamColor == player.TeamColor then return true end
-    end
+    if LocalPlayer.Team and player.Team and LocalPlayer.Team == player.Team then return true end
+    if LocalPlayer.TeamColor and player.TeamColor and LocalPlayer.TeamColor == player.TeamColor then return true end
     return false
 end
 
@@ -74,23 +85,43 @@ local function GetDistance(position)
     return (position - Camera.CFrame.Position).Magnitude
 end
 
+local function GetTargetPart(character)
+    if Config.TargetPart == "Random" then
+        local parts = {"Head", "HumanoidRootPart", "UpperTorso", "Torso"}
+        return character:FindFirstChild(parts[math.random(1, #parts)])
+    end
+    return character:FindFirstChild(Config.TargetPart)
+        or character:FindFirstChild("Head")
+        or character:FindFirstChild("HumanoidRootPart")
+end
+
+local function PredictPosition(target)
+    if not Config.Prediction then return target.Part.Position end
+    local part = target.Part
+    local velocity = part.AssemblyLinearVelocity or part.Velocity or Vector3.new()
+    local dist = (part.Position - Camera.CFrame.Position).Magnitude
+    local bulletSpeed = 1000
+    local travelTime = dist / bulletSpeed
+    return part.Position + velocity * (travelTime + 0.05)
+end
+
 -- ============================================================
 -- FOV
 -- ============================================================
 
-local function GetFOVRadiusPixels()
-    local fovAngle = math.rad(Config.FOV / 2)
+local function GetFOVRadiusPixels(fovValue)
+    local fovAngle = math.rad((fovValue or Config.FOV) / 2)
     local camFov = math.rad(Camera.FieldOfView / 2)
     if camFov <= 0 then return 9999 end
     return math.tan(fovAngle) / math.tan(camFov) * (Camera.ViewportSize.Y / 2)
 end
 
-local function IsInFOV(targetPos)
+local function IsInFOV(targetPos, fovValue)
     local screenPos, onScreen = Camera:WorldToViewportPoint(targetPos)
     if not onScreen then return false, math.huge end
     local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     local distFromCenter = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-    return distFromCenter <= GetFOVRadiusPixels(), distFromCenter
+    return distFromCenter <= GetFOVRadiusPixels(fovValue), distFromCenter
 end
 
 -- ============================================================
@@ -111,100 +142,40 @@ local function CanSee(targetPos, targetCharacter)
 end
 
 -- ============================================================
--- Target part
+-- Silent Aim: Weapon / Combat Detection
 -- ============================================================
 
-local function GetTargetPart(character)
-    if Config.TargetPart == "Random" then
-        local parts = {"Head", "HumanoidRootPart", "UpperTorso", "Torso"}
-        return character:FindFirstChild(parts[math.random(1, #parts)])
-    end
-    return character:FindFirstChild(Config.TargetPart)
-        or character:FindFirstChild("Head")
-        or character:FindFirstChild("HumanoidRootPart")
+local function IsHoldingTool()
+    local char = LocalPlayer.Character
+    if not char then return false end
+    return char:FindFirstChildOfClass("Tool") ~= nil
 end
 
--- ============================================================
--- Prediction
--- ============================================================
+local function IsSilentAimArmed()
+    if not Config.SilentAim then return false end
+    if not Config.Enabled then return false end
 
-local function PredictPosition(target)
-    if not Config.Prediction then return target.Part.Position end
-    local part = target.Part
-    local velocity = part.AssemblyLinearVelocity or part.Velocity or Vector3.new()
-    local dist = (part.Position - Camera.CFrame.Position).Magnitude
-    local bulletSpeed = 1000
-    local travelTime = dist / bulletSpeed
-    return part.Position + velocity * (travelTime + 0.05)
-end
-
--- ============================================================
--- Target validation
--- ============================================================
-
-local function IsTargetValidStrict(target)
-    if not target then return false end
-    if not target.Player or not target.Character then return false end
-    if not IsAlive(target.Character) then return false end
-    if Config.TeamCheck and IsTeammate(target.Player) then return false end
-    local part = target.Character:FindFirstChild(target.Part.Name)
-    if not part then return false end
-    local dist = GetDistance(part.Position)
-    if dist > Config.MaxDistance then return false end
-    local inFOV, _ = IsInFOV(part.Position)
-    if not inFOV then return false end
-    if not CanSee(part.Position, target.Character) then return false end
-    return true
-end
-
-local function IsTargetValidSticky(target)
-    if not target then return false end
-    if not target.Player or not target.Character then return false end
-    if not IsAlive(target.Character) then return false end
-    if Config.TeamCheck and IsTeammate(target.Player) then return false end
-    local part = target.Character:FindFirstChild(target.Part.Name)
-    if not part then return false end
-    local dist = GetDistance(part.Position)
-    if dist > Config.MaxDistance then return false end
-    return true
-end
-
--- ============================================================
--- Target selection
--- ============================================================
-
-local function IsAimbotActive()
-    return Config.Aiming or Config.SilentAim
-end
-
-local function GetBestTarget()
-    if Config.Enabled and Config.StickyTarget and Config.CurrentTarget and IsAimbotActive() then
-        if IsTargetValidSticky(Config.CurrentTarget) then
-            local part = Config.CurrentTarget.Character:FindFirstChild(Config.CurrentTarget.Part.Name)
-            if part then
-                Config.CurrentTarget.Part = part
-                Config.CurrentTarget.Position = part.Position
-                Config.StickyLostTime = 0
-                return Config.CurrentTarget
-            end
-        else
-            if Config.StickyLostTime == 0 then
-                Config.StickyLostTime = tick()
-            elseif tick() - Config.StickyLostTime < Config.StickyGracePeriod then
-                local part = Config.CurrentTarget.Character:FindFirstChild(Config.CurrentTarget.Part.Name)
-                if part then
-                    Config.CurrentTarget.Part = part
-                    Config.CurrentTarget.Position = part.Position
-                    return Config.CurrentTarget
-                end
-            end
-            Config.CurrentTarget = nil
-            Config.StickyLostTime = 0
+    if Config.WeaponOnly then
+        local holdingTool = IsHoldingTool()
+        local recentClick = (tick() - Config.LastClickTime) < Config.RecentClickWindow
+        if not holdingTool and not recentClick then
+            return false
         end
     end
 
+    return true
+end
+
+-- ============================================================
+-- Silent Aim: Target Selection (closest to crosshair)
+-- ============================================================
+
+local function GetSilentAimTarget()
+    if not IsSilentAimArmed() then return nil end
+
     local bestTarget = nil
     local bestScore = math.huge
+    local useFOV = Config.SilentAimFOV or Config.FOV
 
     for _, player in pairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
@@ -216,42 +187,27 @@ local function GetBestTarget()
         local targetPart = GetTargetPart(character)
         if not targetPart then continue end
 
-        local targetPos = targetPart.Position
+        local targetPos = PredictPosition({Part = targetPart, Player = player})
         local dist = GetDistance(targetPos)
         if dist > Config.MaxDistance then continue end
 
-        local inFOV, fovDist = IsInFOV(targetPos)
+        local inFOV, fovDist = IsInFOV(targetPos, useFOV)
         if not inFOV then continue end
 
         if not CanSee(targetPos, character) then continue end
 
-        local score = math.huge
-        local hum = GetHumanoid(character)
-
-        if Config.Priority == "Closest to Mouse" then
-            score = fovDist
-        elseif Config.Priority == "Closest to Player" then
-            score = dist
-        elseif Config.Priority == "Lowest HP" then
-            if hum then
-                score = hum.Health + (fovDist * 0.1)
-            else
-                score = fovDist
-            end
-        elseif Config.Priority == "Highest HP" then
-            if hum then
-                score = -hum.Health + (fovDist * 0.1)
-            else
-                score = fovDist
-            end
-        elseif Config.Priority == "Random" then
-            score = math.random(1, 10000)
-        else
-            score = fovDist + (dist * 0.02)
+        -- Hit chance check
+        if Config.HitChance < 100 and math.random(1, 100) > Config.HitChance then
+            continue
         end
 
-        if score < bestScore then
-            bestScore = score
+        -- Legit mode: only redirect if already close
+        if Config.LegitMode and fovDist > Config.LegitThreshold then
+            continue
+        end
+
+        if fovDist < bestScore then
+            bestScore = fovDist
             bestTarget = {
                 Player = player,
                 Character = character,
@@ -261,11 +217,12 @@ local function GetBestTarget()
             }
         end
     end
+
     return bestTarget
 end
 
 -- ============================================================
--- Lock-on aiming
+-- Lock-on Aiming
 -- ============================================================
 
 local function AimAt(target)
@@ -282,50 +239,133 @@ local function AimAt(target)
 end
 
 -- ============================================================
--- Silent Aim — HookManager Handlers
+-- Silent Aim: Raycast Handler
 -- ============================================================
 
-local function AimbotRaycastHandler(origin, direction, params)
-    if not Config.Enabled or not Config.SilentAim or not Config.CurrentTarget then
-        return nil
-    end
-    local t = Config.CurrentTarget
-    if not t or not t.Part then return nil end
+local function SilentAimRaycastHandler(origin, direction, params)
+    if not IsSilentAimArmed() then return nil end
+
+    local target = GetSilentAimTarget()
+    if not target or not target.Part then return nil end
+
     local camPos = Camera.CFrame.Position
-    if (origin - camPos).Magnitude < 8 then
-        local aimPos = PredictPosition(t)
-        return origin, aimPos - origin, params
+    if (origin - camPos).Magnitude > 15 then return nil end
+
+    local aimPos = target.Position
+    return origin, aimPos - origin, params
+end
+
+-- ============================================================
+-- Silent Aim: FindPartOnRay Handler
+-- ============================================================
+
+local function SilentAimFindPartOnRayHandler(ray, methodName, ...)
+    if not IsSilentAimArmed() then return nil end
+
+    local target = GetSilentAimTarget()
+    if not target or not target.Part then return nil end
+
+    local camPos = Camera.CFrame.Position
+    if (ray.Origin - camPos).Magnitude > 15 then return nil end
+
+    local aimPos = target.Position
+    return Ray.new(ray.Origin, aimPos - ray.Origin)
+end
+
+-- ============================================================
+-- Silent Aim: Mouse.Hit / Mouse.Target __index Handler
+-- ============================================================
+
+local function SilentAimIndexHandler(self_obj, key)
+    if not IsSilentAimArmed() then return nil end
+    if self_obj ~= Mouse then return nil end
+
+    local target = GetSilentAimTarget()
+    if not target or not target.Part then return nil end
+
+    if key == "Hit" then
+        return CFrame.new(target.Position)
+    elseif key == "Target" then
+        return target.Part
+    elseif key == "TargetSurface" then
+        return Enum.NormalId.Top
     end
+
     return nil
 end
 
-local function AimbotNamecallHandler(args, method, self_obj)
-    if not Config.Enabled or not Config.SilentAim or not Config.CurrentTarget then
-        return args, false
-    end
-    local t = Config.CurrentTarget
-    if not t or not t.Part then return args, false end
+-- ============================================================
+-- Silent Aim: __namecall Deep Scan Handler
+-- ============================================================
 
-    local aimPos = PredictPosition(t)
+local function IsHitPosition(pos)
     local camPos = Camera.CFrame.Position
+    local d = (pos - camPos).Magnitude
+    return d > 0.5 and d < Config.MaxDistance * 2
+end
+
+local function DeepScanAndReplace(t, targetPos, targetPart, targetCharacter)
+    if type(t) ~= "table" then return false end
     local modified = false
 
-    local function IsHitPos(pos)
-        local d = (pos - camPos).Magnitude
-        return d > 0.5 and d < Config.MaxDistance * 2
+    for k, v in pairs(t) do
+        local vt = typeof(v)
+
+        if vt == "Vector3" then
+            if IsHitPosition(v) then
+                t[k] = targetPos
+                modified = true
+            end
+        elseif vt == "CFrame" then
+            if IsHitPosition(v.Position) then
+                t[k] = CFrame.new(targetPos)
+                modified = true
+            end
+        elseif vt == "Ray" then
+            t[k] = Ray.new(v.Origin, targetPos - v.Origin)
+            modified = true
+        elseif vt == "Instance" and v:IsA("BasePart") then
+            local vm = v:FindFirstAncestorOfClass("Model")
+            if vm and vm ~= LocalPlayer.Character then
+                t[k] = targetPart
+                modified = true
+            end
+        elseif vt == "table" then
+            if DeepScanAndReplace(v, targetPos, targetPart, targetCharacter) then
+                modified = true
+            end
+        elseif vt == "string" then
+            -- Some games send part names as strings
+            if v:lower():match("torso") or v:lower():match("body") or v:lower():match("limb") or v:lower():match("arm") or v:lower():match("leg") then
+                t[k] = targetPart.Name
+                modified = true
+            end
+        end
     end
+
+    return modified
+end
+
+local function SilentAimNamecallHandler(args, method, self_obj)
+    if not IsSilentAimArmed() then return args, false end
+
+    local target = GetSilentAimTarget()
+    if not target or not target.Part then return args, false end
+
+    local aimPos = target.Position
+    local modified = false
 
     for i = 1, #args do
         local arg = args[i]
         local argType = typeof(arg)
 
         if argType == "Vector3" then
-            if IsHitPos(arg) then
+            if IsHitPosition(arg) then
                 args[i] = aimPos
                 modified = true
             end
         elseif argType == "CFrame" then
-            if IsHitPos(arg.Position) then
+            if IsHitPosition(arg.Position) then
                 args[i] = CFrame.new(aimPos)
                 modified = true
             end
@@ -335,25 +375,17 @@ local function AimbotNamecallHandler(args, method, self_obj)
         elseif argType == "Instance" and arg:IsA("BasePart") then
             local model = arg:FindFirstAncestorOfClass("Model")
             if model and model ~= LocalPlayer.Character then
-                args[i] = t.Part
+                args[i] = target.Part
                 modified = true
             end
         elseif argType == "table" then
-            for k, v in pairs(arg) do
-                local vt = typeof(v)
-                if vt == "Vector3" and IsHitPos(v) then
-                    arg[k] = aimPos
-                    modified = true
-                elseif vt == "CFrame" and IsHitPos(v.Position) then
-                    arg[k] = CFrame.new(aimPos)
-                    modified = true
-                elseif vt == "Instance" and v:IsA("BasePart") then
-                    local vm = v:FindFirstAncestorOfClass("Model")
-                    if vm and vm ~= LocalPlayer.Character then
-                        arg[k] = t.Part
-                        modified = true
-                    end
-                end
+            if DeepScanAndReplace(arg, aimPos, target.Part, target.Character) then
+                modified = true
+            end
+        elseif argType == "string" then
+            if arg:lower():match("torso") or arg:lower():match("body") or arg:lower():match("limb") or arg:lower():match("arm") or arg:lower():match("leg") then
+                args[i] = target.Part.Name
+                modified = true
             end
         end
     end
@@ -414,16 +446,29 @@ end
 
 local FOVCircle = nil
 local TargetCircle = nil
+local SilentAimCircle = nil
 
 local function UpdateFOVCircle()
     if not FOVCircle then return end
     if Config.Enabled then
-        local radius = GetFOVRadiusPixels()
+        local radius = GetFOVRadiusPixels(Config.FOV)
         FOVCircle.Visible = true
         FOVCircle.Radius = radius
         FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
     else
         FOVCircle.Visible = false
+    end
+end
+
+local function UpdateSilentAimCircle()
+    if not SilentAimCircle then return end
+    if Config.Enabled and Config.SilentAim then
+        local radius = GetFOVRadiusPixels(Config.SilentAimFOV)
+        SilentAimCircle.Visible = true
+        SilentAimCircle.Radius = radius
+        SilentAimCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    else
+        SilentAimCircle.Visible = false
     end
 end
 
@@ -443,6 +488,128 @@ local function UpdateTargetCircle()
 end
 
 -- ============================================================
+-- Target Selection (Lock-on)
+-- ============================================================
+
+local function IsTargetValidStrict(target)
+    if not target then return false end
+    if not target.Player or not target.Character then return false end
+    if not IsAlive(target.Character) then return false end
+    if Config.TeamCheck and IsTeammate(target.Player) then return false end
+    local part = target.Character:FindFirstChild(target.Part.Name)
+    if not part then return false end
+    local dist = GetDistance(part.Position)
+    if dist > Config.MaxDistance then return false end
+    local inFOV, _ = IsInFOV(part.Position, Config.FOV)
+    if not inFOV then return false end
+    if not CanSee(part.Position, target.Character) then return false end
+    return true
+end
+
+local function IsTargetValidSticky(target)
+    if not target then return false end
+    if not target.Player or not target.Character then return false end
+    if not IsAlive(target.Character) then return false end
+    if Config.TeamCheck and IsTeammate(target.Player) then return false end
+    local part = target.Character:FindFirstChild(target.Part.Name)
+    if not part then return false end
+    local dist = GetDistance(part.Position)
+    if dist > Config.MaxDistance then return false end
+    return true
+end
+
+local function IsAimbotActive()
+    return Config.Aiming or Config.SilentAim
+end
+
+local function GetBestTarget()
+    if Config.Enabled and Config.StickyTarget and Config.CurrentTarget and IsAimbotActive() then
+        if IsTargetValidSticky(Config.CurrentTarget) then
+            local part = Config.CurrentTarget.Character:FindFirstChild(Config.CurrentTarget.Part.Name)
+            if part then
+                Config.CurrentTarget.Part = part
+                Config.CurrentTarget.Position = part.Position
+                Config.StickyLostTime = 0
+                return Config.CurrentTarget
+            end
+        else
+            if Config.StickyLostTime == 0 then
+                Config.StickyLostTime = tick()
+            elseif tick() - Config.StickyLostTime < Config.StickyGracePeriod then
+                local part = Config.CurrentTarget.Character:FindFirstChild(Config.CurrentTarget.Part.Name)
+                if part then
+                    Config.CurrentTarget.Part = part
+                    Config.CurrentTarget.Position = part.Position
+                    return Config.CurrentTarget
+                end
+            end
+            Config.CurrentTarget = nil
+            Config.StickyLostTime = 0
+        end
+    end
+
+    local bestTarget = nil
+    local bestScore = math.huge
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        if Config.TeamCheck and IsTeammate(player) then continue end
+
+        local character = GetCharacter(player)
+        if not character or not IsAlive(character) then continue end
+
+        local targetPart = GetTargetPart(character)
+        if not targetPart then continue end
+
+        local targetPos = targetPart.Position
+        local dist = GetDistance(targetPos)
+        if dist > Config.MaxDistance then continue end
+
+        local inFOV, fovDist = IsInFOV(targetPos, Config.FOV)
+        if not inFOV then continue end
+
+        if not CanSee(targetPos, character) then continue end
+
+        local score = math.huge
+        local hum = GetHumanoid(character)
+
+        if Config.Priority == "Closest to Mouse" then
+            score = fovDist
+        elseif Config.Priority == "Closest to Player" then
+            score = dist
+        elseif Config.Priority == "Lowest HP" then
+            if hum then
+                score = hum.Health + (fovDist * 0.1)
+            else
+                score = fovDist
+            end
+        elseif Config.Priority == "Highest HP" then
+            if hum then
+                score = -hum.Health + (fovDist * 0.1)
+            else
+                score = fovDist
+            end
+        elseif Config.Priority == "Random" then
+            score = math.random(1, 10000)
+        else
+            score = fovDist + (dist * 0.02)
+        end
+
+        if score < bestScore then
+            bestScore = score
+            bestTarget = {
+                Player = player,
+                Character = character,
+                Part = targetPart,
+                Position = targetPos,
+                Distance = dist,
+            }
+        end
+    end
+    return bestTarget
+end
+
+-- ============================================================
 -- Render loop
 -- ============================================================
 
@@ -452,6 +619,7 @@ local function OnRenderStep()
         Config.StickyLostTime = 0
         if FOVCircle then FOVCircle.Visible = false end
         if TargetCircle then TargetCircle.Visible = false end
+        if SilentAimCircle then SilentAimCircle.Visible = false end
         return
     end
 
@@ -471,6 +639,7 @@ local function OnRenderStep()
     end
 
     UpdateFOVCircle()
+    UpdateSilentAimCircle()
     UpdateTargetCircle()
 end
 
@@ -480,6 +649,9 @@ end
 
 local function OnInputBegan(input, gp)
     if gp then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        Config.LastClickTime = tick()
+    end
     if input.UserInputType == Config.AimKey or input.KeyCode == Config.AimKey then
         if Config.ToggleMode then
             Config.Aiming = not Config.Aiming
@@ -513,6 +685,14 @@ function Module.Init()
     FOVCircle.NumSides = 64
     FOVCircle.Filled = false
 
+    SilentAimCircle = Drawing.new("Circle")
+    SilentAimCircle.Visible = false
+    SilentAimCircle.Thickness = 1
+    SilentAimCircle.Color = Color3.fromRGB(255, 255, 0)
+    SilentAimCircle.Transparency = 0.3
+    SilentAimCircle.NumSides = 64
+    SilentAimCircle.Filled = false
+
     TargetCircle = Drawing.new("Circle")
     TargetCircle.Visible = false
     TargetCircle.Thickness = 2
@@ -529,8 +709,10 @@ end
 function Module.Enable()
     Config.Enabled = true
     if Config.SilentAim and Utils and Utils.HookManager then
-        Utils.HookManager:RegisterRaycastHandler("Aimbot", AimbotRaycastHandler)
-        Utils.HookManager:RegisterNamecallHandler("Aimbot", AimbotNamecallHandler)
+        Utils.HookManager:RegisterRaycastHandler("Aimbot", SilentAimRaycastHandler, 10)
+        Utils.HookManager:RegisterFindPartOnRayHandler("Aimbot", SilentAimFindPartOnRayHandler, 10)
+        Utils.HookManager:RegisterNamecallHandler("Aimbot", SilentAimNamecallHandler, 10)
+        Utils.HookManager:RegisterIndexHandler("Aimbot", SilentAimIndexHandler, 10)
         Utils.HookManager:Install()
     end
     if not RenderConnection then
@@ -545,13 +727,16 @@ function Module.Disable()
     Config.StickyLostTime = 0
     if Utils and Utils.HookManager then
         Utils.HookManager:UnregisterRaycastHandler("Aimbot")
+        Utils.HookManager:UnregisterFindPartOnRayHandler("Aimbot")
         Utils.HookManager:UnregisterNamecallHandler("Aimbot")
+        Utils.HookManager:UnregisterIndexHandler("Aimbot")
     end
     if RenderConnection then
         RenderConnection:Disconnect()
         RenderConnection = nil
     end
     if FOVCircle then FOVCircle.Visible = false end
+    if SilentAimCircle then SilentAimCircle.Visible = false end
     if TargetCircle then TargetCircle.Visible = false end
 end
 
@@ -560,18 +745,23 @@ function Module.SetConfig(key, value)
         Config.SilentAim = value
         if Config.Enabled and Utils and Utils.HookManager then
             if value then
-                Utils.HookManager:RegisterRaycastHandler("Aimbot", AimbotRaycastHandler)
-                Utils.HookManager:RegisterNamecallHandler("Aimbot", AimbotNamecallHandler)
+                Utils.HookManager:RegisterRaycastHandler("Aimbot", SilentAimRaycastHandler, 10)
+                Utils.HookManager:RegisterFindPartOnRayHandler("Aimbot", SilentAimFindPartOnRayHandler, 10)
+                Utils.HookManager:RegisterNamecallHandler("Aimbot", SilentAimNamecallHandler, 10)
+                Utils.HookManager:RegisterIndexHandler("Aimbot", SilentAimIndexHandler, 10)
                 Utils.HookManager:Install()
             else
                 Utils.HookManager:UnregisterRaycastHandler("Aimbot")
+                Utils.HookManager:UnregisterFindPartOnRayHandler("Aimbot")
                 Utils.HookManager:UnregisterNamecallHandler("Aimbot")
+                Utils.HookManager:UnregisterIndexHandler("Aimbot")
             end
         end
     elseif key == "Triggerbot" then Config.Triggerbot = value
     elseif key == "TeamCheck" then Config.TeamCheck = value
     elseif key == "WallCheck" then Config.WallCheck = value
     elseif key == "FOV" then Config.FOV = math.clamp(value, 10, 360)
+    elseif key == "SilentAimFOV" then Config.SilentAimFOV = math.clamp(value, 10, 360)
     elseif key == "Smoothness" then Config.Smoothness = math.clamp(value, 0, 100)
     elseif key == "MaxDistance" then Config.MaxDistance = math.clamp(value, 50, 5000)
     elseif key == "TriggerDelay" then Config.TriggerDelay = math.clamp(value, 0, 5000)
@@ -583,6 +773,11 @@ function Module.SetConfig(key, value)
         Config.ToggleMode = value
         if not value then Config.Aiming = false end
     elseif key == "StickyTarget" then Config.StickyTarget = value
+    elseif key == "HitChance" then Config.HitChance = math.clamp(value, 0, 100)
+    elseif key == "LegitMode" then Config.LegitMode = value
+    elseif key == "LegitThreshold" then Config.LegitThreshold = value
+    elseif key == "WeaponOnly" then Config.WeaponOnly = value
+    elseif key == "SilentAimMode" then Config.SilentAimMode = value
     end
 end
 
@@ -597,6 +792,7 @@ function Module.ResetConfig()
     Config.TeamCheck = false
     Config.WallCheck = false
     Config.FOV = 120
+    Config.SilentAimFOV = 60
     Config.Smoothness = 15
     Config.MaxDistance = 1000
     Config.TriggerDelay = 50
@@ -609,9 +805,16 @@ function Module.ResetConfig()
     Config.CurrentTarget = nil
     Config.Aiming = false
     Config.StickyLostTime = 0
+    Config.HitChance = 100
+    Config.LegitMode = false
+    Config.LegitThreshold = 30
+    Config.WeaponOnly = true
+    Config.SilentAimMode = "Raycast"
     if Utils and Utils.HookManager then
         Utils.HookManager:UnregisterRaycastHandler("Aimbot")
+        Utils.HookManager:UnregisterFindPartOnRayHandler("Aimbot")
         Utils.HookManager:UnregisterNamecallHandler("Aimbot")
+        Utils.HookManager:UnregisterIndexHandler("Aimbot")
     end
 end
 
@@ -620,6 +823,7 @@ function Module.Cleanup()
     if InputBeganConnection then InputBeganConnection:Disconnect(); InputBeganConnection = nil end
     if InputEndedConnection then InputEndedConnection:Disconnect(); InputEndedConnection = nil end
     if FOVCircle then FOVCircle:Remove(); FOVCircle = nil end
+    if SilentAimCircle then SilentAimCircle:Remove(); SilentAimCircle = nil end
     if TargetCircle then TargetCircle:Remove(); TargetCircle = nil end
 end
 

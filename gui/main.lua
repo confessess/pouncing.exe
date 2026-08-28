@@ -45,6 +45,30 @@ function MainGUI.Create(screenGui, moduleManager)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("SilentAim", v) end
     end)
+    GUI.CreateToggle(ACon, "Weapon Only", true, nil, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("WeaponOnly", v) end
+    end)
+    GUI.CreateToggle(ACon, "Legit Mode", false, nil, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("LegitMode", v) end
+    end)
+    GUI.CreateDropdown(ACon, "Silent Aim Mode", {"Raycast", "Mouse", "Hybrid"}, "Raycast", function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("SilentAimMode", v) end
+    end)
+    GUI.CreateSlider(ACon, "Silent Aim FOV", 10, 180, 60, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("SilentAimFOV", v) end
+    end)
+    GUI.CreateSlider(ACon, "Hit Chance %", 0, 100, 100, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("HitChance", v) end
+    end)
+    GUI.CreateSlider(ACon, "Legit Threshold", 5, 100, 30, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("LegitThreshold", v) end
+    end)
     GUI.CreateToggle(ACon, "Triggerbot", false, nil, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("Triggerbot", v) end

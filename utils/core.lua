@@ -1,8 +1,10 @@
--- Pouncing.exe | Utils Core v2.0
--- Shared utilities + Unified Hook Manager for collision-free __namecall/Raycast
+-- Pouncing.exe | Utils Core v3.0
+-- Shared utilities + Unified Hook Manager
+-- Added: FindPartOnRay hooks, __index hooks, handler priority system
 -- ============================================================
 
 local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
 local Camera = Workspace.CurrentCamera
 
 local Utils = {}
@@ -126,45 +128,93 @@ Utils.SkeletonConnections = {
 }
 
 -- ============================================================
--- UNIFIED HOOK MANAGER
--- Allows multiple modules to hook __namecall / Raycast safely
+-- UNIFIED HOOK MANAGER v3.0
 -- ============================================================
 local HookManager = {
-    OriginalNamecall = nil,
+    -- Raycast
     OriginalRaycast = nil,
-    NamecallHandlers = {},
     RaycastHandlers = {},
+
+    -- FindPartOnRay family
+    OriginalFindPartOnRay = nil,
+    OriginalFindPartOnRayWithIgnoreList = nil,
+    OriginalFindPartOnRayWithWhitelist = nil,
+    FindPartOnRayHandlers = {},
+
+    -- __namecall
+    OriginalNamecall = nil,
+    NamecallHandlers = {},
+    Mt = nil,
+
+    -- __index (for Mouse.Hit, Mouse.Target, etc.)
+    OriginalIndex = nil,
+    IndexHandlers = {},
+
     Hooked = false,
-    Mt = nil
 }
 
-function HookManager:RegisterNamecallHandler(name, handler)
-    self.NamecallHandlers[name] = handler
+-- Priority-based handler iteration
+local function GetSortedHandlers(handlerTable)
+    local sorted = {}
+    for name, data in pairs(handlerTable) do
+        if type(data) == "table" and data.handler then
+            table.insert(sorted, {name = name, handler = data.handler, priority = data.priority or 0})
+        elseif type(data) == "function" then
+            table.insert(sorted, {name = name, handler = data, priority = 0})
+        end
+    end
+    table.sort(sorted, function(a, b) return a.priority > b.priority end)
+    return sorted
 end
 
-function HookManager:UnregisterNamecallHandler(name)
-    self.NamecallHandlers[name] = nil
+-- Raycast handlers
+function HookManager:RegisterRaycastHandler(name, handler, priority)
+    self.RaycastHandlers[name] = {handler = handler, priority = priority or 0}
 end
-
-function HookManager:RegisterRaycastHandler(name, handler)
-    self.RaycastHandlers[name] = handler
-end
-
 function HookManager:UnregisterRaycastHandler(name)
     self.RaycastHandlers[name] = nil
 end
 
+-- FindPartOnRay handlers
+function HookManager:RegisterFindPartOnRayHandler(name, handler, priority)
+    self.FindPartOnRayHandlers[name] = {handler = handler, priority = priority or 0}
+end
+function HookManager:UnregisterFindPartOnRayHandler(name)
+    self.FindPartOnRayHandlers[name] = nil
+end
+
+-- Namecall handlers
+function HookManager:RegisterNamecallHandler(name, handler, priority)
+    self.NamecallHandlers[name] = {handler = handler, priority = priority or 0}
+end
+function HookManager:UnregisterNamecallHandler(name)
+    self.NamecallHandlers[name] = nil
+end
+
+-- Index handlers
+function HookManager:RegisterIndexHandler(name, handler, priority)
+    self.IndexHandlers[name] = {handler = handler, priority = priority or 0}
+end
+function HookManager:UnregisterIndexHandler(name)
+    self.IndexHandlers[name] = nil
+end
+
+-- ============================================================
+-- Install all hooks
+-- ============================================================
 function HookManager:Install()
     if self.Hooked then return end
     self.Hooked = true
 
-    -- Raycast hook
+    local LocalPlayer = Players.LocalPlayer
+
+    -- Raycast hook (direct function replacement)
     local oldRaycast = Workspace.Raycast
     self.OriginalRaycast = oldRaycast
     Workspace.Raycast = function(ws, origin, direction, params, ...)
         local finalOrigin, finalDirection, finalParams = origin, direction, params
-        for _, handler in pairs(self.RaycastHandlers) do
-            local ok, newOrigin, newDirection, newParams = pcall(handler, finalOrigin, finalDirection, finalParams)
+        for _, entry in ipairs(GetSortedHandlers(self.RaycastHandlers)) do
+            local ok, newOrigin, newDirection, newParams = pcall(entry.handler, finalOrigin, finalDirection, finalParams)
             if ok and newOrigin ~= nil then
                 finalOrigin = newOrigin
                 finalDirection = newDirection or finalDirection
@@ -173,6 +223,29 @@ function HookManager:Install()
         end
         return oldRaycast(ws, finalOrigin, finalDirection, finalParams, ...)
     end
+
+    -- FindPartOnRay hooks
+    local function HookFindPartOnRay(methodName, original)
+        if not original then return nil end
+        return function(ws, ray, ...)
+            local finalRay = ray
+            for _, entry in ipairs(GetSortedHandlers(self.FindPartOnRayHandlers)) do
+                local ok, newRay = pcall(entry.handler, finalRay, methodName, ...)
+                if ok and newRay ~= nil then
+                    finalRay = newRay
+                end
+            end
+            return original(ws, finalRay, ...)
+        end
+    end
+
+    self.OriginalFindPartOnRay = Workspace.FindPartOnRay
+    self.OriginalFindPartOnRayWithIgnoreList = Workspace.FindPartOnRayWithIgnoreList
+    self.OriginalFindPartOnRayWithWhitelist = Workspace.FindPartOnRayWithWhitelist
+
+    Workspace.FindPartOnRay = HookFindPartOnRay("FindPartOnRay", self.OriginalFindPartOnRay)
+    Workspace.FindPartOnRayWithIgnoreList = HookFindPartOnRay("FindPartOnRayWithIgnoreList", self.OriginalFindPartOnRayWithIgnoreList)
+    Workspace.FindPartOnRayWithWhitelist = HookFindPartOnRay("FindPartOnRayWithWhitelist", self.OriginalFindPartOnRayWithWhitelist)
 
     -- __namecall hook
     local ok, mt = pcall(getrawmetatable, game)
@@ -188,11 +261,53 @@ function HookManager:Install()
                 local modified = false
 
                 if method == "FireServer" or method == "InvokeServer" then
-                    for _, handler in pairs(self.NamecallHandlers) do
-                        local ok, newArgs, wasModified = pcall(handler, args, method, self_obj)
+                    for _, entry in ipairs(GetSortedHandlers(self.NamecallHandlers)) do
+                        local ok, newArgs, wasModified = pcall(entry.handler, args, method, self_obj)
                         if ok and newArgs then
                             args = newArgs
                             if wasModified then modified = true end
+                        end
+                    end
+                end
+
+                -- Also catch FindPartOnRay via __namecall
+                if method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
+                    local ray = args[1]
+                    if ray and typeof(ray) == "Ray" then
+                        local finalRay = ray
+                        for _, entry in ipairs(GetSortedHandlers(self.FindPartOnRayHandlers)) do
+                            local ok, newRay = pcall(entry.handler, finalRay, method, unpack(args, 2))
+                            if ok and newRay ~= nil then
+                                finalRay = newRay
+                            end
+                        end
+                        if finalRay ~= ray then
+                            args[1] = finalRay
+                            modified = true
+                        end
+                    end
+                end
+
+                -- Catch Raycast via __namecall too
+                if method == "Raycast" then
+                    local origin = args[1]
+                    local direction = args[2]
+                    local params = args[3]
+                    if origin and direction then
+                        local finalOrigin, finalDirection, finalParams = origin, direction, params
+                        for _, entry in ipairs(GetSortedHandlers(self.RaycastHandlers)) do
+                            local ok, newOrigin, newDirection, newParams = pcall(entry.handler, finalOrigin, finalDirection, finalParams)
+                            if ok and newOrigin ~= nil then
+                                finalOrigin = newOrigin
+                                finalDirection = newDirection or finalDirection
+                                finalParams = newParams or finalParams
+                            end
+                        end
+                        if finalOrigin ~= origin or finalDirection ~= direction then
+                            args[1] = finalOrigin
+                            args[2] = finalDirection
+                            args[3] = finalParams
+                            modified = true
                         end
                     end
                 end
@@ -206,19 +321,52 @@ function HookManager:Install()
             setreadonly(mt, true)
         end
     end
+
+    -- __index hook (for Mouse.Hit, Mouse.Target, etc.)
+    local ok2, mt2 = pcall(getrawmetatable, game)
+    if ok2 and mt2 then
+        local oldIndex = mt2.__index
+        if oldIndex then
+            self.OriginalIndex = oldIndex
+            setreadonly(mt2, false)
+            mt2.__index = newcclosure(function(self_obj, key)
+                for _, entry in ipairs(GetSortedHandlers(self.IndexHandlers)) do
+                    local ok, result = pcall(entry.handler, self_obj, key)
+                    if ok and result ~= nil then
+                        return result
+                    end
+                end
+                return oldIndex(self_obj, key)
+            end)
+            setreadonly(mt2, true)
+        end
+    end
 end
 
 function HookManager:Uninstall()
     if not self.Hooked then return end
+
     if self.OriginalRaycast then Workspace.Raycast = self.OriginalRaycast end
+    if self.OriginalFindPartOnRay then Workspace.FindPartOnRay = self.OriginalFindPartOnRay end
+    if self.OriginalFindPartOnRayWithIgnoreList then Workspace.FindPartOnRayWithIgnoreList = self.OriginalFindPartOnRayWithIgnoreList end
+    if self.OriginalFindPartOnRayWithWhitelist then Workspace.FindPartOnRayWithWhitelist = self.OriginalFindPartOnRayWithWhitelist end
+
     if self.Mt and self.OriginalNamecall then
         setreadonly(self.Mt, false)
         self.Mt.__namecall = self.OriginalNamecall
         setreadonly(self.Mt, true)
     end
+
+    if self.Mt and self.OriginalIndex then
+        setreadonly(self.Mt, false)
+        self.Mt.__index = self.OriginalIndex
+        setreadonly(self.Mt, true)
+    end
+
     self.Hooked = false
     self.OriginalRaycast = nil
     self.OriginalNamecall = nil
+    self.OriginalIndex = nil
     self.Mt = nil
 end
 
