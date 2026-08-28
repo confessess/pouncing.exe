@@ -506,23 +506,44 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateSeparator(CCon)
     GUI.CreateSection(CCon, "Kill Switch")
     GUI.CreateButton(CCon, "UNINJECT / KILL SWITCH", function()
-        -- Destroy all modules
+        print("[Pouncing] Killswitch activated...")
+        -- Step 1: Disable every module first (turn off all features)
+        for name, mod in pairs(moduleManager.Modules) do
+            if mod then
+                -- Toggle off if possible
+                if mod.Toggle then
+                    pcall(function() mod.Toggle(false) end)
+                end
+                -- Set Enabled false if possible
+                if mod.SetConfig then
+                    pcall(function() mod.SetConfig("Enabled", false) end)
+                end
+            end
+        end
+        -- Step 2: Cleanup every module (remove ESP, stop loops, etc.)
         for name, mod in pairs(moduleManager.Modules) do
             if mod and mod.Cleanup then
                 pcall(mod.Cleanup)
             end
         end
-        -- Destroy the UI
+        -- Step 3: Destroy the UI
         if screenGui then
-            screenGui:Destroy()
+            pcall(function() screenGui:Destroy() end)
         end
-        -- Clear module manager
+        -- Step 4: Clear module manager
         moduleManager.Modules = {}
-        -- Disconnect any remaining connections
+        -- Step 5: Stop any running RenderStepped/Heartbeat connections
+        for _, conn in pairs(getconnections(RunService.RenderStepped)) do
+            pcall(function() conn:Disconnect() end)
+        end
+        for _, conn in pairs(getconnections(RunService.Heartbeat)) do
+            pcall(function() conn:Disconnect() end)
+        end
+        -- Step 6: Disconnect input connections
         for _, conn in pairs(getconnections(UserInputService.InputBegan)) do
             pcall(function() conn:Disconnect() end)
         end
-        print("[Pouncing] Killswitch activated — fully uninjected")
+        print("[Pouncing] Fully uninjected — all modules off, all connections killed")
     end)
 
     GUI.CreateSeparator(CCon)
@@ -561,8 +582,8 @@ function MainGUI.Create(screenGui, moduleManager)
             isMatch = (input.UserInputType == uiToggleKey)
         end
         if isMatch then
-            window.MainFrame.Visible = not window.MainFrame.Visible
-            print("[Pouncing] UI toggled — Visible:", tostring(window.MainFrame.Visible))
+            window.Container.Visible = not window.Container.Visible
+            print("[Pouncing] UI toggled — Visible:", tostring(window.Container.Visible))
         end
     end)
 
