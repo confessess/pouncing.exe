@@ -1,6 +1,5 @@
--- Pouncing.exe | GUI Main v3.0
--- Assembles the main window with all tabs and real controls
--- Fixed: Fly dropdown (3 methods + warning), SliderWithInput for movement
+-- Pouncing.exe | GUI Main v3.1
+-- Complete UI revamp: larger window, theme presets, no clipping
 -- Made by pouncing :3
 -- ============================================================
 
@@ -16,7 +15,7 @@ local MainGUI = {}
 function MainGUI.Create(screenGui, moduleManager)
     local GUI = moduleManager:GetModule("Framework") or require(script.Parent.framework)
 
-    local window = GUI.CreateWindow(screenGui, "Pouncing.exe", UDim2.new(0, 560, 0, 400))
+    local window = GUI.CreateWindow(screenGui, "Pouncing.exe", UDim2.new(0, 680, 0, 520))
 
     local tabDefs = {
         {Name = "Aimbot", Icon = "🎯"},
@@ -26,7 +25,6 @@ function MainGUI.Create(screenGui, moduleManager)
         {Name = "Hitbox", Icon = "📦"},
         {Name = "Config", Icon = "💾"}
     }
-
     for _, tabInfo in ipairs(tabDefs) do
         GUI.CreateTab(window, tabInfo.Name, tabInfo.Icon)
     end
@@ -134,24 +132,16 @@ function MainGUI.Create(screenGui, moduleManager)
     colorPickers.DistanceColor = GUI.CreateColorPicker(ECon, "Distance Color", Color3.fromRGB(200, 200, 200))
 
     local colorConfigMap = {
-        BoxColor = "Color_Box",
-        SkeletonColor = "Color_Skeleton",
-        ChamsColor = "Color_ChamsFill",
-        TracerColor = "Color_Tracers",
-        HeadDotColor = "Color_HeadDot",
-        NameColor = "Color_Name",
-        HealthColor = "Color_Health",
-        DistanceColor = "Color_Distance",
+        BoxColor = "Color_Box", SkeletonColor = "Color_Skeleton",
+        ChamsColor = "Color_ChamsFill", TracerColor = "Color_Tracers",
+        HeadDotColor = "Color_HeadDot", NameColor = "Color_Name",
+        HealthColor = "Color_Health", DistanceColor = "Color_Distance",
     }
     local colorDefaults = {
-        BoxColor = Color3.fromRGB(255, 105, 180),
-        SkeletonColor = Color3.fromRGB(255, 0, 255),
-        ChamsColor = Color3.fromRGB(255, 20, 147),
-        TracerColor = Color3.fromRGB(255, 105, 180),
-        HeadDotColor = Color3.fromRGB(255, 255, 255),
-        NameColor = Color3.fromRGB(255, 255, 255),
-        HealthColor = Color3.fromRGB(0, 255, 100),
-        DistanceColor = Color3.fromRGB(200, 200, 200),
+        BoxColor = Color3.fromRGB(255, 105, 180), SkeletonColor = Color3.fromRGB(255, 0, 255),
+        ChamsColor = Color3.fromRGB(255, 20, 147), TracerColor = Color3.fromRGB(255, 105, 180),
+        HeadDotColor = Color3.fromRGB(255, 255, 255), NameColor = Color3.fromRGB(255, 255, 255),
+        HealthColor = Color3.fromRGB(0, 255, 100), DistanceColor = Color3.fromRGB(200, 200, 200),
     }
 
     local function MakeESPToggle(text, default, colorKey, configKey)
@@ -161,28 +151,18 @@ function MainGUI.Create(screenGui, moduleManager)
         end)
         if cbtn then
             local defaultColor = colorDefaults[colorKey]
-            if defaultColor then
-                cbtn.BackgroundColor3 = defaultColor
-            end
+            if defaultColor then cbtn.BackgroundColor3 = defaultColor end
             if colorKey and colorPickers[colorKey] then
                 cbtn.MouseButton1Click:Connect(function()
                     local picker = colorPickers[colorKey]
-                    if picker:IsOpen() then
-                        picker:Close()
-                    else
+                    if picker:IsOpen() then picker:Close() else
                         for _, cp in pairs(colorPickers) do
-                            if cp ~= picker and cp:IsOpen() then
-                                cp:Close()
-                            end
+                            if cp ~= picker and cp:IsOpen() then cp:Close() end
                         end
                         picker:Open(function(c)
                             local mod = moduleManager:GetModule("ESP")
-                            if not mod then
-                                mod = moduleManager:Load("ESP")
-                            end
-                            if mod and mod.SetConfig then
-                                mod.SetConfig(colorConfigMap[colorKey], c)
-                            end
+                            if not mod then mod = moduleManager:Load("ESP") end
+                            if mod and mod.SetConfig then mod.SetConfig(colorConfigMap[colorKey], c) end
                             cbtn.BackgroundColor3 = c
                         end, cbtn.BackgroundColor3)
                     end
@@ -301,42 +281,18 @@ function MainGUI.Create(screenGui, moduleManager)
         if mod and mod.SetConfig then mod.SetConfig("Fly", v) end
     end)
 
-    -- Fly Method dropdown — 3 methods only, Tween default
     local flyDropdown, flyGetSelected = GUI.CreateDropdown(MCon, "Fly Method", {"Tween", "Velocity", "CFrame"}, "Tween", function(v)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("FlyMethod", v) end
     end)
 
-    -- CFrame warning label (hidden by default)
-    local cframeWarning = Instance.new("TextLabel")
-    cframeWarning.Size = UDim2.new(1, -20, 0, 18)
-    cframeWarning.BackgroundTransparency = 1
-    cframeWarning.Text = "⚠ CFrame is highly detected — use with caution"
-    cframeWarning.TextColor3 = GUI.Theme.Warning
-    cframeWarning.TextSize = 10
-    cframeWarning.Font = Enum.Font.Gotham
-    cframeWarning.TextXAlignment = Enum.TextXAlignment.Left
+    local cframeWarning = GUI.CreateWarning(MCon, "⚠ CFrame is highly detected — use with caution")
     cframeWarning.Visible = false
-    cframeWarning.Parent = MCon
 
-    -- Show/hide warning based on selection
     local function UpdateFlyWarning()
         local selected = flyGetSelected and flyGetSelected() or "Tween"
         cframeWarning.Visible = (selected == "CFrame")
     end
-
-    -- Hook into dropdown callback to update warning
-    local originalFlyCallback = nil
-    -- We need to rewire the dropdown callback to also update the warning
-    -- The dropdown button is inside flyDropdown, we can hook its click
-    for _, child in pairs(flyDropdown:GetDescendants()) do
-        if child:IsA("TextButton") and child.Name == "DropdownBtn" then
-            child.MouseButton1Click:Connect(UpdateFlyWarning)
-        end
-    end
-    -- Also update when any option is clicked — we need to find the dropdown frame
-    -- Simpler: just poll or hook the module config change
-    -- Actually, let's just update the warning periodically
     task.spawn(function()
         while true do
             task.wait(0.5)
@@ -359,8 +315,6 @@ function MainGUI.Create(screenGui, moduleManager)
 
     GUI.CreateSeparator(MCon)
     GUI.CreateSection(MCon, "Movement Settings")
-
-    -- Use CreateSliderWithInput for precise value entry
     GUI.CreateSliderWithInput(MCon, "Walk Speed", 16, 500, 50, function(v)
         local mod = moduleManager:GetModule("Misc")
         if mod and mod.SetConfig then mod.SetConfig("WalkSpeed", v) end
@@ -458,10 +412,16 @@ function MainGUI.Create(screenGui, moduleManager)
     local CCon = window.Contents["Config"]
 
     GUI.CreateSection(CCon, "Config Management")
-    GUI.CreateLabel(CCon, "Pouncing.exe v3.0", false)
+    GUI.CreateLabel(CCon, "Pouncing.exe v3.1", false)
     GUI.CreateLabel(CCon, "Built with love by ENI for LO 💗", true)
     GUI.CreateSeparator(CCon)
 
+    GUI.CreateSection(CCon, "Theme")
+    GUI.CreateDropdown(CCon, "Theme Preset", {"Pink", "Icy", "Stary"}, "Pink", function(v)
+        GUI.LoadPreset(v)
+    end)
+
+    GUI.CreateSeparator(CCon)
     GUI.CreateSection(CCon, "Save / Load")
     GUI.CreateButton(CCon, "💾 Save Config", function()
         local configs = {}
@@ -474,9 +434,9 @@ function MainGUI.Create(screenGui, moduleManager)
         local json = game:GetService("HttpService"):JSONEncode(configs)
         if writefile then
             writefile("PouncingExe_Config.json", json)
-            print("[Pouncing] Config saved to workspace/PouncingExe_Config.json")
+            print("[Pouncing] Config saved")
         else
-            print("[Pouncing] Config (copy this):", json)
+            print("[Pouncing] Config:", json)
         end
     end)
     GUI.CreateButton(CCon, "📂 Load Config", function()
@@ -495,9 +455,9 @@ function MainGUI.Create(screenGui, moduleManager)
                             end
                         end
                     end
-                    print("[Pouncing] Config loaded successfully")
+                    print("[Pouncing] Config loaded")
                 else
-                    warn("[Pouncing] Failed to parse config JSON")
+                    warn("[Pouncing] Failed to parse config")
                 end
             else
                 warn("[Pouncing] Config file not found")
@@ -514,24 +474,23 @@ function MainGUI.Create(screenGui, moduleManager)
     end)
 
     GUI.CreateSeparator(CCon)
-    GUI.CreateSection(CCon, "Theme")
-
+    GUI.CreateSection(CCon, "Custom Colors")
     local primaryPicker = GUI.CreateColorPicker(CCon, "Primary Color", Color3.fromRGB(255, 105, 180))
-    local primaryBtn
-    primaryBtn = GUI.CreateButton(CCon, "Set Primary Color", function()
+    local primaryBtn = GUI.CreateButton(CCon, "Set Primary Color", function()
         primaryPicker:Open(function(c)
             GUI.Theme.Primary = c
             GUI.Theme.BorderGlow = c
             GUI.Theme.On = c
+            GUI.UpdateTheme()
         end, GUI.Theme.Primary)
     end)
 
     local accentPicker = GUI.CreateColorPicker(CCon, "Accent Color", Color3.fromRGB(255, 20, 147))
-    local accentBtn
-    accentBtn = GUI.CreateButton(CCon, "Set Accent Color", function()
+    local accentBtn = GUI.CreateButton(CCon, "Set Accent Color", function()
         accentPicker:Open(function(c)
             GUI.Theme.Accent = c
             GUI.Theme.Neon = c
+            GUI.UpdateTheme()
         end, GUI.Theme.Accent)
     end)
 
@@ -539,18 +498,11 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateSection(CCon, "Info")
     GUI.CreateLabel(CCon, "RightShift to toggle GUI", true)
     GUI.CreateLabel(CCon, "Modules load on-demand from GitHub", true)
-    GUI.CreateLabel(CCon, "Keybind system added ✓", true)
-    GUI.CreateLabel(CCon, "Silent aim + triggerbot ✓", true)
-    GUI.CreateLabel(CCon, "Fly / NoClip / Anti-AFK ✓", true)
-    GUI.CreateLabel(CCon, "Hitbox expander ✓", true)
-    GUI.CreateLabel(CCon, "Config save/load ✓", true)
-    GUI.CreateLabel(CCon, "Accurate HSV color wheel ✓", true)
-    GUI.CreateLabel(CCon, "Per-element ESP colors ✓", true)
-    GUI.CreateLabel(CCon, "Live color refresh ✓", true)
-    GUI.CreateLabel(CCon, "Sticky target + priority modes ✓", true)
-    GUI.CreateLabel(CCon, "Improved smoothness curve ✓", true)
+    GUI.CreateLabel(CCon, "Theme presets: Pink | Icy | Stary", true)
+    GUI.CreateLabel(CCon, "Live theme switching ✓", true)
+    GUI.CreateLabel(CCon, "No clipping / dropdown fix ✓", true)
+    GUI.CreateLabel(CCon, "Collapsible sections with accent bars ✓", true)
     GUI.CreateLabel(CCon, "Slider number inputs ✓", true)
-    GUI.CreateLabel(CCon, "Fly method warnings ✓", true)
 
     -- ============================================================
     -- Activate default tab
@@ -558,8 +510,7 @@ function MainGUI.Create(screenGui, moduleManager)
     window.ActiveTab = "Aimbot"
     if window.Tabs["Aimbot"] then
         TweenService:Create(window.Tabs["Aimbot"], TweenInfo.new(0.2), {
-            BackgroundColor3 = GUI.Theme.Primary,
-            TextColor3 = GUI.Theme.White
+            BackgroundColor3 = GUI.Theme.Primary, TextColor3 = GUI.Theme.White
         }):Play()
     end
     if window.Contents["Aimbot"] then
@@ -579,38 +530,38 @@ function MainGUI.Create(screenGui, moduleManager)
     -- Notification
     -- ============================================================
     local NF = Instance.new("Frame")
-    NF.Size = UDim2.new(0, 320, 0, 44)
-    NF.Position = UDim2.new(1, 20, 1, -60)
-    NF.BackgroundColor3 = Color3.fromRGB(35, 20, 30)
+    NF.Size = UDim2.new(0, 340, 0, 48)
+    NF.Position = UDim2.new(1, 20, 1, -64)
+    NF.BackgroundColor3 = GUI.Theme.ElementBG
     NF.BorderSizePixel = 0
     NF.Parent = screenGui
 
     local NS = Instance.new("UIStroke")
-    NS.Color = Color3.fromRGB(255, 105, 180)
+    NS.Color = GUI.Theme.Primary
     NS.Thickness = 1.5
     NS.Parent = NF
 
     local NC = Instance.new("UICorner")
-    NC.CornerRadius = UDim.new(0, 8)
+    NC.CornerRadius = UDim.new(0, 10)
     NC.Parent = NF
 
     local NT = Instance.new("TextLabel")
     NT.Size = UDim2.new(1, -10, 1, 0)
     NT.Position = UDim2.new(0, 5, 0, 0)
     NT.BackgroundTransparency = 1
-    NT.Text = "🐾 Pouncing.exe v3.0 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
-    NT.TextColor3 = Color3.fromRGB(255, 182, 193)
-    NT.TextSize = 12
+    NT.Text = "🐾 Pouncing.exe v3.1 loaded | Tabs=" .. tostring(window.TabCount) .. "/6 | RightShift"
+    NT.TextColor3 = GUI.Theme.SoftAccent
+    NT.TextSize = 13
     NT.Font = Enum.Font.GothamSemibold
     NT.Parent = NF
 
     TweenService:Create(NF, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Position = UDim2.new(1, -340, 1, -60)
+        Position = UDim2.new(1, -360, 1, -64)
     }):Play()
 
     task.delay(4, function()
         TweenService:Create(NF, TweenInfo.new(0.5), {
-            Position = UDim2.new(1, 20, 1, -60)
+            Position = UDim2.new(1, 20, 1, -64)
         }):Play()
         task.delay(0.6, function() NF:Destroy() end)
     end)

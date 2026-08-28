@@ -630,7 +630,7 @@ function Module.ResetConfig()
     Config.MaxDistance = 1000
     Config.TriggerDelay = 50
     Config.TargetPart = "Head"
-    Config.Priority = "Mouse"
+    Config.Priority = "Closest to Mouse"
     Config.AimKey = Enum.KeyCode.Q
     Config.Prediction = false
     Config.ToggleMode = false
