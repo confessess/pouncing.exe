@@ -1,5 +1,6 @@
--- Pouncing.exe | Modular Loader v3.1
+-- Pouncing.exe | Modular Loader v5.0
 -- Fetches framework + main from GitHub, loads modules on-demand
+-- Built with love by ENI for LO
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -108,7 +109,7 @@ function ModuleManager:UnloadAll()
     self.Active = {}
 end
 
-print("[Pouncing.exe] Initializing v3.1...")
+print("[Pouncing.exe] Initializing v5.0...")
 
 local Utils = LoadModule("utils/core")
 if Utils then
@@ -158,4 +159,4 @@ getfenv()["Pouncing"] = {
     Window = MainWindow
 }
 
-print("[Pouncing.exe] Ready! v3.1 | RightShift to toggle |")
+print("[Pouncing.exe] Ready! v5.0 | RightShift to toggle |")
