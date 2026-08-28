@@ -1,6 +1,6 @@
--- Pouncing.exe | Utils Core v4.0
+-- Pouncing.exe | Utils Core v3.0
 -- Shared utilities + Unified Hook Manager
--- Added: Post-execution FindPartOnRay hooks, __index hooks, priority system
+-- Added: FindPartOnRay hooks, __index hooks, handler priority system
 -- ============================================================
 
 local Workspace = game:GetService("Workspace")
@@ -74,7 +74,7 @@ function Utils.GetBoxData(character)
     local topScr, topVis, topZ = Utils.W2S(topPos)
     local botScr, botVis, botZ = Utils.W2S(botPos)
     if (not topVis and not botVis) or topZ <= 0 or botZ <= 0 then return nil end
-    local h = math.abs(botScr.Y - botScr.Y)
+    local h = math.abs(botScr.Y - topScr.Y)
     local w = h * 0.6
     if h <= 1 or w <= 1 then return nil end
     return {
@@ -128,22 +128,25 @@ Utils.SkeletonConnections = {
 }
 
 -- ============================================================
--- UNIFIED HOOK MANAGER v4.0
+-- UNIFIED HOOK MANAGER v3.0
 -- ============================================================
 local HookManager = {
+    -- Raycast
     OriginalRaycast = nil,
     RaycastHandlers = {},
 
+    -- FindPartOnRay family
     OriginalFindPartOnRay = nil,
     OriginalFindPartOnRayWithIgnoreList = nil,
     OriginalFindPartOnRayWithWhitelist = nil,
     FindPartOnRayHandlers = {},
-    FindPartOnRayPostHandlers = {},
 
+    -- __namecall
     OriginalNamecall = nil,
     NamecallHandlers = {},
     Mt = nil,
 
+    -- __index (for Mouse.Hit, Mouse.Target, etc.)
     OriginalIndex = nil,
     IndexHandlers = {},
 
@@ -172,20 +175,12 @@ function HookManager:UnregisterRaycastHandler(name)
     self.RaycastHandlers[name] = nil
 end
 
--- FindPartOnRay pre-execution handlers
+-- FindPartOnRay handlers
 function HookManager:RegisterFindPartOnRayHandler(name, handler, priority)
     self.FindPartOnRayHandlers[name] = {handler = handler, priority = priority or 0}
 end
 function HookManager:UnregisterFindPartOnRayHandler(name)
     self.FindPartOnRayHandlers[name] = nil
-end
-
--- FindPartOnRay POST-execution handlers (NEW)
-function HookManager:RegisterFindPartOnRayPostHandler(name, handler, priority)
-    self.FindPartOnRayPostHandlers[name] = {handler = handler, priority = priority or 0}
-end
-function HookManager:UnregisterFindPartOnRayPostHandler(name)
-    self.FindPartOnRayPostHandlers[name] = nil
 end
 
 -- Namecall handlers
@@ -213,7 +208,7 @@ function HookManager:Install()
 
     local LocalPlayer = Players.LocalPlayer
 
-    -- Raycast hook
+    -- Raycast hook (direct function replacement)
     local oldRaycast = Workspace.Raycast
     self.OriginalRaycast = oldRaycast
     Workspace.Raycast = function(ws, origin, direction, params, ...)
@@ -229,30 +224,18 @@ function HookManager:Install()
         return oldRaycast(ws, finalOrigin, finalDirection, finalParams, ...)
     end
 
-    -- FindPartOnRay hooks with POST-execution support
+    -- FindPartOnRay hooks
     local function HookFindPartOnRay(methodName, original)
         if not original then return nil end
         return function(ws, ray, ...)
             local finalRay = ray
-            -- Pre-execution handlers
             for _, entry in ipairs(GetSortedHandlers(self.FindPartOnRayHandlers)) do
                 local ok, newRay = pcall(entry.handler, finalRay, methodName, ...)
                 if ok and newRay ~= nil then
                     finalRay = newRay
                 end
             end
-
-            local result = {original(ws, finalRay, ...)}
-
-            -- Post-execution handlers
-            for _, entry in ipairs(GetSortedHandlers(self.FindPartOnRayPostHandlers)) do
-                local ok, newResult = pcall(entry.handler, result, finalRay, methodName, ...)
-                if ok and newResult ~= nil then
-                    result = newResult
-                end
-            end
-
-            return unpack(result)
+            return original(ws, finalRay, ...)
         end
     end
 
@@ -287,7 +270,7 @@ function HookManager:Install()
                     end
                 end
 
-                -- Catch FindPartOnRay via __namecall
+                -- Also catch FindPartOnRay via __namecall
                 if method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
                     local ray = args[1]
                     if ray and typeof(ray) == "Ray" then
@@ -305,7 +288,7 @@ function HookManager:Install()
                     end
                 end
 
-                -- Catch Raycast via __namecall
+                -- Catch Raycast via __namecall too
                 if method == "Raycast" then
                     local origin = args[1]
                     local direction = args[2]
