@@ -1,10 +1,7 @@
--- Pouncing.exe | GUI Main v7.3
+-- Pouncing.exe | GUI Main v7.4
 -- Dynamic preset-based UI — controls and tabs adapt to active game preset
--- Fixed: Tab visibility uses window.Tabs/window.Contents correctly
--- Fixed: Canvas auto-refreshes after visibility changes (no clipping)
--- Fixed: Preset loader handles 404 better, applies visibility on failure
--- Cyberpunk HUD: contained dropdowns, no clipping, all corners rounded
--- Built with love by ENI for LO
+-- Added: Bullet Redirect toggle (universal hook-based silent aim)
+-- Fixed: Preset loader clearer messaging, applies UI even on fetch fail
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -24,8 +21,8 @@ function MainGUI.Create(screenGui, moduleManager)
     -- DYNAMIC UI STATE
     -- ============================================================
     local ActivePreset = "Universal"
-    local TaggedControls = {} -- {frame = Frame, presets = {"arsenal", "all"}, ...}
-    local TaggedTabs = {}     -- {name = "Aimbot", button = Frame, content = Frame, presets = {...}}
+    local TaggedControls = {}
+    local TaggedTabs = {}
     local AllTabNames = {"Aimbot", "ESP", "Gun", "Misc", "Hitbox", "Da Hood", "Settings"}
 
     local function TagControl(frame, presets)
@@ -71,13 +68,11 @@ function MainGUI.Create(screenGui, moduleManager)
         ActivePreset = presetName
         print("[Pouncing] UI refreshing for preset: " .. presetName)
 
-        -- Update controls visibility
         for _, item in ipairs(TaggedControls) do
             local show = ShouldShowForPreset(item.presets)
             item.frame.Visible = show
         end
 
-        -- Update tabs visibility
         local visibleTabs = {}
         for name, tab in pairs(TaggedTabs) do
             local show = ShouldShowForPreset(tab.presets)
@@ -94,11 +89,9 @@ function MainGUI.Create(screenGui, moduleManager)
             end
         end
 
-        -- Switch active tab if current one got hidden
         if window.ActiveTab then
             local currentTab = TaggedTabs[window.ActiveTab]
             if currentTab and not ShouldShowForPreset(currentTab.presets) then
-                -- Switch to first visible tab
                 for _, name in ipairs(AllTabNames) do
                     local t = TaggedTabs[name]
                     if t and ShouldShowForPreset(t.presets) then
@@ -125,14 +118,13 @@ function MainGUI.Create(screenGui, moduleManager)
             end
         end
 
-        -- Force canvas refresh to prevent clipping
         task.delay(0.05, RefreshAllCanvasSizes)
     end
 
     local window = GUI.CreateWindow(screenGui, "Pouncing.exe", UDim2.new(0, 780, 0, 600))
 
     -- ============================================================
-    -- CREATE TABS (all created, visibility controlled dynamically)
+    -- CREATE TABS
     -- ============================================================
     local tabDefs = {
         {Name = "Aimbot", Icon = "", Presets = {"all"}},
@@ -144,9 +136,7 @@ function MainGUI.Create(screenGui, moduleManager)
         {Name = "Settings", Icon = "", Presets = {"all"}}
     }
     for _, tabInfo in ipairs(tabDefs) do
-        -- CreateTab returns the content ScrollingFrame, not the button
         GUI.CreateTab(window, tabInfo.Name, tabInfo.Icon)
-        -- Use window.Tabs and window.Contents for proper references
         TagTab(tabInfo.Name, window.Tabs[tabInfo.Name], window.Contents[tabInfo.Name], tabInfo.Presets)
     end
 
@@ -155,7 +145,6 @@ function MainGUI.Create(screenGui, moduleManager)
     -- ============================================================
     local ACon = window.Contents["Aimbot"]
 
-    -- Section: Core (all presets)
     local coreSection = GUI.CreateSection(ACon, "Aimbot Core")
     TagControl(coreSection, {"all"})
 
@@ -170,21 +159,28 @@ function MainGUI.Create(screenGui, moduleManager)
     end)
     TagControl(silentAimToggle, {"aim"})
 
-    -- Arsenal-only: Hitbox Expand (renamed from "Arsenal Hitbox Expand")
+    -- NEW: Bullet Redirect toggle (universal hook-based silent aim)
+    local bulletRedirectToggle = GUI.CreateToggle(ACon, "Bullet Redirect", false, nil, function(v)
+        local mod = moduleManager:GetModule("Aimbot")
+        if mod and mod.SetConfig then mod.SetConfig("BulletRedirect", v) end
+    end)
+    TagControl(bulletRedirectToggle, {"aim"})
+
+    -- Arsenal-only: Hitbox Expand
     local hitboxExpandToggle = GUI.CreateToggle(ACon, "Hitbox Expand", true, nil, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("ArsenalHitboxExpand", v) end
     end)
     TagControl(hitboxExpandToggle, {"Arsenal"})
 
-    -- Arsenal-only: Hitbox Size (renamed from "Arsenal Hitbox Size")
+    -- Arsenal-only: Hitbox Size
     local hitboxSizeSlider = GUI.CreateSlider(ACon, "Hitbox Size", 1, 25, 13, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("ArsenalHitboxSize", v) end
     end)
     TagControl(hitboxSizeSlider, {"Arsenal"})
 
-    -- Non-Arsenal controls (Legit mode, etc.)
+    -- Non-Arsenal controls
     local legitModeToggle = GUI.CreateToggle(ACon, "Legit Mode", false, nil, function(v)
         local mod = moduleManager:GetModule("Aimbot")
         if mod and mod.SetConfig then mod.SetConfig("LegitMode", v) end
@@ -228,11 +224,9 @@ function MainGUI.Create(screenGui, moduleManager)
     end)
     TagControl(wallCheckToggle, {"all"})
 
-    -- Separator (all)
     local sep1 = GUI.CreateSeparator(ACon)
     TagControl(sep1, {"all"})
 
-    -- Section: Settings (all)
     local settingsSection = GUI.CreateSection(ACon, "Aimbot Settings")
     TagControl(settingsSection, {"all"})
 
@@ -273,7 +267,6 @@ function MainGUI.Create(screenGui, moduleManager)
     local sep2 = GUI.CreateSeparator(ACon)
     TagControl(sep2, {"all"})
 
-    -- Section: Extras (non-arsenal)
     local extrasSection = GUI.CreateSection(ACon, "Aimbot Extras")
     TagControl(extrasSection, {"not_arsenal"})
 
@@ -286,7 +279,6 @@ function MainGUI.Create(screenGui, moduleManager)
     local sep3 = GUI.CreateSeparator(ACon)
     TagControl(sep3, {"all"})
 
-    -- Section: Target Priority (all)
     local prioritySection = GUI.CreateSection(ACon, "Target Priority")
     TagControl(prioritySection, {"all"})
 
@@ -311,7 +303,6 @@ function MainGUI.Create(screenGui, moduleManager)
     local sep4 = GUI.CreateSeparator(ACon)
     TagControl(sep4, {"all"})
 
-    -- Section: Behavior (all)
     local behaviorSection = GUI.CreateSection(ACon, "Aimbot Behavior")
     TagControl(behaviorSection, {"all"})
 
@@ -845,7 +836,6 @@ function MainGUI.Create(screenGui, moduleManager)
     local gameName = "Universal"
     local placeId = game.PlaceId
 
-    -- Auto-detect from PlaceId
     local knownGames = {
         [286090429] = "Arsenal",
         [2788229376] = "Da Hood",
@@ -854,7 +844,6 @@ function MainGUI.Create(screenGui, moduleManager)
     }
     gameName = knownGames[placeId] or "Universal"
 
-    -- Try to get game name from Marketplace
     pcall(function()
         local mps = game:GetService("MarketplaceService")
         local info = mps:GetProductInfo(placeId)
@@ -871,7 +860,6 @@ function MainGUI.Create(screenGui, moduleManager)
     local placeIdLabel = GUI.CreateLabel(CCon, "PlaceId: " .. tostring(placeId), true)
     TagControl(placeIdLabel, {"all"})
 
-    -- Manual game override dropdown
     local selectedPreset = gameName
     local presetDropdown, getPreset = GUI.CreateDropdown(CCon, "Manual Override", {"Auto-Detect", "Arsenal", "Da Hood", "Zee Hood", "Universal"}, "Auto-Detect", function(v)
         if v == "Auto-Detect" then
@@ -884,7 +872,6 @@ function MainGUI.Create(screenGui, moduleManager)
     end)
     TagControl(presetDropdown, {"all"})
 
-    -- Preset load status label
     local presetStatus = GUI.CreateLabel(CCon, "Preset Status: Ready", true)
     TagControl(presetStatus, {"all"})
 
@@ -892,7 +879,7 @@ function MainGUI.Create(screenGui, moduleManager)
         local presetName = selectedPreset
         if presetName == "Auto-Detect" then presetName = gameName end
 
-        presetStatus.Text = "Preset Status: Loading " .. presetName .. "..."
+        presetStatus.Text = "Preset Status: Fetching " .. presetName .. "..."
         presetStatus.TextColor3 = Color3.fromRGB(255, 200, 0)
 
         local baseUrl = "https://raw.githubusercontent.com/confessess/pouncing.exe/main/games/"
@@ -903,7 +890,6 @@ function MainGUI.Create(screenGui, moduleManager)
             presetUrl = baseUrl .. "da_hood.lua"
         end
 
-        -- Cache-busting
         presetUrl = presetUrl .. "?t=" .. tostring(tick())
 
         local fetchOk, source = pcall(function()
@@ -911,27 +897,25 @@ function MainGUI.Create(screenGui, moduleManager)
         end)
 
         if not fetchOk or not source or source == "" then
-            presetStatus.Text = "Preset Status: FAILED — Could not fetch " .. presetName
-            presetStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
-            warn("[Pouncing] Failed to fetch preset: " .. presetUrl .. " | " .. tostring(source))
-            -- Still apply visibility for the selected preset
+            presetStatus.Text = "Preset Status: Config file missing — UI applied for " .. presetName
+            presetStatus.TextColor3 = Color3.fromRGB(255, 150, 50)
+            warn("[Pouncing] Preset config not found: " .. presetUrl .. " | " .. tostring(source))
             ApplyPresetVisibility(presetName)
             return
         end
 
-        -- Check for 404 / error responses
         if source:sub(1, 1) == "<" or source:find("<!DOCTYPE") or source:find("<html") then
-            presetStatus.Text = "Preset Status: FAILED — File not found (404 HTML)"
-            presetStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
-            warn("[Pouncing] Preset file not found at: " .. presetUrl)
+            presetStatus.Text = "Preset Status: Config file missing — UI applied for " .. presetName
+            presetStatus.TextColor3 = Color3.fromRGB(255, 150, 50)
+            warn("[Pouncing] Preset file not found (404 HTML): " .. presetUrl)
             ApplyPresetVisibility(presetName)
             return
         end
 
         if source:find("404") or source:find("Not Found") or source:find("not found") then
-            presetStatus.Text = "Preset Status: FAILED — File not found (404)"
-            presetStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
-            warn("[Pouncing] Preset file not found at: " .. presetUrl)
+            presetStatus.Text = "Preset Status: Config file missing — UI applied for " .. presetName
+            presetStatus.TextColor3 = Color3.fromRGB(255, 150, 50)
+            warn("[Pouncing] Preset file not found: " .. presetUrl)
             ApplyPresetVisibility(presetName)
             return
         end
@@ -943,22 +927,21 @@ function MainGUI.Create(screenGui, moduleManager)
         end)
 
         if not loadOk or not preset then
-            presetStatus.Text = "Preset Status: FAILED — Syntax/runtime error"
-            presetStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
+            presetStatus.Text = "Preset Status: Config error — UI applied for " .. presetName
+            presetStatus.TextColor3 = Color3.fromRGB(255, 150, 50)
             warn("[Pouncing] Failed to load preset " .. presetName .. ": " .. tostring(preset))
             ApplyPresetVisibility(presetName)
             return
         end
 
         if not preset.Configs then
-            presetStatus.Text = "Preset Status: FAILED — Invalid preset format (missing Configs)"
-            presetStatus.TextColor3 = Color3.fromRGB(255, 80, 80)
+            presetStatus.Text = "Preset Status: Invalid format — UI applied for " .. presetName
+            presetStatus.TextColor3 = Color3.fromRGB(255, 150, 50)
             warn("[Pouncing] Preset " .. presetName .. " missing Configs table")
             ApplyPresetVisibility(presetName)
             return
         end
 
-        -- Apply configs
         local appliedCount = 0
         for modName, cfg in pairs(preset.Configs) do
             local mod = moduleManager:GetModule(modName)
@@ -973,14 +956,12 @@ function MainGUI.Create(screenGui, moduleManager)
             end
         end
 
-        -- Apply preset visibility
         ApplyPresetVisibility(presetName)
 
         presetStatus.Text = "Preset Status: LOADED " .. presetName .. " (" .. tostring(appliedCount) .. " settings)"
         presetStatus.TextColor3 = Color3.fromRGB(0, 255, 100)
         print("[Pouncing] Loaded " .. presetName .. " preset with " .. appliedCount .. " settings")
 
-        -- Auto-enable modules that are set to enabled in preset
         for modName, cfg in pairs(preset.Configs) do
             if cfg.Enabled == true then
                 moduleManager:Toggle(modName, true)
@@ -994,7 +975,7 @@ function MainGUI.Create(screenGui, moduleManager)
     local cfgMgmtSection = GUI.CreateSection(CCon, "Config Management")
     TagControl(cfgMgmtSection, {"all"})
 
-    local versionLabel = GUI.CreateLabel(CCon, "Pouncing.exe v7.3", false)
+    local versionLabel = GUI.CreateLabel(CCon, "Pouncing.exe v7.4", false)
     TagControl(versionLabel, {"all"})
     local creditLabel = GUI.CreateLabel(CCon, "Built with love by ENI for LO", true)
     TagControl(creditLabel, {"all"})
@@ -1146,7 +1127,7 @@ function MainGUI.Create(screenGui, moduleManager)
     GUI.CreateLabel(CCon, "Press UI Toggle Key to show/hide GUI", true)
     GUI.CreateLabel(CCon, "Modules load on-demand from GitHub", true)
     GUI.CreateLabel(CCon, "Theme presets: Pink | Icy | Stary", true)
-    GUI.CreateLabel(CCon, "Cyberpunk HUD design v7.3", true)
+    GUI.CreateLabel(CCon, "Cyberpunk HUD design v7.4", true)
     GUI.CreateLabel(CCon, "Game-specific presets", true)
     GUI.CreateLabel(CCon, "Arsenal | Da Hood | Zee Hood | Universal", true)
     GUI.CreateLabel(CCon, "Dynamic UI — controls adapt to preset", true)
@@ -1218,7 +1199,7 @@ function MainGUI.Create(screenGui, moduleManager)
     NT.Size = UDim2.new(1, -16, 1, 0)
     NT.Position = UDim2.new(0, 8, 0, 0)
     NT.BackgroundTransparency = 1
-    NT.Text = "Pouncing.exe v7.3 loaded | Dynamic UI | Preset: " .. gameName .. " | UI Toggle: RightShift"
+    NT.Text = "Pouncing.exe v7.4 loaded | Dynamic UI | Preset: " .. gameName .. " | UI Toggle: RightShift"
     NT.TextColor3 = GUI.Theme.SoftAccent
     NT.TextSize = 13
     NT.Font = Enum.Font.GothamSemibold
