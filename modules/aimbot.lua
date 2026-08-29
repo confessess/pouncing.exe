@@ -320,37 +320,73 @@ local function HookArsenalFireRemote()
         return
     end
 
+    -- METHOD 1: hookmetamethod on __namecall (bypasses RAC metatable protection)
+    if hookmetamethod and getrawmetatable and getnamecallmethod then
+        local mt = getrawmetatable(fireRemote)
+        if mt and mt.__namecall then
+            local oldNamecall = hookmetamethod(fireRemote, "__namecall", function(self, ...)
+                if self == fireRemote then
+                    local method = getnamecallmethod()
+                    if method == "FireServer" and Config.SilentAim and Config.Enabled and Config.ArsenalMode then
+                        if math.random(1, 100) <= Config.HitChance then
+                            local target = GetSilentAimTarget()
+                            if target and target.Part then
+                                local args = {...}
+                                local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                                local origin = myHRP and myHRP.Position or Camera.CFrame.Position
+                                local targetPos = target.Part.Position + (target.Part.Velocity * 0.03)
+                                local newDir = (targetPos - origin).Unit
+                                for i = 1, #args do
+                                    if typeof(args[i]) == "Vector3" then
+                                        args[i] = newDir
+                                        if Config.DebugMode then
+                                            print(string.format("[SA-Fire] __namecall → %s | %s | %.1f studs",
+                                                target.Player.Name, target.Part.Name, target.Distance))
+                                        end
+                                        break
+                                    end
+                                end
+                                return oldNamecall(self, unpack(args))
+                            end
+                        end
+                    end
+                end
+                return oldNamecall(self, ...)
+            end)
+            FireRemoteHooked = true
+            print("[Pouncing] Arsenal Fire remote hooked via hookmetamethod (__namecall)")
+            return
+        end
+    end
+
+    -- METHOD 2: Fallback to direct FireServer hook
     OriginalFireRemote = fireRemote.FireServer
-
-    fireRemote.FireServer = function(self, ...)
-        local args = {...}
-
-        if Config.SilentAim and Config.Enabled and Config.ArsenalMode then
-            if math.random(1, 100) <= Config.HitChance then
-                local target = GetSilentAimTarget()
-                if target and target.Part then
-                    -- Arsenal Fire signature: args[1] = direction Vector3
-                    if #args >= 1 and typeof(args[1]) == "Vector3" then
-                        local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                        local origin = myHRP and myHRP.Position or Camera.CFrame.Position
-                        local targetPos = target.Part.Position + (target.Part.Velocity * 0.03)
-                        local newDir = (targetPos - origin).Unit
-                        args[1] = newDir
-
-                        if Config.DebugMode then
-                            print(string.format("[SA-Fire] Curved → %s | %s | %.1f studs",
-                                target.Player.Name, target.Part.Name, target.Distance))
+    if OriginalFireRemote then
+        fireRemote.FireServer = function(self, ...)
+            local args = {...}
+            if Config.SilentAim and Config.Enabled and Config.ArsenalMode then
+                if math.random(1, 100) <= Config.HitChance then
+                    local target = GetSilentAimTarget()
+                    if target and target.Part then
+                        if #args >= 1 and typeof(args[1]) == "Vector3" then
+                            local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                            local origin = myHRP and myHRP.Position or Camera.CFrame.Position
+                            local targetPos = target.Part.Position + (target.Part.Velocity * 0.03)
+                            local newDir = (targetPos - origin).Unit
+                            args[1] = newDir
+                            if Config.DebugMode then
+                                print(string.format("[SA-Fire] direct → %s | %s | %.1f studs",
+                                    target.Player.Name, target.Part.Name, target.Distance))
+                            end
                         end
                     end
                 end
             end
+            return OriginalFireRemote(self, table.unpack(args))
         end
-
-        return OriginalFireRemote(self, table.unpack(args))
+        FireRemoteHooked = true
+        print("[Pouncing] Arsenal Fire remote hooked via direct replacement")
     end
-
-    FireRemoteHooked = true
-    print("[Pouncing] Arsenal Fire remote hooked")
 end
 
 local function UnhookArsenalFireRemote()

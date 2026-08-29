@@ -126,40 +126,67 @@ local function HookArsenalFireForHeadshot()
 
     if not success or not fireRemote then return end
 
-    Config.FireRemoteOriginal = fireRemote.FireServer
-
-    fireRemote.FireServer = function(self, ...)
-        local args = {...}
-
-        if Config.AlwaysHeadshot and Config.Enabled and Config.ArsenalMode then
-            -- Find nearest head and aim there
-            local bestHead = nil
-            local bestDist = math.huge
-            local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position or Camera.CFrame.Position
-
-            for _, plr in pairs(Players:GetPlayers()) do
-                if plr ~= LocalPlayer and plr.Character then
-                    local head = plr.Character:FindFirstChild("Head")
-                    if head then
-                        local dist = (head.Position - myPos).Magnitude
-                        if dist < bestDist then
-                            bestDist = dist
-                            bestHead = head
+    -- METHOD 1: hookmetamethod on __namecall (bypasses RAC)
+    if hookmetamethod and getrawmetatable and getnamecallmethod then
+        local mt = getrawmetatable(fireRemote)
+        if mt and mt.__namecall then
+            local oldNamecall = hookmetamethod(fireRemote, "__namecall", function(self, ...)
+                if self == fireRemote then
+                    local method = getnamecallmethod()
+                    if method == "FireServer" and Config.AlwaysHeadshot and Config.Enabled and Config.ArsenalMode then
+                        local bestHead, bestDist = nil, math.huge
+                        local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position or Camera.CFrame.Position
+                        for _, plr in pairs(Players:GetPlayers()) do
+                            if plr ~= LocalPlayer and plr.Character then
+                                local head = plr.Character:FindFirstChild("Head")
+                                if head then
+                                    local dist = (head.Position - myPos).Magnitude
+                                    if dist < bestDist then bestDist = dist bestHead = head end
+                                end
+                            end
+                        end
+                        if bestHead then
+                            local args = {...}
+                            local newDir = (bestHead.Position - myPos).Unit
+                            for i = 1, #args do
+                                if typeof(args[i]) == "Vector3" then args[i] = newDir break end
+                            end
+                            return oldNamecall(self, unpack(args))
                         end
                     end
                 end
-            end
-
-            if bestHead and #args >= 1 and typeof(args[1]) == "Vector3" then
-                local newDir = (bestHead.Position - myPos).Unit
-                args[1] = newDir
-            end
+                return oldNamecall(self, ...)
+            end)
+            Config.FireRemoteHooked = true
+            return
         end
-
-        return Config.FireRemoteOriginal(self, table.unpack(args))
     end
 
-    Config.FireRemoteHooked = true
+    -- METHOD 2: Fallback direct FireServer hook
+    Config.FireRemoteOriginal = fireRemote.FireServer
+    if Config.FireRemoteOriginal then
+        fireRemote.FireServer = function(self, ...)
+            local args = {...}
+            if Config.AlwaysHeadshot and Config.Enabled and Config.ArsenalMode then
+                local bestHead, bestDist = nil, math.huge
+                local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position or Camera.CFrame.Position
+                for _, plr in pairs(Players:GetPlayers()) do
+                    if plr ~= LocalPlayer and plr.Character then
+                        local head = plr.Character:FindFirstChild("Head")
+                        if head then
+                            local dist = (head.Position - myPos).Magnitude
+                            if dist < bestDist then bestDist = dist bestHead = head end
+                        end
+                    end
+                end
+                if bestHead and #args >= 1 and typeof(args[1]) == "Vector3" then
+                    args[1] = (bestHead.Position - myPos).Unit
+                end
+            end
+            return Config.FireRemoteOriginal(self, table.unpack(args))
+        end
+        Config.FireRemoteHooked = true
+    end
 end
 
 local function UnhookArsenalFireForHeadshot()
