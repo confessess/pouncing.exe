@@ -1,7 +1,7 @@
--- Pouncing.exe | Aimbot Module v7.7
--- Silent Aim = Bullet Redirect via HookManager (__namecall for remotes)
--- Hitbox: Malrand-style continuous expansion
--- Removed: Direct remote hooking (caused executor crashes)
+-- Pouncing.exe | Aimbot Module v7.8
+-- Silent Aim = Bullet Redirect via HookManager
+-- Fixed: CoreGui-safe hooks, recursive raycast protection, magnitude preservation
+-- Hitbox: Malrand-style continuous expansion (unchanged)
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -69,6 +69,13 @@ local InputBeganConnection = nil
 local InputEndedConnection = nil
 local ArsenalHitboxThread = nil
 local ArsenalHitboxRunning = false
+
+-- ============================================================
+-- RECURSION GUARD
+-- Prevents silent aim raycasts from being redirected during
+-- our own visibility checks (which also call Raycast)
+-- ============================================================
+local InternalRaycastActive = false
 
 -- ============================================================
 -- Helpers
@@ -139,17 +146,19 @@ local function IsInFOV(targetPos)
 end
 
 -- ============================================================
--- Wall check
+-- Wall check — guarded against recursive redirect
 -- ============================================================
 
 local function CanSee(targetPos, targetCharacter)
     if not Config.WallCheck then return true end
+    InternalRaycastActive = true
     local origin = Camera.CFrame.Position
     local direction = targetPos - origin
     local raycastParams = RaycastParams.new()
     raycastParams.FilterDescendantsInstances = {LocalPlayer.Character}
     raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
     local result = Workspace:Raycast(origin, direction, raycastParams)
+    InternalRaycastActive = false
     if not result then return true end
     local hitModel = result.Instance:FindFirstAncestorOfClass("Model")
     return hitModel and hitModel == targetCharacter
@@ -288,7 +297,7 @@ local function IsEnemyPart(part)
     return true
 end
 
-local function DeepScanAndReplace(t, targetPos, targetPart)
+local function DeepScanAndReplace(t, targetPos, targetPart, localPos)
     if type(t) ~= "table" then return false end
     local modified = false
 
@@ -297,13 +306,16 @@ local function DeepScanAndReplace(t, targetPos, targetPart)
 
         if vt == "Vector3" then
             local dist = (v - Camera.CFrame.Position).Magnitude
-            if dist > 0.5 and dist < Config.MaxDistance * 3 then
+            local distFromLocal = localPos and (v - localPos).Magnitude or dist
+            -- Only replace if it's not the player's own position and within range
+            if dist > 0.5 and dist < Config.MaxDistance * 3 and distFromLocal > 5 then
                 t[k] = targetPos
                 modified = true
             end
         elseif vt == "CFrame" then
             local dist = (v.Position - Camera.CFrame.Position).Magnitude
-            if dist > 0.5 and dist < Config.MaxDistance * 3 then
+            local distFromLocal = localPos and (v.Position - localPos).Magnitude or dist
+            if dist > 0.5 and dist < Config.MaxDistance * 3 and distFromLocal > 5 then
                 t[k] = CFrame.new(targetPos)
                 modified = true
             end
@@ -316,7 +328,7 @@ local function DeepScanAndReplace(t, targetPos, targetPart)
                 modified = true
             end
         elseif vt == "table" then
-            if DeepScanAndReplace(v, targetPos, targetPart) then
+            if DeepScanAndReplace(v, targetPos, targetPart, localPos) then
                 modified = true
             end
         elseif vt == "string" then
@@ -340,6 +352,10 @@ local function ProcessRemoteArgs(args, remoteName)
     local aimPos = target.Position
     local modified = false
     local isHitRemote = IsLikelyHitRemote(remoteName)
+
+    -- Get local player position to avoid replacing our own position in remotes
+    local localRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    local localPos = localRoot and localRoot.Position
 
     -- REMOTE SPY: Log all remotes when enabled
     if Config.RemoteSpy then
@@ -368,13 +384,15 @@ local function ProcessRemoteArgs(args, remoteName)
 
         if argType == "Vector3" then
             local dist = (arg - Camera.CFrame.Position).Magnitude
-            if dist > 0.5 and dist < Config.MaxDistance * 3 then
+            local distFromLocal = localPos and (arg - localPos).Magnitude or dist
+            if dist > 0.5 and dist < Config.MaxDistance * 3 and distFromLocal > 5 then
                 args[i] = aimPos
                 modified = true
             end
         elseif argType == "CFrame" then
             local dist = (arg.Position - Camera.CFrame.Position).Magnitude
-            if dist > 0.5 and dist < Config.MaxDistance * 3 then
+            local distFromLocal = localPos and (arg.Position - localPos).Magnitude or dist
+            if dist > 0.5 and dist < Config.MaxDistance * 3 and distFromLocal > 5 then
                 args[i] = CFrame.new(aimPos)
                 modified = true
             end
@@ -387,7 +405,7 @@ local function ProcessRemoteArgs(args, remoteName)
                 modified = true
             end
         elseif argType == "table" then
-            if DeepScanAndReplace(arg, aimPos, target.Part) then
+            if DeepScanAndReplace(arg, aimPos, target.Part, localPos) then
                 modified = true
             end
         elseif argType == "string" then
@@ -409,9 +427,7 @@ end
 -- __namecall handler for HookManager
 local function RedirectNamecallHandler(args, method, self_obj)
     if method ~= "FireServer" and method ~= "InvokeServer" then return args, false end
-
-    local objType = typeof(self_obj)
-    if objType ~= "Instance" then return args, false end
+    if typeof(self_obj) ~= "Instance" then return args, false end
     if not (self_obj:IsA("RemoteEvent") or self_obj:IsA("RemoteFunction")) then return args, false end
 
     local remoteName = self_obj.Name
@@ -421,13 +437,16 @@ end
 
 -- Raycast handler for HookManager
 local function RedirectRaycastHandler(origin, direction, params)
+    if InternalRaycastActive then return nil end
     if not Config.SilentAim or not Config.Enabled then return nil end
     local target = GetSilentAimTarget()
     if not target or not target.Part then return nil end
     if Config.DebugMode then
         print("[Pouncing Aimbot] Raycast redirected to " .. target.Player.Name)
     end
-    return origin, target.Position - origin, params
+    -- Preserve original ray length but point at target
+    local newDirection = (target.Position - origin).Unit * direction.Magnitude
+    return origin, newDirection, params
 end
 
 -- FindPartOnRay handler for HookManager
@@ -438,11 +457,12 @@ local function RedirectFindPartOnRayHandler(ray, methodName, ...)
     if Config.DebugMode then
         print("[Pouncing Aimbot] FindPartOnRay redirected to " .. target.Player.Name)
     end
-    return Ray.new(ray.Origin, target.Position - ray.Origin)
+    local newDirection = (target.Position - ray.Origin).Unit * ray.Direction.Magnitude
+    return Ray.new(ray.Origin, newDirection)
 end
 
 -- ============================================================
--- HITBOX EXPANSION — Malrand Style
+-- HITBOX EXPANSION — Malrand Style (UNCHANGED)
 -- ============================================================
 
 local function RestoreArsenalHitboxes(player)
@@ -765,7 +785,7 @@ local function OnRenderStep()
 
     if target then
         if Config.SilentAim then
-            -- Silent aim uses HookManager __namecall
+            -- Silent aim uses HookManager __namecall — no camera manipulation
         elseif Config.Aiming then
             AimAt(target)
         end

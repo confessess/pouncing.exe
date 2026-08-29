@@ -1,8 +1,10 @@
--- Pouncing.exe | Utils Core v3.4
+-- Pouncing.exe | Utils Core v3.5
 -- Shared utilities + Unified Hook Manager
--- CRITICAL FIX: __namecall hook now calls getnamecallmethod() FIRST
--- Uses unpack (not table.unpack) for Lua 5.1 compatibility
--- Only repacks args when modified; passes ... directly for unmodified calls
+-- CRITICAL FIXES:
+--   1. CoreGui caller detection — skips ALL modifications for CoreScripts
+--   2. Arg count preservation via select("#", ...) — prevents arg truncation
+--   3. getnamecallmethod() called absolutely first, zero operations before it
+--   4. Safer unpack repacking — only when modified, exact arg count passed
 -- ============================================================
 
 local Workspace = game:GetService("Workspace")
@@ -119,10 +121,30 @@ Utils.SkeletonConnections = {
 }
 
 -- ============================================================
--- UNIFIED HOOK MANAGER v3.4
--- CRITICAL: __namecall calls getnamecallmethod() FIRST
--- Uses unpack (global) not table.unpack
--- Only repacks when modified
+-- COREGUI CALLER DETECTION
+-- Prevents hook interception on Roblox UI (AvatarContextMenu, etc.)
+-- ============================================================
+local function IsCoreGuiCaller()
+    local success, callingScript = pcall(getcallingscript)
+    if not success or not callingScript then return false end
+    if typeof(callingScript) ~= "Instance" then return false end
+
+    -- CoreScripts are always Roblox internal
+    if callingScript:IsA("CoreScript") then return true end
+
+    -- Walk ancestry for CoreGui / CorePackages
+    local current = callingScript.Parent
+    while current do
+        if current == game.CoreGui or current == game.CorePackages then
+            return true
+        end
+        current = current.Parent
+    end
+    return false
+end
+
+-- ============================================================
+-- UNIFIED HOOK MANAGER v3.5
 -- ============================================================
 local HookManager = {
     OriginalRaycast = nil,
@@ -235,14 +257,24 @@ function HookManager:Install()
         if oldNamecall then
             self.OriginalNamecall = oldNamecall
             setreadonly(mt, false)
+
             mt.__namecall = function(self_obj, ...)
-                -- CRITICAL: getnamecallmethod() MUST be called first
+                -- ABSOLUTE FIRST CALL — no operations before this
                 local method = getnamecallmethod()
                 if not method then
                     return oldNamecall(self_obj, ...)
                 end
 
-                -- Handle remotes
+                -- Preserve exact argument count for repacking
+                local argCount = select("#", ...)
+
+                -- Skip ALL modifications for CoreGui/CoreScripts
+                -- This prevents AvatarContextMenu and other UI from breaking
+                if IsCoreGuiCaller() then
+                    return oldNamecall(self_obj, ...)
+                end
+
+                -- Handle remotes (FireServer / InvokeServer)
                 if method == "FireServer" or method == "InvokeServer" then
                     local args = {...}
                     local modified = false
@@ -254,7 +286,7 @@ function HookManager:Install()
                         end
                     end
                     if modified then
-                        return oldNamecall(self_obj, unpack(args))
+                        return oldNamecall(self_obj, unpack(args, 1, argCount))
                     end
                 end
 
@@ -263,16 +295,17 @@ function HookManager:Install()
                     local args = {...}
                     local ray = args[1]
                     if ray and typeof(ray) == "Ray" then
-                        local finalRay = ray
+                        local modified = false
                         for _, entry in ipairs(GetSortedHandlers(self.FindPartOnRayHandlers)) do
-                            local ok2, newRay = pcall(entry.handler, finalRay, method, unpack(args, 2))
+                            local ok2, newRay = pcall(entry.handler, ray, method, unpack(args, 2, argCount))
                             if ok2 and newRay ~= nil then
-                                finalRay = newRay
+                                ray = newRay
+                                modified = true
                             end
                         end
-                        if finalRay ~= ray then
-                            args[1] = finalRay
-                            return oldNamecall(self_obj, unpack(args))
+                        if modified then
+                            args[1] = ray
+                            return oldNamecall(self_obj, unpack(args, 1, argCount))
                         end
                     end
                 end
@@ -282,29 +315,31 @@ function HookManager:Install()
                     local args = {...}
                     local origin = args[1]
                     local direction = args[2]
-                    local params = args[3]
                     if origin and direction then
-                        local finalOrigin, finalDirection, finalParams = origin, direction, params
+                        local modified = false
+                        local finalOrigin, finalDirection, finalParams = origin, direction, args[3]
                         for _, entry in ipairs(GetSortedHandlers(self.RaycastHandlers)) do
                             local ok2, newOrigin, newDirection, newParams = pcall(entry.handler, finalOrigin, finalDirection, finalParams)
                             if ok2 and newOrigin ~= nil then
                                 finalOrigin = newOrigin
                                 finalDirection = newDirection or finalDirection
                                 finalParams = newParams or finalParams
+                                modified = true
                             end
                         end
-                        if finalOrigin ~= origin or finalDirection ~= direction then
+                        if modified then
                             args[1] = finalOrigin
                             args[2] = finalDirection
                             args[3] = finalParams
-                            return oldNamecall(self_obj, unpack(args))
+                            return oldNamecall(self_obj, unpack(args, 1, argCount))
                         end
                     end
                 end
 
-                -- Unmodified — pass through with original varargs
+                -- Unmodified — pass through with original varargs (no repacking)
                 return oldNamecall(self_obj, ...)
             end
+
             setreadonly(mt, true)
         end
     end
