@@ -1,7 +1,8 @@
--- Pouncing.exe | Utils Core v3.3
+-- Pouncing.exe | Utils Core v3.4
 -- Shared utilities + Unified Hook Manager
--- REMOVED __index hook — was breaking Roblox core GUI scripts
--- Kept: __namecall for remotes + direct Workspace method hooks
+-- CRITICAL FIX: __namecall hook now calls getnamecallmethod() FIRST
+-- Uses unpack (not table.unpack) for Lua 5.1 compatibility
+-- Only repacks args when modified; passes ... directly for unmodified calls
 -- ============================================================
 
 local Workspace = game:GetService("Workspace")
@@ -118,9 +119,10 @@ Utils.SkeletonConnections = {
 }
 
 -- ============================================================
--- UNIFIED HOOK MANAGER v3.3
--- REMOVED __index hook — was breaking Roblox core scripts
--- Kept: __namecall for remotes + direct Workspace method hooks
+-- UNIFIED HOOK MANAGER v3.4
+-- CRITICAL: __namecall calls getnamecallmethod() FIRST
+-- Uses unpack (global) not table.unpack
+-- Only repacks when modified
 -- ============================================================
 local HookManager = {
     OriginalRaycast = nil,
@@ -225,7 +227,7 @@ function HookManager:Install()
         pcall(function() Workspace.FindPartOnRayWithWhitelist = HookFindPartOnRay("FindPartOnRayWithWhitelist", oldFPRWL) end)
     end
 
-    -- __namecall hook — REGULAR CLOSURE (not newcclosure)
+    -- __namecall hook — CRITICAL: getnamecallmethod() called FIRST
     local ok, mt = pcall(getrawmetatable, game)
     if ok and mt then
         self.Mt = mt
@@ -234,18 +236,16 @@ function HookManager:Install()
             self.OriginalNamecall = oldNamecall
             setreadonly(mt, false)
             mt.__namecall = function(self_obj, ...)
-                local args = {...}
-                local method = nil
-                local methodOk = pcall(function()
-                    method = getnamecallmethod()
-                end)
-                if not methodOk or not method then
-                    return oldNamecall(self_obj, table.unpack(args))
+                -- CRITICAL: getnamecallmethod() MUST be called first
+                local method = getnamecallmethod()
+                if not method then
+                    return oldNamecall(self_obj, ...)
                 end
 
-                local modified = false
-
+                -- Handle remotes
                 if method == "FireServer" or method == "InvokeServer" then
+                    local args = {...}
+                    local modified = false
                     for _, entry in ipairs(GetSortedHandlers(self.NamecallHandlers)) do
                         local ok2, newArgs, wasModified = pcall(entry.handler, args, method, self_obj)
                         if ok2 and newArgs then
@@ -253,28 +253,33 @@ function HookManager:Install()
                             if wasModified then modified = true end
                         end
                     end
+                    if modified then
+                        return oldNamecall(self_obj, unpack(args))
+                    end
                 end
 
                 -- Catch FindPartOnRay via __namecall
                 if method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
+                    local args = {...}
                     local ray = args[1]
                     if ray and typeof(ray) == "Ray" then
                         local finalRay = ray
                         for _, entry in ipairs(GetSortedHandlers(self.FindPartOnRayHandlers)) do
-                            local ok2, newRay = pcall(entry.handler, finalRay, method, table.unpack(args, 2))
+                            local ok2, newRay = pcall(entry.handler, finalRay, method, unpack(args, 2))
                             if ok2 and newRay ~= nil then
                                 finalRay = newRay
                             end
                         end
                         if finalRay ~= ray then
                             args[1] = finalRay
-                            modified = true
+                            return oldNamecall(self_obj, unpack(args))
                         end
                     end
                 end
 
                 -- Catch Raycast via __namecall
                 if method == "Raycast" then
+                    local args = {...}
                     local origin = args[1]
                     local direction = args[2]
                     local params = args[3]
@@ -292,12 +297,13 @@ function HookManager:Install()
                             args[1] = finalOrigin
                             args[2] = finalDirection
                             args[3] = finalParams
-                            modified = true
+                            return oldNamecall(self_obj, unpack(args))
                         end
                     end
                 end
 
-                return oldNamecall(self_obj, table.unpack(args))
+                -- Unmodified — pass through with original varargs
+                return oldNamecall(self_obj, ...)
             end
             setreadonly(mt, true)
         end
