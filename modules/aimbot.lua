@@ -1,6 +1,7 @@
--- Pouncing.exe | Aimbot Module v7.8
--- Silent Aim = Bullet Redirect via HookManager
--- Fixed: CoreGui-safe hooks, recursive raycast protection, magnitude preservation
+-- Pouncing.exe | Aimbot Module v8.0
+-- Silent Aim = Bullet Redirect via __namecall ray replacement + remote replacement
+-- Fixed: args indexing in __namecall (args[1] is self, not first arg)
+-- Added: Camera-origin safety check for ray methods (avoids UI ray corruption)
 -- Hitbox: Malrand-style continuous expansion (unchanged)
 -- ============================================================
 
@@ -72,8 +73,6 @@ local ArsenalHitboxRunning = false
 
 -- ============================================================
 -- RECURSION GUARD
--- Prevents silent aim raycasts from being redirected during
--- our own visibility checks (which also call Raycast)
 -- ============================================================
 local InternalRaycastActive = false
 
@@ -146,7 +145,7 @@ local function IsInFOV(targetPos)
 end
 
 -- ============================================================
--- Wall check — guarded against recursive redirect
+-- Wall check
 -- ============================================================
 
 local function CanSee(targetPos, targetCharacter)
@@ -276,7 +275,43 @@ local function DoCameraSnap()
 end
 
 -- ============================================================
--- BULLET REDIRECT: HookManager-based
+-- BULLET REDIRECT: Ray replacement
+-- ============================================================
+
+-- Safety check: only redirect rays that originate near the camera
+-- This prevents redirecting UI rays (like AvatarContextMenu)
+local function IsBulletRay(origin)
+    if not origin or typeof(origin) ~= "Vector3" then return false end
+    return (origin - Camera.CFrame.Position).Magnitude < 15
+end
+
+local function RedirectRaycastHandler(origin, direction, params)
+    if InternalRaycastActive then return nil end
+    if not Config.SilentAim or not Config.Enabled then return nil end
+    if not IsBulletRay(origin) then return nil end
+    local target = GetSilentAimTarget()
+    if not target or not target.Part then return nil end
+    if Config.DebugMode then
+        print("[Pouncing Aimbot] Raycast redirected to " .. target.Player.Name)
+    end
+    local newDirection = (target.Position - origin).Unit * direction.Magnitude
+    return origin, newDirection, params
+end
+
+local function RedirectFindPartOnRayHandler(ray, methodName, ...)
+    if not Config.SilentAim or not Config.Enabled then return nil end
+    if not IsBulletRay(ray.Origin) then return nil end
+    local target = GetSilentAimTarget()
+    if not target or not target.Part then return nil end
+    if Config.DebugMode then
+        print("[Pouncing Aimbot] FindPartOnRay redirected to " .. target.Player.Name)
+    end
+    local newDirection = (target.Position - ray.Origin).Unit * ray.Direction.Magnitude
+    return Ray.new(ray.Origin, newDirection)
+end
+
+-- ============================================================
+-- BULLET REDIRECT: Remote replacement
 -- ============================================================
 
 local function IsLikelyHitRemote(remoteName)
@@ -284,7 +319,7 @@ local function IsLikelyHitRemote(remoteName)
     return n:find("hit") or n:find("damage") or n:find("bullet") or n:find("fire") 
         or n:find("shoot") or n:find("atk") or n:find("attack") or n:find("dmg")
         or n:find("ray") or n:find("cast") or n:find("proj") or n:find("register")
-        or n:find("shot") or n:find("weapon")
+        or n:find("shot") or n:find("weapon") or n:find("kill") or n:find("hurt")
 end
 
 local function IsEnemyPart(part)
@@ -307,7 +342,6 @@ local function DeepScanAndReplace(t, targetPos, targetPart, localPos)
         if vt == "Vector3" then
             local dist = (v - Camera.CFrame.Position).Magnitude
             local distFromLocal = localPos and (v - localPos).Magnitude or dist
-            -- Only replace if it's not the player's own position and within range
             if dist > 0.5 and dist < Config.MaxDistance * 3 and distFromLocal > 5 then
                 t[k] = targetPos
                 modified = true
@@ -353,14 +387,13 @@ local function ProcessRemoteArgs(args, remoteName)
     local modified = false
     local isHitRemote = IsLikelyHitRemote(remoteName)
 
-    -- Get local player position to avoid replacing our own position in remotes
     local localRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     local localPos = localRoot and localRoot.Position
 
     -- REMOTE SPY: Log all remotes when enabled
     if Config.RemoteSpy then
         local argSummary = {}
-        for i = 1, math.min(#args, 5) do
+        for i = 1, math.min(#args, 6) do
             local a = args[i]
             local t = typeof(a)
             if t == "Vector3" then
@@ -371,6 +404,10 @@ local function ProcessRemoteArgs(args, remoteName)
                 table.insert(argSummary, a.Name .. "(" .. a.ClassName .. ")")
             elseif t == "table" then
                 table.insert(argSummary, "table[" .. tostring(#a) .. "]")
+            elseif t == "Ray" then
+                table.insert(argSummary, "Ray")
+            elseif t == "number" then
+                table.insert(argSummary, "N:" .. tostring(math.floor(a * 100) / 100))
             else
                 table.insert(argSummary, t .. ":" .. tostring(a):sub(1, 20))
             end
@@ -424,7 +461,6 @@ local function ProcessRemoteArgs(args, remoteName)
     return args, modified
 end
 
--- __namecall handler for HookManager
 local function RedirectNamecallHandler(args, method, self_obj)
     if method ~= "FireServer" and method ~= "InvokeServer" then return args, false end
     if typeof(self_obj) ~= "Instance" then return args, false end
@@ -433,32 +469,6 @@ local function RedirectNamecallHandler(args, method, self_obj)
     local remoteName = self_obj.Name
     local newArgs, modified = ProcessRemoteArgs(args, remoteName)
     return newArgs, modified
-end
-
--- Raycast handler for HookManager
-local function RedirectRaycastHandler(origin, direction, params)
-    if InternalRaycastActive then return nil end
-    if not Config.SilentAim or not Config.Enabled then return nil end
-    local target = GetSilentAimTarget()
-    if not target or not target.Part then return nil end
-    if Config.DebugMode then
-        print("[Pouncing Aimbot] Raycast redirected to " .. target.Player.Name)
-    end
-    -- Preserve original ray length but point at target
-    local newDirection = (target.Position - origin).Unit * direction.Magnitude
-    return origin, newDirection, params
-end
-
--- FindPartOnRay handler for HookManager
-local function RedirectFindPartOnRayHandler(ray, methodName, ...)
-    if not Config.SilentAim or not Config.Enabled then return nil end
-    local target = GetSilentAimTarget()
-    if not target or not target.Part then return nil end
-    if Config.DebugMode then
-        print("[Pouncing Aimbot] FindPartOnRay redirected to " .. target.Player.Name)
-    end
-    local newDirection = (target.Position - ray.Origin).Unit * ray.Direction.Magnitude
-    return Ray.new(ray.Origin, newDirection)
 end
 
 -- ============================================================
@@ -862,11 +872,13 @@ end
 function Module.Enable()
     Config.Enabled = true
 
-    -- Register hooks with HookManager
     if Utils and Utils.HookManager then
+        -- Register ray handlers (primary mechanism for Arsenal)
         Utils.HookManager:RegisterRaycastHandler("Aimbot", RedirectRaycastHandler, 10)
         Utils.HookManager:RegisterFindPartOnRayHandler("Aimbot", RedirectFindPartOnRayHandler, 10)
+        -- Register remote handler (secondary mechanism)
         Utils.HookManager:RegisterNamecallHandler("Aimbot", RedirectNamecallHandler, 10)
+
         local ok, err = pcall(function() Utils.HookManager:Install() end)
         if not ok and Config.DebugMode then
             warn("[Pouncing Aimbot] HookManager install failed: " .. tostring(err))
@@ -884,7 +896,7 @@ function Module.Enable()
     end
 
     if Config.DebugMode then
-        print("[Pouncing Aimbot] Enabled. FOV circle + hitbox loop active.")
+        print("[Pouncing Aimbot] Enabled. Ray redirect + remote redirect active.")
     end
 end
 
