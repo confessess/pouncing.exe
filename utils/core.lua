@@ -1,7 +1,7 @@
--- Pouncing.exe | Utils Core v3.7
--- Shared utilities + Unified Hook Manager
--- CRITICAL FIX: args[1] in __namecall is self, not the first argument
--- This was causing stack corruption on ray method redirects
+-- Pouncing.exe | Utils Core v3.8
+-- Minimal __namecall hook using Rollimonster pattern
+-- Always unpack(args) for ALL calls to avoid stack corruption
+-- Only modifies ray methods when handlers are registered
 -- ============================================================
 
 local Workspace = game:GetService("Workspace")
@@ -118,8 +118,9 @@ Utils.SkeletonConnections = {
 }
 
 -- ============================================================
--- UNIFIED HOOK MANAGER v3.7
--- CRITICAL FIX: args[1] is self in __namecall
+-- UNIFIED HOOK MANAGER v3.8
+-- Minimal __namecall — Rollimonster pattern
+-- ALWAYS unpack(args) for ALL calls
 -- ============================================================
 local HookManager = {
     OriginalNamecall = nil,
@@ -182,121 +183,93 @@ function HookManager:Install()
         -- ABSOLUTE FIRST CALL
         local method = getnamecallmethod()
         if not method then
-            return oldNamecall(...)
+            return oldNamecall(unpack({...}))
         end
 
-        -- Fast-path: methods we NEVER touch
-        local isRemote = (method == "FireServer" or method == "InvokeServer")
-        local isRaycast = (method == "Raycast")
-        local isFindPart = (method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist")
-
-        if not isRemote and not isRaycast and not isFindPart then
-            return oldNamecall(...)
-        end
-
-        -- Extract self from varargs
-        -- __namecall receives (self, arg1, arg2, ...) as ...
         local args = {...}
-        local self_obj = args[1]
+        local modified = false
 
-        -- ============================================================
-        -- REMOTE HANDLING (FireServer / InvokeServer)
-        -- ============================================================
+        -- Only process ray methods and remotes
+        local isRayMethod = method == "Raycast" or method:find("Ray") ~= nil
+        local isRemote = method == "FireServer" or method == "InvokeServer"
+
+        if isRayMethod then
+            -- Raycast: args[1]=Workspace, args[2]=origin, args[3]=direction, args[4]=params
+            -- FindPartOnRay: args[1]=Workspace, args[2]=ray, args[3+]=extra
+            local origin, direction, params
+            if method == "Raycast" then
+                origin = args[2]
+                direction = args[3]
+                params = args[4]
+            else
+                -- FindPartOnRay variants
+                local ray = args[2]
+                if ray and typeof(ray) == "Ray" then
+                    origin = ray.Origin
+                    direction = ray.Direction
+                end
+            end
+
+            if origin and direction then
+                local finalOrigin, finalDirection, finalParams = origin, direction, params
+                for _, entry in ipairs(GetSortedHandlers(self.RaycastHandlers)) do
+                    local ok2, newOrigin, newDirection, newParams = pcall(entry.handler, finalOrigin, finalDirection, finalParams)
+                    if ok2 and newOrigin ~= nil then
+                        finalOrigin = newOrigin
+                        finalDirection = newDirection or finalDirection
+                        finalParams = newParams or finalParams
+                        modified = true
+                    end
+                end
+                for _, entry in ipairs(GetSortedHandlers(self.FindPartOnRayHandlers)) do
+                    local ok2, newRay = pcall(entry.handler, Ray.new(finalOrigin, finalDirection), method)
+                    if ok2 and newRay ~= nil and typeof(newRay) == "Ray" then
+                        finalOrigin = newRay.Origin
+                        finalDirection = newRay.Direction
+                        modified = true
+                    end
+                end
+
+                if modified then
+                    if method == "Raycast" then
+                        args[2] = finalOrigin
+                        args[3] = finalDirection
+                        args[4] = finalParams
+                    else
+                        args[2] = Ray.new(finalOrigin, finalDirection)
+                    end
+                end
+            end
+        end
+
         if isRemote then
-            if typeof(self_obj) ~= "Instance" then
-                return oldNamecall(...)
-            end
-            if not (self_obj:IsA("RemoteEvent") or self_obj:IsA("RemoteFunction")) then
-                return oldNamecall(...)
-            end
-
-            -- Remove self from args for handler processing
-            local handlerArgs = {}
-            for i = 2, #args do
-                handlerArgs[i - 1] = args[i]
-            end
-
-            local modified = false
-            for _, entry in ipairs(GetSortedHandlers(self.NamecallHandlers)) do
-                local ok2, newArgs, wasModified = pcall(entry.handler, handlerArgs, method, self_obj)
-                if ok2 and newArgs then
-                    handlerArgs = newArgs
-                    if wasModified then modified = true end
+            local self_obj = args[1]
+            if typeof(self_obj) == "Instance" and (self_obj:IsA("RemoteEvent") or self_obj:IsA("RemoteFunction")) then
+                local handlerArgs = {}
+                for i = 2, #args do
+                    handlerArgs[i - 1] = args[i]
                 end
-            end
-
-            if modified then
-                return oldNamecall(self_obj, unpack(handlerArgs))
-            else
-                return oldNamecall(...)
+                for _, entry in ipairs(GetSortedHandlers(self.NamecallHandlers)) do
+                    local ok2, newArgs, wasModified = pcall(entry.handler, handlerArgs, method, self_obj)
+                    if ok2 and newArgs then
+                        handlerArgs = newArgs
+                        if wasModified then modified = true end
+                    end
+                end
+                if modified then
+                    for i = 2, #args do
+                        args[i] = nil
+                    end
+                    for i, v in ipairs(handlerArgs) do
+                        args[i + 1] = v
+                    end
+                end
             end
         end
 
-        -- ============================================================
-        -- RAYCAST HANDLING
-        -- self_obj = Workspace, args[2] = origin, args[3] = direction, args[4] = params
-        -- ============================================================
-        if isRaycast then
-            local origin = args[2]
-            local direction = args[3]
-
-            if not origin or not direction then
-                return oldNamecall(...)
-            end
-
-            local modified = false
-            local finalOrigin, finalDirection, finalParams = origin, direction, args[4]
-
-            for _, entry in ipairs(GetSortedHandlers(self.RaycastHandlers)) do
-                local ok2, newOrigin, newDirection, newParams = pcall(entry.handler, finalOrigin, finalDirection, finalParams)
-                if ok2 and newOrigin ~= nil then
-                    finalOrigin = newOrigin
-                    finalDirection = newDirection or finalDirection
-                    finalParams = newParams or finalParams
-                    modified = true
-                end
-            end
-
-            if modified then
-                return oldNamecall(self_obj, finalOrigin, finalDirection, finalParams)
-            else
-                return oldNamecall(...)
-            end
-        end
-
-        -- ============================================================
-        -- FINDPARTONRAY HANDLING
-        -- self_obj = Workspace, args[2] = ray, args[3+] = other args
-        -- ============================================================
-        if isFindPart then
-            local ray = args[2]
-            if not ray or typeof(ray) ~= "Ray" then
-                return oldNamecall(...)
-            end
-
-            local modified = false
-            for _, entry in ipairs(GetSortedHandlers(self.FindPartOnRayHandlers)) do
-                -- Build extra args starting from args[3]
-                local extraArgs = {}
-                for i = 3, #args do
-                    table.insert(extraArgs, args[i])
-                end
-                local ok2, newRay = pcall(entry.handler, ray, method, unpack(extraArgs))
-                if ok2 and newRay ~= nil then
-                    ray = newRay
-                    modified = true
-                end
-            end
-
-            if modified then
-                return oldNamecall(self_obj, ray, unpack(extraArgs))
-            else
-                return oldNamecall(...)
-            end
-        end
-
-        -- Fallback
-        return oldNamecall(...)
+        -- CRITICAL: Always use unpack(args) for ALL calls
+        -- This matches Rollimonster's working pattern
+        return oldNamecall(unpack(args))
     end
 
     setreadonly(mt, true)

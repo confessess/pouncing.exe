@@ -1,7 +1,6 @@
--- Pouncing.exe | Aimbot Module v8.0
--- Silent Aim = Bullet Redirect via __namecall ray replacement + remote replacement
--- Fixed: args indexing in __namecall (args[1] is self, not first arg)
--- Added: Camera-origin safety check for ray methods (avoids UI ray corruption)
+-- Pouncing.exe | Aimbot Module v8.1
+-- Silent Aim via __namecall ray replacement (Rollimonster pattern)
+-- Fixed: Always unpack(args) for ALL calls in HookManager
 -- Hitbox: Malrand-style continuous expansion (unchanged)
 -- ============================================================
 
@@ -275,16 +274,16 @@ local function DoCameraSnap()
 end
 
 -- ============================================================
--- BULLET REDIRECT: Ray replacement
+-- BULLET REDIRECT: Ray replacement (Rollimonster pattern)
 -- ============================================================
 
--- Safety check: only redirect rays that originate near the camera
--- This prevents redirecting UI rays (like AvatarContextMenu)
+-- Only redirect rays that originate near the camera (bullet rays)
 local function IsBulletRay(origin)
     if not origin or typeof(origin) ~= "Vector3" then return false end
     return (origin - Camera.CFrame.Position).Magnitude < 15
 end
 
+-- Raycast handler: returns new origin, direction, params
 local function RedirectRaycastHandler(origin, direction, params)
     if InternalRaycastActive then return nil end
     if not Config.SilentAim or not Config.Enabled then return nil end
@@ -298,7 +297,8 @@ local function RedirectRaycastHandler(origin, direction, params)
     return origin, newDirection, params
 end
 
-local function RedirectFindPartOnRayHandler(ray, methodName, ...)
+-- FindPartOnRay handler: returns new Ray
+local function RedirectFindPartOnRayHandler(ray, methodName)
     if not Config.SilentAim or not Config.Enabled then return nil end
     if not IsBulletRay(ray.Origin) then return nil end
     local target = GetSilentAimTarget()
@@ -311,7 +311,7 @@ local function RedirectFindPartOnRayHandler(ray, methodName, ...)
 end
 
 -- ============================================================
--- BULLET REDIRECT: Remote replacement
+-- BULLET REDIRECT: Remote replacement (for non-ray hit systems)
 -- ============================================================
 
 local function IsLikelyHitRemote(remoteName)
