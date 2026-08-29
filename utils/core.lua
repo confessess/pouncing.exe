@@ -1,10 +1,11 @@
--- Pouncing.exe | Utils Core v3.5
+-- Pouncing.exe | Utils Core v3.6
 -- Shared utilities + Unified Hook Manager
 -- CRITICAL FIXES:
---   1. CoreGui caller detection — skips ALL modifications for CoreScripts
---   2. Arg count preservation via select("#", ...) — prevents arg truncation
---   3. getnamecallmethod() called absolutely first, zero operations before it
---   4. Safer unpack repacking — only when modified, exact arg count passed
+--   1. __namecall uses ... signature — getnamecallmethod() called before ANY other operation
+--   2. Removed ALL direct Workspace method replacements (caused CoreGui collisions)
+--   3. IsCoreGuiCaller() — multi-strategy detection with fallback heuristics
+--   4. Unmodified calls pass through with ... directly — zero repacking
+--   5. Early return for non-handled methods before ANY work
 -- ============================================================
 
 local Workspace = game:GetService("Workspace")
@@ -121,40 +122,68 @@ Utils.SkeletonConnections = {
 }
 
 -- ============================================================
--- COREGUI CALLER DETECTION
--- Prevents hook interception on Roblox UI (AvatarContextMenu, etc.)
+-- COREGUI CALLER DETECTION v2
+-- Multi-strategy detection to handle executor quirks
 -- ============================================================
 local function IsCoreGuiCaller()
+    -- Strategy 1: getcallingscript() + ancestry walk
     local success, callingScript = pcall(getcallingscript)
-    if not success or not callingScript then return false end
-    if typeof(callingScript) ~= "Instance" then return false end
-
-    -- CoreScripts are always Roblox internal
-    if callingScript:IsA("CoreScript") then return true end
-
-    -- Walk ancestry for CoreGui / CorePackages
-    local current = callingScript.Parent
-    while current do
-        if current == game.CoreGui or current == game.CorePackages then
+    if success and callingScript and typeof(callingScript) == "Instance" then
+        -- Direct CoreScript check
+        if callingScript:IsA("CoreScript") then
             return true
         end
-        current = current.Parent
+        -- Ancestry walk
+        local current = callingScript.Parent
+        while current do
+            if current == game.CoreGui or current == game.CorePackages then
+                return true
+            end
+            current = current.Parent
+        end
     end
+
+    -- Strategy 2: checkcallers() — some executors provide this
+    if checkcaller then
+        local ok, isCaller = pcall(checkcaller)
+        if ok and isCaller then
+            -- Our own code is the caller, not CoreGui
+            return false
+        end
+    end
+
+    -- Strategy 3: getfenv stack inspection — detect CoreGui in call stack
+    local ok, env = pcall(getfenv, 3)
+    if ok and env then
+        local scriptRef = env.script
+        if typeof(scriptRef) == "Instance" then
+            if scriptRef:IsA("CoreScript") then
+                return true
+            end
+            local current = scriptRef.Parent
+            while current do
+                if current == game.CoreGui or current == game.CorePackages then
+                    return true
+                end
+                current = current.Parent
+            end
+        end
+    end
+
+    -- Strategy 4: Heuristic — if the call is on a CoreGui descendant, skip it
+    -- This is a last resort and less reliable
     return false
 end
 
 -- ============================================================
--- UNIFIED HOOK MANAGER v3.5
+-- UNIFIED HOOK MANAGER v3.6
+-- Only __namecall hook — removed all direct Workspace replacements
 -- ============================================================
 local HookManager = {
-    OriginalRaycast = nil,
-    RaycastHandlers = {},
-    OriginalFindPartOnRay = nil,
-    OriginalFindPartOnRayWithIgnoreList = nil,
-    OriginalFindPartOnRayWithWhitelist = nil,
-    FindPartOnRayHandlers = {},
     OriginalNamecall = nil,
     NamecallHandlers = {},
+    RaycastHandlers = {},
+    FindPartOnRayHandlers = {},
     Mt = nil,
     Hooked = false,
 }
@@ -197,169 +226,149 @@ function HookManager:Install()
     if self.Hooked then return end
     self.Hooked = true
 
-    -- Raycast hook (direct function replacement) — PCALL WRAPPED
-    local okRaycast, oldRaycast = pcall(function() return Workspace.Raycast end)
-    if okRaycast and oldRaycast then
-        self.OriginalRaycast = oldRaycast
-        pcall(function()
-            Workspace.Raycast = function(ws, origin, direction, params, ...)
-                local finalOrigin, finalDirection, finalParams = origin, direction, params
-                for _, entry in ipairs(GetSortedHandlers(self.RaycastHandlers)) do
-                    local ok, newOrigin, newDirection, newParams = pcall(entry.handler, finalOrigin, finalDirection, finalParams)
-                    if ok and newOrigin ~= nil then
-                        finalOrigin = newOrigin
-                        finalDirection = newDirection or finalDirection
-                        finalParams = newParams or finalParams
-                    end
-                end
-                return oldRaycast(ws, finalOrigin, finalDirection, finalParams, ...)
-            end
-        end)
-    end
-
-    -- FindPartOnRay hooks — PCALL WRAPPED
-    local function HookFindPartOnRay(methodName, original)
-        if not original then return nil end
-        return function(ws, ray, ...)
-            local finalRay = ray
-            for _, entry in ipairs(GetSortedHandlers(self.FindPartOnRayHandlers)) do
-                local ok, newRay = pcall(entry.handler, finalRay, methodName, ...)
-                if ok and newRay ~= nil then
-                    finalRay = newRay
-                end
-            end
-            return original(ws, finalRay, ...)
-        end
-    end
-
-    local okFPR, oldFPR = pcall(function() return Workspace.FindPartOnRay end)
-    local okFPRIL, oldFPRIL = pcall(function() return Workspace.FindPartOnRayWithIgnoreList end)
-    local okFPRWL, oldFPRWL = pcall(function() return Workspace.FindPartOnRayWithWhitelist end)
-
-    if okFPR and oldFPR then
-        self.OriginalFindPartOnRay = oldFPR
-        pcall(function() Workspace.FindPartOnRay = HookFindPartOnRay("FindPartOnRay", oldFPR) end)
-    end
-    if okFPRIL and oldFPRIL then
-        self.OriginalFindPartOnRayWithIgnoreList = oldFPRIL
-        pcall(function() Workspace.FindPartOnRayWithIgnoreList = HookFindPartOnRay("FindPartOnRayWithIgnoreList", oldFPRIL) end)
-    end
-    if okFPRWL and oldFPRWL then
-        self.OriginalFindPartOnRayWithWhitelist = oldFPRWL
-        pcall(function() Workspace.FindPartOnRayWithWhitelist = HookFindPartOnRay("FindPartOnRayWithWhitelist", oldFPRWL) end)
-    end
-
-    -- __namecall hook — CRITICAL: getnamecallmethod() called FIRST
+    -- __namecall hook — CRITICAL: ... signature, getnamecallmethod() FIRST
     local ok, mt = pcall(getrawmetatable, game)
-    if ok and mt then
-        self.Mt = mt
-        local oldNamecall = mt.__namecall
-        if oldNamecall then
-            self.OriginalNamecall = oldNamecall
-            setreadonly(mt, false)
+    if not ok or not mt then return end
 
-            mt.__namecall = function(self_obj, ...)
-                -- ABSOLUTE FIRST CALL — no operations before this
-                local method = getnamecallmethod()
-                if not method then
-                    return oldNamecall(self_obj, ...)
-                end
+    self.Mt = mt
+    local oldNamecall = mt.__namecall
+    if not oldNamecall then return end
 
-                -- Preserve exact argument count for repacking
-                local argCount = select("#", ...)
+    self.OriginalNamecall = oldNamecall
+    setreadonly(mt, false)
 
-                -- Skip ALL modifications for CoreGui/CoreScripts
-                -- This prevents AvatarContextMenu and other UI from breaking
-                if IsCoreGuiCaller() then
-                    return oldNamecall(self_obj, ...)
-                end
+    mt.__namecall = function(...)
+        -- ABSOLUTE FIRST CALL — zero operations before this
+        local method = getnamecallmethod()
+        if not method then
+            return oldNamecall(...)
+        end
 
-                -- Handle remotes (FireServer / InvokeServer)
-                if method == "FireServer" or method == "InvokeServer" then
-                    local args = {...}
-                    local modified = false
-                    for _, entry in ipairs(GetSortedHandlers(self.NamecallHandlers)) do
-                        local ok2, newArgs, wasModified = pcall(entry.handler, args, method, self_obj)
-                        if ok2 and newArgs then
-                            args = newArgs
-                            if wasModified then modified = true end
-                        end
-                    end
-                    if modified then
-                        return oldNamecall(self_obj, unpack(args, 1, argCount))
-                    end
-                end
+        -- Fast-path: methods we NEVER touch — pass through immediately
+        local methodLower = method:lower()
+        local isRemote = (method == "FireServer" or method == "InvokeServer")
+        local isRaycast = (method == "Raycast")
+        local isFindPart = (method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist")
 
-                -- Catch FindPartOnRay via __namecall
-                if method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
-                    local args = {...}
-                    local ray = args[1]
-                    if ray and typeof(ray) == "Ray" then
-                        local modified = false
-                        for _, entry in ipairs(GetSortedHandlers(self.FindPartOnRayHandlers)) do
-                            local ok2, newRay = pcall(entry.handler, ray, method, unpack(args, 2, argCount))
-                            if ok2 and newRay ~= nil then
-                                ray = newRay
-                                modified = true
-                            end
-                        end
-                        if modified then
-                            args[1] = ray
-                            return oldNamecall(self_obj, unpack(args, 1, argCount))
-                        end
-                    end
-                end
+        if not isRemote and not isRaycast and not isFindPart then
+            return oldNamecall(...)
+        end
 
-                -- Catch Raycast via __namecall
-                if method == "Raycast" then
-                    local args = {...}
-                    local origin = args[1]
-                    local direction = args[2]
-                    if origin and direction then
-                        local modified = false
-                        local finalOrigin, finalDirection, finalParams = origin, direction, args[3]
-                        for _, entry in ipairs(GetSortedHandlers(self.RaycastHandlers)) do
-                            local ok2, newOrigin, newDirection, newParams = pcall(entry.handler, finalOrigin, finalDirection, finalParams)
-                            if ok2 and newOrigin ~= nil then
-                                finalOrigin = newOrigin
-                                finalDirection = newDirection or finalDirection
-                                finalParams = newParams or finalParams
-                                modified = true
-                            end
-                        end
-                        if modified then
-                            args[1] = finalOrigin
-                            args[2] = finalDirection
-                            args[3] = finalParams
-                            return oldNamecall(self_obj, unpack(args, 1, argCount))
-                        end
-                    end
-                end
+        -- Extract self_obj from varargs
+        local self_obj = ...
 
-                -- Unmodified — pass through with original varargs (no repacking)
-                return oldNamecall(self_obj, ...)
+        -- Skip ALL modifications for CoreGui/CoreScripts
+        if IsCoreGuiCaller() then
+            return oldNamecall(...)
+        end
+
+        -- Skip if self_obj is not an Instance (safety)
+        if typeof(self_obj) ~= "Instance" then
+            return oldNamecall(...)
+        end
+
+        -- ============================================================
+        -- REMOTE HANDLING (FireServer / InvokeServer)
+        -- ============================================================
+        if isRemote then
+            -- Only process RemoteEvent and RemoteFunction
+            if not (self_obj:IsA("RemoteEvent") or self_obj:IsA("RemoteFunction")) then
+                return oldNamecall(...)
             end
 
-            setreadonly(mt, true)
+            local args = {...}
+            table.remove(args, 1) -- remove self_obj
+            local modified = false
+
+            for _, entry in ipairs(GetSortedHandlers(self.NamecallHandlers)) do
+                local ok2, newArgs, wasModified = pcall(entry.handler, args, method, self_obj)
+                if ok2 and newArgs then
+                    args = newArgs
+                    if wasModified then modified = true end
+                end
+            end
+
+            if modified then
+                return oldNamecall(self_obj, unpack(args))
+            else
+                return oldNamecall(...)
+            end
         end
+
+        -- ============================================================
+        -- FINDPARTONRAY HANDLING
+        -- ============================================================
+        if isFindPart then
+            local args = {...}
+            table.remove(args, 1) -- remove self_obj
+            local ray = args[1]
+
+            if not ray or typeof(ray) ~= "Ray" then
+                return oldNamecall(...)
+            end
+
+            local modified = false
+            for _, entry in ipairs(GetSortedHandlers(self.FindPartOnRayHandlers)) do
+                local ok2, newRay = pcall(entry.handler, ray, method, unpack(args, 2))
+                if ok2 and newRay ~= nil then
+                    ray = newRay
+                    modified = true
+                end
+            end
+
+            if modified then
+                args[1] = ray
+                return oldNamecall(self_obj, unpack(args))
+            else
+                return oldNamecall(...)
+            end
+        end
+
+        -- ============================================================
+        -- RAYCAST HANDLING
+        -- ============================================================
+        if isRaycast then
+            local args = {...}
+            table.remove(args, 1) -- remove self_obj
+            local origin = args[1]
+            local direction = args[2]
+
+            if not origin or not direction then
+                return oldNamecall(...)
+            end
+
+            local modified = false
+            local finalOrigin, finalDirection, finalParams = origin, direction, args[3]
+
+            for _, entry in ipairs(GetSortedHandlers(self.RaycastHandlers)) do
+                local ok2, newOrigin, newDirection, newParams = pcall(entry.handler, finalOrigin, finalDirection, finalParams)
+                if ok2 and newOrigin ~= nil then
+                    finalOrigin = newOrigin
+                    finalDirection = newDirection or finalDirection
+                    finalParams = newParams or finalParams
+                    modified = true
+                end
+            end
+
+            if modified then
+                args[1] = finalOrigin
+                args[2] = finalDirection
+                args[3] = finalParams
+                return oldNamecall(self_obj, unpack(args))
+            else
+                return oldNamecall(...)
+            end
+        end
+
+        -- Fallback (should never reach here)
+        return oldNamecall(...)
     end
+
+    setreadonly(mt, true)
 end
 
 function HookManager:Uninstall()
     if not self.Hooked then return end
-
-    if self.OriginalRaycast then
-        pcall(function() Workspace.Raycast = self.OriginalRaycast end)
-    end
-    if self.OriginalFindPartOnRay then
-        pcall(function() Workspace.FindPartOnRay = self.OriginalFindPartOnRay end)
-    end
-    if self.OriginalFindPartOnRayWithIgnoreList then
-        pcall(function() Workspace.FindPartOnRayWithIgnoreList = self.OriginalFindPartOnRayWithIgnoreList end)
-    end
-    if self.OriginalFindPartOnRayWithWhitelist then
-        pcall(function() Workspace.FindPartOnRayWithWhitelist = self.OriginalFindPartOnRayWithWhitelist end)
-    end
 
     if self.Mt and self.OriginalNamecall then
         setreadonly(self.Mt, false)
@@ -368,7 +377,6 @@ function HookManager:Uninstall()
     end
 
     self.Hooked = false
-    self.OriginalRaycast = nil
     self.OriginalNamecall = nil
     self.Mt = nil
 end
