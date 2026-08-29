@@ -1,6 +1,7 @@
--- Pouncing.exe | Aimbot Module v8.1
--- Silent Aim via __namecall ray replacement (Rollimonster pattern)
--- Fixed: Always unpack(args) for ALL calls in HookManager
+-- Pouncing.exe | Aimbot Module v8.2
+-- Silent Aim via DIRECT replacements (no __namecall, no HookManager)
+-- Replaces Workspace.Raycast, Workspace.FindPartOnRay, and remote.FireServer directly
+-- All replacements wrapped in pcall — one failure won't kill the rest
 -- Hitbox: Malrand-style continuous expansion (unchanged)
 -- ============================================================
 
@@ -8,11 +9,10 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
-
-local Utils = getfenv()["PouncingUtils"]
 
 local Config = {
     Enabled = false,
@@ -69,6 +69,16 @@ local InputBeganConnection = nil
 local InputEndedConnection = nil
 local ArsenalHitboxThread = nil
 local ArsenalHitboxRunning = false
+
+-- ============================================================
+-- DIRECT REPLACEMENT STATE
+-- ============================================================
+local OriginalRaycast = nil
+local OriginalFindPartOnRay = nil
+local OriginalFindPartOnRayWithIgnoreList = nil
+local OriginalFindPartOnRayWithWhitelist = nil
+local OriginalRemoteFires = {}
+local HooksActive = false
 
 -- ============================================================
 -- RECURSION GUARD
@@ -274,7 +284,7 @@ local function DoCameraSnap()
 end
 
 -- ============================================================
--- BULLET REDIRECT: Ray replacement (Rollimonster pattern)
+-- BULLET REDIRECT: Ray replacement
 -- ============================================================
 
 -- Only redirect rays that originate near the camera (bullet rays)
@@ -283,35 +293,20 @@ local function IsBulletRay(origin)
     return (origin - Camera.CFrame.Position).Magnitude < 15
 end
 
--- Raycast handler: returns new origin, direction, params
-local function RedirectRaycastHandler(origin, direction, params)
+local function GetRedirectRay(origin, direction)
     if InternalRaycastActive then return nil end
     if not Config.SilentAim or not Config.Enabled then return nil end
     if not IsBulletRay(origin) then return nil end
     local target = GetSilentAimTarget()
     if not target or not target.Part then return nil end
     if Config.DebugMode then
-        print("[Pouncing Aimbot] Raycast redirected to " .. target.Player.Name)
+        print("[Pouncing Aimbot] Ray redirected to " .. target.Player.Name)
     end
-    local newDirection = (target.Position - origin).Unit * direction.Magnitude
-    return origin, newDirection, params
-end
-
--- FindPartOnRay handler: returns new Ray
-local function RedirectFindPartOnRayHandler(ray, methodName)
-    if not Config.SilentAim or not Config.Enabled then return nil end
-    if not IsBulletRay(ray.Origin) then return nil end
-    local target = GetSilentAimTarget()
-    if not target or not target.Part then return nil end
-    if Config.DebugMode then
-        print("[Pouncing Aimbot] FindPartOnRay redirected to " .. target.Player.Name)
-    end
-    local newDirection = (target.Position - ray.Origin).Unit * ray.Direction.Magnitude
-    return Ray.new(ray.Origin, newDirection)
+    return (target.Position - origin).Unit * direction.Magnitude
 end
 
 -- ============================================================
--- BULLET REDIRECT: Remote replacement (for non-ray hit systems)
+-- BULLET REDIRECT: Remote replacement
 -- ============================================================
 
 local function IsLikelyHitRemote(remoteName)
@@ -385,7 +380,6 @@ local function ProcessRemoteArgs(args, remoteName)
 
     local aimPos = target.Position
     local modified = false
-    local isHitRemote = IsLikelyHitRemote(remoteName)
 
     local localRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
     local localPos = localRoot and localRoot.Position
@@ -461,14 +455,119 @@ local function ProcessRemoteArgs(args, remoteName)
     return args, modified
 end
 
-local function RedirectNamecallHandler(args, method, self_obj)
-    if method ~= "FireServer" and method ~= "InvokeServer" then return args, false end
-    if typeof(self_obj) ~= "Instance" then return args, false end
-    if not (self_obj:IsA("RemoteEvent") or self_obj:IsA("RemoteFunction")) then return args, false end
+-- ============================================================
+-- HOOK INSTALLATION (direct replacements with pcall)
+-- ============================================================
 
-    local remoteName = self_obj.Name
-    local newArgs, modified = ProcessRemoteArgs(args, remoteName)
-    return newArgs, modified
+local function InstallHooks()
+    if HooksActive then return end
+    HooksActive = true
+
+    -- 1. Workspace.Raycast
+    pcall(function()
+        OriginalRaycast = Workspace.Raycast
+        Workspace.Raycast = function(self, origin, direction, params)
+            local newDirection = GetRedirectRay(origin, direction)
+            if newDirection then
+                return OriginalRaycast(self, origin, newDirection, params)
+            end
+            return OriginalRaycast(self, origin, direction, params)
+        end
+    end)
+
+    -- 2. Workspace.FindPartOnRay
+    pcall(function()
+        OriginalFindPartOnRay = Workspace.FindPartOnRay
+        Workspace.FindPartOnRay = function(self, ray, ...)
+            local newDirection = GetRedirectRay(ray.Origin, ray.Direction)
+            if newDirection then
+                return OriginalFindPartOnRay(self, Ray.new(ray.Origin, newDirection), ...)
+            end
+            return OriginalFindPartOnRay(self, ray, ...)
+        end
+    end)
+
+    -- 3. Workspace.FindPartOnRayWithIgnoreList
+    pcall(function()
+        OriginalFindPartOnRayWithIgnoreList = Workspace.FindPartOnRayWithIgnoreList
+        Workspace.FindPartOnRayWithIgnoreList = function(self, ray, ...)
+            local newDirection = GetRedirectRay(ray.Origin, ray.Direction)
+            if newDirection then
+                return OriginalFindPartOnRayWithIgnoreList(self, Ray.new(ray.Origin, newDirection), ...)
+            end
+            return OriginalFindPartOnRayWithIgnoreList(self, ray, ...)
+        end
+    end)
+
+    -- 4. Workspace.FindPartOnRayWithWhitelist
+    pcall(function()
+        OriginalFindPartOnRayWithWhitelist = Workspace.FindPartOnRayWithWhitelist
+        Workspace.FindPartOnRayWithWhitelist = function(self, ray, ...)
+            local newDirection = GetRedirectRay(ray.Origin, ray.Direction)
+            if newDirection then
+                return OriginalFindPartOnRayWithWhitelist(self, Ray.new(ray.Origin, newDirection), ...)
+            end
+            return OriginalFindPartOnRayWithWhitelist(self, ray, ...)
+        end
+    end)
+
+    -- 5. Remote FireServer replacement
+    pcall(function()
+        local function HookRemote(remote)
+            if not remote:IsA("RemoteEvent") then return end
+            if OriginalRemoteFires[remote] then return end
+            OriginalRemoteFires[remote] = remote.FireServer
+            remote.FireServer = function(self, ...)
+                local args = {...}
+                local newArgs, modified = ProcessRemoteArgs(args, self.Name)
+                if modified then
+                    return OriginalRemoteFires[remote](self, unpack(newArgs))
+                end
+                return OriginalRemoteFires[remote](self, ...)
+            end
+        end
+
+        -- Hook existing remotes
+        for _, child in ipairs(ReplicatedStorage:GetDescendants()) do
+            pcall(function() HookRemote(child) end)
+        end
+
+        -- Hook new remotes as they're added
+        ReplicatedStorage.DescendantAdded:Connect(function(child)
+            pcall(function() HookRemote(child) end)
+        end)
+    end)
+end
+
+local function UninstallHooks()
+    if not HooksActive then return end
+    HooksActive = false
+
+    pcall(function()
+        if OriginalRaycast then Workspace.Raycast = OriginalRaycast end
+    end)
+    pcall(function()
+        if OriginalFindPartOnRay then Workspace.FindPartOnRay = OriginalFindPartOnRay end
+    end)
+    pcall(function()
+        if OriginalFindPartOnRayWithIgnoreList then Workspace.FindPartOnRayWithIgnoreList = OriginalFindPartOnRayWithIgnoreList end
+    end)
+    pcall(function()
+        if OriginalFindPartOnRayWithWhitelist then Workspace.FindPartOnRayWithWhitelist = OriginalFindPartOnRayWithWhitelist end
+    end)
+    pcall(function()
+        for remote, oldFire in pairs(OriginalRemoteFires) do
+            if remote and remote.Parent then
+                remote.FireServer = oldFire
+            end
+        end
+    end)
+
+    OriginalRaycast = nil
+    OriginalFindPartOnRay = nil
+    OriginalFindPartOnRayWithIgnoreList = nil
+    OriginalFindPartOnRayWithWhitelist = nil
+    OriginalRemoteFires = {}
 end
 
 -- ============================================================
@@ -795,7 +894,7 @@ local function OnRenderStep()
 
     if target then
         if Config.SilentAim then
-            -- Silent aim uses HookManager __namecall — no camera manipulation
+            -- Silent aim uses direct replacements — no camera manipulation
         elseif Config.Aiming then
             AimAt(target)
         end
@@ -871,21 +970,7 @@ end
 
 function Module.Enable()
     Config.Enabled = true
-
-    if Utils and Utils.HookManager then
-        -- Register ray handlers (primary mechanism for Arsenal)
-        Utils.HookManager:RegisterRaycastHandler("Aimbot", RedirectRaycastHandler, 10)
-        Utils.HookManager:RegisterFindPartOnRayHandler("Aimbot", RedirectFindPartOnRayHandler, 10)
-        -- Register remote handler (secondary mechanism)
-        Utils.HookManager:RegisterNamecallHandler("Aimbot", RedirectNamecallHandler, 10)
-
-        local ok, err = pcall(function() Utils.HookManager:Install() end)
-        if not ok and Config.DebugMode then
-            warn("[Pouncing Aimbot] HookManager install failed: " .. tostring(err))
-        end
-    elseif Config.DebugMode then
-        warn("[Pouncing Aimbot] HookManager not available — silent aim will not work")
-    end
+    InstallHooks()
 
     if Config.ArsenalHitboxExpand then
         StartArsenalHitboxLoop()
@@ -896,7 +981,7 @@ function Module.Enable()
     end
 
     if Config.DebugMode then
-        print("[Pouncing Aimbot] Enabled. Ray redirect + remote redirect active.")
+        print("[Pouncing Aimbot] Enabled. Direct replacement hooks active.")
     end
 end
 
@@ -907,14 +992,7 @@ function Module.Disable()
     Config.StickyLostTime = 0
     Config.SnapRestorePending = false
 
-    if Utils and Utils.HookManager then
-        pcall(function()
-            Utils.HookManager:UnregisterRaycastHandler("Aimbot")
-            Utils.HookManager:UnregisterFindPartOnRayHandler("Aimbot")
-            Utils.HookManager:UnregisterNamecallHandler("Aimbot")
-        end)
-    end
-
+    UninstallHooks()
     StopArsenalHitboxLoop()
 
     if RenderConnection then
@@ -1005,13 +1083,7 @@ function Module.ResetConfig()
     Config.DebugMode = false
     Config.RemoteSpy = false
     StopArsenalHitboxLoop()
-    if Utils and Utils.HookManager then
-        pcall(function()
-            Utils.HookManager:UnregisterRaycastHandler("Aimbot")
-            Utils.HookManager:UnregisterFindPartOnRayHandler("Aimbot")
-            Utils.HookManager:UnregisterNamecallHandler("Aimbot")
-        end)
-    end
+    UninstallHooks()
 end
 
 function Module.Cleanup()
