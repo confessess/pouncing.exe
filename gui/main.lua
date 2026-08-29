@@ -1,7 +1,6 @@
--- Pouncing.exe | GUI Main v7.4
--- Dynamic preset-based UI — controls and tabs adapt to active game preset
--- Added: Bullet Redirect toggle (universal hook-based silent aim)
--- Fixed: Preset loader clearer messaging, applies UI even on fetch fail
+-- Pouncing.exe | GUI Main v7.5
+-- Fixed: Robust error handling in ApplyPresetVisibility, auto-apply on dropdown change
+-- Added: Debug output option, pcall wrappers on all visibility updates
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -24,6 +23,7 @@ function MainGUI.Create(screenGui, moduleManager)
     local TaggedControls = {}
     local TaggedTabs = {}
     local AllTabNames = {"Aimbot", "ESP", "Gun", "Misc", "Hitbox", "Da Hood", "Settings"}
+    local DebugGUI = false
 
     local function TagControl(frame, presets)
         if not frame then return end
@@ -54,6 +54,7 @@ function MainGUI.Create(screenGui, moduleManager)
     end
 
     local function RefreshAllCanvasSizes()
+        if not window or not window.Contents then return end
         for _, content in pairs(window.Contents) do
             if content and content.Parent then
                 local layout = content:FindFirstChildOfClass("UIListLayout")
@@ -65,65 +66,81 @@ function MainGUI.Create(screenGui, moduleManager)
     end
 
     local function ApplyPresetVisibility(presetName)
-        if not presetName then return end
-        if not window then
-            warn("[Pouncing] ApplyPresetVisibility: window not initialized yet")
-            return
-        end
-        ActivePreset = presetName
-        print("[Pouncing] UI refreshing for preset: " .. presetName)
-
-        for _, item in ipairs(TaggedControls) do
-            local show = ShouldShowForPreset(item.presets)
-            item.frame.Visible = show
-        end
-
-        local visibleTabs = {}
-        for name, tab in pairs(TaggedTabs) do
-            local show = ShouldShowForPreset(tab.presets)
-            if tab.button then
-                tab.button.Visible = show
+        local ok, err = pcall(function()
+            if not presetName then return end
+            if not window then
+                if DebugGUI then warn("[Pouncing] ApplyPresetVisibility: window not initialized yet") end
+                return
             end
-            if tab.content then
-                if not show then
-                    tab.content.Visible = false
+            ActivePreset = presetName
+            if DebugGUI then print("[Pouncing] UI refreshing for preset: " .. presetName) end
+
+            -- Update controls
+            for _, item in ipairs(TaggedControls) do
+                local show = ShouldShowForPreset(item.presets)
+                if item.frame and typeof(item.frame) == "Instance" then
+                    item.frame.Visible = show
                 end
             end
-            if show then
-                table.insert(visibleTabs, name)
-            end
-        end
 
-        if window.ActiveTab and TaggedTabs[window.ActiveTab] then
-            local currentTab = TaggedTabs[window.ActiveTab]
-            if currentTab and not ShouldShowForPreset(currentTab.presets) then
-                for _, name in ipairs(AllTabNames) do
-                    local t = TaggedTabs[name]
-                    if t and ShouldShowForPreset(t.presets) then
-                        if window.Tabs[name] then
-                            for _, tabBtn in pairs(window.Tabs) do
-                                TweenService:Create(tabBtn, TweenInfo.new(0.2), {
-                                    BackgroundColor3 = GUI.Theme.ElementBG, BackgroundTransparency = 0.45
+            -- Update tabs
+            local visibleTabs = {}
+            for name, tab in pairs(TaggedTabs) do
+                local show = ShouldShowForPreset(tab.presets)
+                if tab.button and typeof(tab.button) == "Instance" then
+                    tab.button.Visible = show
+                end
+                if tab.content and typeof(tab.content) == "Instance" then
+                    if not show then
+                        tab.content.Visible = false
+                    end
+                end
+                if show then
+                    table.insert(visibleTabs, name)
+                end
+            end
+
+            -- Switch active tab if current one is hidden
+            if window.ActiveTab and TaggedTabs[window.ActiveTab] then
+                local currentTab = TaggedTabs[window.ActiveTab]
+                if currentTab and not ShouldShowForPreset(currentTab.presets) then
+                    for _, name in ipairs(AllTabNames) do
+                        local t = TaggedTabs[name]
+                        if t and ShouldShowForPreset(t.presets) then
+                            if window.Tabs and window.Tabs[name] then
+                                for _, tabBtn in pairs(window.Tabs) do
+                                    if tabBtn and typeof(tabBtn) == "Instance" then
+                                        TweenService:Create(tabBtn, TweenInfo.new(0.2), {
+                                            BackgroundColor3 = GUI.Theme.ElementBG, BackgroundTransparency = 0.45
+                                        }):Play()
+                                    end
+                                end
+                                TweenService:Create(window.Tabs[name], TweenInfo.new(0.2), {
+                                    BackgroundColor3 = GUI.Theme.Primary, BackgroundTransparency = 0.1
                                 }):Play()
                             end
-                            TweenService:Create(window.Tabs[name], TweenInfo.new(0.2), {
-                                BackgroundColor3 = GUI.Theme.Primary, BackgroundTransparency = 0.1
-                            }):Play()
+                            if window.Contents then
+                                for _, content in pairs(window.Contents) do
+                                    if content and typeof(content) == "Instance" then
+                                        content.Visible = false
+                                    end
+                                end
+                            end
+                            if window.Contents[name] and typeof(window.Contents[name]) == "Instance" then
+                                window.Contents[name].Visible = true
+                            end
+                            window.ActiveTab = name
+                            break
                         end
-                        for _, content in pairs(window.Contents) do
-                            content.Visible = false
-                        end
-                        if window.Contents[name] then
-                            window.Contents[name].Visible = true
-                        end
-                        window.ActiveTab = name
-                        break
                     end
                 end
             end
-        end
 
-        task.delay(0.05, RefreshAllCanvasSizes)
+            task.delay(0.05, RefreshAllCanvasSizes)
+        end)
+        if not ok and DebugGUI then
+            warn("[Pouncing] ApplyPresetVisibility error: " .. tostring(err))
+        end
     end
 
     local window = GUI.CreateWindow(screenGui, "Pouncing.exe", UDim2.new(0, 780, 0, 600))
@@ -805,93 +822,100 @@ function MainGUI.Create(screenGui, moduleManager)
     end)
     TagControl(dhKnockToggle, {"Da Hood", "Zee Hood"})
 
-    local dhHPToggle = GUI.CreateToggle(DCon, "HP Display", false, nil, function(v)
-        local mod = moduleManager:GetModule("DaHoodExtras")
-        if mod and mod.SetConfig then mod.SetConfig("HPDisplay", v) end
-    end)
-    TagControl(dhHPToggle, {"Da Hood", "Zee Hood"})
-
-    local dhStompToggle = GUI.CreateToggle(DCon, "Auto Stomp", false, nil, function(v)
+    local dhAutoStompToggle = GUI.CreateToggle(DCon, "Auto Stomp", false, nil, function(v)
         local mod = moduleManager:GetModule("DaHoodExtras")
         if mod and mod.SetConfig then mod.SetConfig("AutoStomp", v) end
     end)
-    TagControl(dhStompToggle, {"Da Hood", "Zee Hood"})
+    TagControl(dhAutoStompToggle, {"Da Hood", "Zee Hood"})
 
-    local dhDropToggle = GUI.CreateToggle(DCon, "Auto Drop", false, nil, function(v)
+    local dhAntiStompToggle = GUI.CreateToggle(DCon, "Anti Stomp", false, nil, function(v)
+        local mod = moduleManager:GetModule("DaHoodExtras")
+        if mod and mod.SetConfig then mod.SetConfig("AntiStomp", v) end
+    end)
+    TagControl(dhAntiStompToggle, {"Da Hood", "Zee Hood"})
+
+    local dhAutoDropToggle = GUI.CreateToggle(DCon, "Auto Drop", false, nil, function(v)
         local mod = moduleManager:GetModule("DaHoodExtras")
         if mod and mod.SetConfig then mod.SetConfig("AutoDrop", v) end
     end)
-    TagControl(dhDropToggle, {"Da Hood", "Zee Hood"})
+    TagControl(dhAutoDropToggle, {"Da Hood", "Zee Hood"})
 
-    local dhSep1 = GUI.CreateSeparator(DCon)
-    TagControl(dhSep1, {"Da Hood", "Zee Hood"})
-
-    local dhSettingsSection = GUI.CreateSection(DCon, "Settings")
-    TagControl(dhSettingsSection, {"Da Hood", "Zee Hood"})
-
-    local dhStompRangeSlider = GUI.CreateSlider(DCon, "Stomp Range", 2, 20, 8, function(v)
+    local dhAntiBagToggle = GUI.CreateToggle(DCon, "Anti Bag", false, nil, function(v)
         local mod = moduleManager:GetModule("DaHoodExtras")
-        if mod and mod.SetConfig then mod.SetConfig("StompRange", v) end
+        if mod and mod.SetConfig then mod.SetConfig("AntiBag", v) end
     end)
-    TagControl(dhStompRangeSlider, {"Da Hood", "Zee Hood"})
+    TagControl(dhAntiBagToggle, {"Da Hood", "Zee Hood"})
 
-    local dhDropAmountSlider = GUI.CreateSlider(DCon, "Drop Amount", 100, 5000, 500, function(v)
+    local dhAntiGrabToggle = GUI.CreateToggle(DCon, "Anti Grab", false, nil, function(v)
         local mod = moduleManager:GetModule("DaHoodExtras")
-        if mod and mod.SetConfig then mod.SetConfig("DropAmount", v) end
+        if mod and mod.SetConfig then mod.SetConfig("AntiGrab", v) end
     end)
-    TagControl(dhDropAmountSlider, {"Da Hood", "Zee Hood"})
+    TagControl(dhAntiGrabToggle, {"Da Hood", "Zee Hood"})
+
+    local dhAntiSlowToggle = GUI.CreateToggle(DCon, "Anti Slow", false, nil, function(v)
+        local mod = moduleManager:GetModule("DaHoodExtras")
+        if mod and mod.SetConfig then mod.SetConfig("AntiSlow", v) end
+    end)
+    TagControl(dhAntiSlowToggle, {"Da Hood", "Zee Hood"})
+
+    local dhAntiFlingToggle = GUI.CreateToggle(DCon, "Anti Fling", false, nil, function(v)
+        local mod = moduleManager:GetModule("DaHoodExtras")
+        if mod and mod.SetConfig then mod.SetConfig("AntiFling", v) end
+    end)
+    TagControl(dhAntiFlingToggle, {"Da Hood", "Zee Hood"})
+
+    local dhCashAuraToggle = GUI.CreateToggle(DCon, "Cash Aura", false, nil, function(v)
+        local mod = moduleManager:GetModule("DaHoodExtras")
+        if mod and mod.SetConfig then mod.SetConfig("CashAura", v) end
+    end)
+    TagControl(dhCashAuraToggle, {"Da Hood", "Zee Hood"})
+
+    local dhCashAuraDistSlider = GUI.CreateSlider(DCon, "Cash Aura Distance", 5, 100, 20, function(v)
+        local mod = moduleManager:GetModule("DaHoodExtras")
+        if mod and mod.SetConfig then mod.SetConfig("CashAuraDist", v) end
+    end)
+    TagControl(dhCashAuraDistSlider, {"Da Hood", "Zee Hood"})
+
+    local dhAutoBlockToggle = GUI.CreateToggle(DCon, "Auto Block", false, nil, function(v)
+        local mod = moduleManager:GetModule("DaHoodExtras")
+        if mod and mod.SetConfig then mod.SetConfig("AutoBlock", v) end
+    end)
+    TagControl(dhAutoBlockToggle, {"Da Hood", "Zee Hood"})
+
+    local dhAntiLockToggle = GUI.CreateToggle(DCon, "Anti Lock", false, nil, function(v)
+        local mod = moduleManager:GetModule("DaHoodExtras")
+        if mod and mod.SetConfig then mod.SetConfig("AntiLock", v) end
+    end)
+    TagControl(dhAntiLockToggle, {"Da Hood", "Zee Hood"})
 
     -- ============================================================
-    -- CONFIG TAB
+    -- SETTINGS TAB
     -- ============================================================
-    local CCon = window.Contents["Settings"]
+    local SCon = window.Contents["Settings"]
 
-    local cfgSection = GUI.CreateSection(CCon, "Game Detection")
-    TagControl(cfgSection, {"all"})
+    local presetSection = GUI.CreateSection(SCon, "Game Preset")
+    TagControl(presetSection, {"all"})
 
-    local gameName = "Universal"
-    local placeId = game.PlaceId
-
-    local knownGames = {
-        [286090429] = "Arsenal",
-        [2788229376] = "Da Hood",
-        [16033194031] = "Zee Hood",
-        [7239319209] = "Da Hood",
-    }
-    gameName = knownGames[placeId] or "Universal"
-
-    pcall(function()
-        local mps = game:GetService("MarketplaceService")
-        local info = mps:GetProductInfo(placeId)
-        if info and info.Name then
-            local n = info.Name:lower()
-            if n:match("arsenal") then gameName = "Arsenal" end
-            if n:match("da hood") then gameName = "Da Hood" end
-            if n:match("zee hood") then gameName = "Zee Hood" end
-        end
-    end)
-
-    local detectedLabel = GUI.CreateLabel(CCon, "Detected Game: " .. gameName, false)
+    local detectedLabel = GUI.CreateLabel(SCon, "Detected Game: " .. gameName)
     TagControl(detectedLabel, {"all"})
-    local placeIdLabel = GUI.CreateLabel(CCon, "PlaceId: " .. tostring(placeId), true)
-    TagControl(placeIdLabel, {"all"})
 
-    local selectedPreset = gameName
-    local presetDropdown, getPreset = GUI.CreateDropdown(CCon, "Manual Override", {"Auto-Detect", "Arsenal", "Da Hood", "Zee Hood", "Universal"}, "Auto-Detect", function(v)
+    local presetDropdown, getPreset = GUI.CreateDropdown(SCon, "Manual Override", {"Auto-Detect", "Arsenal", "Da Hood", "Zee Hood", "Universal"}, "Auto-Detect", function(v)
         if v == "Auto-Detect" then
             selectedPreset = gameName
         else
             selectedPreset = v
         end
         detectedLabel.Text = "Active Preset: " .. selectedPreset
-        print("[Pouncing] Manual preset selected: " .. selectedPreset)
+        if DebugGUI then print("[Pouncing] Manual preset selected: " .. selectedPreset) end
+        -- Auto-apply on dropdown change
+        ApplyPresetVisibility(selectedPreset)
     end)
     TagControl(presetDropdown, {"all"})
 
-    local presetStatus = GUI.CreateLabel(CCon, "Preset Status: Ready", true)
+    local presetStatus = GUI.CreateLabel(SCon, "Preset Status: Ready")
     TagControl(presetStatus, {"all"})
 
-    GUI.CreateButton(CCon, "Load Selected Preset", function()
+    GUI.CreateButton(SCon, "Load Selected Preset", function()
         local presetName = selectedPreset
         if presetName == "Auto-Detect" then presetName = gameName end
 
@@ -915,325 +939,106 @@ function MainGUI.Create(screenGui, moduleManager)
         if not fetchOk or not source or source == "" then
             presetStatus.Text = "Preset Status: Config file missing — UI applied for " .. presetName
             presetStatus.TextColor3 = Color3.fromRGB(255, 150, 50)
-            warn("[Pouncing] Preset config not found: " .. presetUrl .. " | " .. tostring(source))
+            if DebugGUI then warn("[Pouncing] Preset config not found: " .. presetUrl .. " | " .. tostring(source)) end
             ApplyPresetVisibility(presetName)
             return
         end
 
-        if source:sub(1, 1) == "<" or source:find("<!DOCTYPE") or source:find("<html") then
-            presetStatus.Text = "Preset Status: Config file missing — UI applied for " .. presetName
-            presetStatus.TextColor3 = Color3.fromRGB(255, 150, 50)
-            warn("[Pouncing] Preset file not found (404 HTML): " .. presetUrl)
-            ApplyPresetVisibility(presetName)
-            return
-        end
-
-        if source:find("404") or source:find("Not Found") or source:find("not found") then
-            presetStatus.Text = "Preset Status: Config file missing — UI applied for " .. presetName
-            presetStatus.TextColor3 = Color3.fromRGB(255, 150, 50)
-            warn("[Pouncing] Preset file not found: " .. presetUrl)
-            ApplyPresetVisibility(presetName)
-            return
-        end
-
-        local loadOk, preset = pcall(function()
-            local fn = loadstring(source, presetName)
-            if not fn then return nil end
-            return fn()
-        end)
-
-        if not loadOk or not preset then
-            presetStatus.Text = "Preset Status: Config error — UI applied for " .. presetName
-            presetStatus.TextColor3 = Color3.fromRGB(255, 150, 50)
-            warn("[Pouncing] Failed to load preset " .. presetName .. ": " .. tostring(preset))
-            ApplyPresetVisibility(presetName)
-            return
-        end
-
-        if not preset.Configs then
-            presetStatus.Text = "Preset Status: Invalid format — UI applied for " .. presetName
-            presetStatus.TextColor3 = Color3.fromRGB(255, 150, 50)
-            warn("[Pouncing] Preset " .. presetName .. " missing Configs table")
-            ApplyPresetVisibility(presetName)
-            return
-        end
-
-        local appliedCount = 0
-        for modName, cfg in pairs(preset.Configs) do
-            local mod = moduleManager:GetModule(modName)
-            if not mod then
-                mod = moduleManager:Load(modName)
+        local loadOk, loadErr = pcall(function()
+            local presetFunc = loadstring(source)
+            if not presetFunc then
+                error("Failed to compile preset script")
             end
-            if mod and mod.SetConfig then
-                for k, v in pairs(cfg) do
-                    local ok = pcall(function() mod.SetConfig(k, v) end)
-                    if ok then appliedCount = appliedCount + 1 end
+            local presetEnv = setmetatable({}, {__index = getfenv()})
+            setfenv(presetFunc, presetEnv)
+            local presetResult = presetFunc()
+            if type(presetResult) == "table" then
+                for k, v in pairs(presetResult) do
+                    local mod = moduleManager:GetModule("Aimbot")
+                    if mod and mod.SetConfig then
+                        mod.SetConfig(k, v)
+                    end
                 end
             end
+        end)
+
+        if not loadOk then
+            presetStatus.Text = "Preset Status: Error loading " .. presetName .. " config"
+            presetStatus.TextColor3 = Color3.fromRGB(255, 50, 50)
+            warn("[Pouncing] Preset load error: " .. tostring(loadErr))
+        else
+            presetStatus.Text = "Preset Status: " .. presetName .. " loaded successfully"
+            presetStatus.TextColor3 = Color3.fromRGB(50, 255, 100)
         end
 
         ApplyPresetVisibility(presetName)
-
-        presetStatus.Text = "Preset Status: LOADED " .. presetName .. " (" .. tostring(appliedCount) .. " settings)"
-        presetStatus.TextColor3 = Color3.fromRGB(0, 255, 100)
-        print("[Pouncing] Loaded " .. presetName .. " preset with " .. appliedCount .. " settings")
-
-        for modName, cfg in pairs(preset.Configs) do
-            if cfg.Enabled == true then
-                moduleManager:Toggle(modName, true)
-            end
-        end
     end)
 
-    local cfgSep1 = GUI.CreateSeparator(CCon)
-    TagControl(cfgSep1, {"all"})
+    local sepPreset = GUI.CreateSeparator(SCon)
+    TagControl(sepPreset, {"all"})
 
-    local cfgMgmtSection = GUI.CreateSection(CCon, "Config Management")
-    TagControl(cfgMgmtSection, {"all"})
-
-    local versionLabel = GUI.CreateLabel(CCon, "Pouncing.exe v7.4", false)
-    TagControl(versionLabel, {"all"})
-    local creditLabel = GUI.CreateLabel(CCon, "Built with love by ENI for LO", true)
-    TagControl(creditLabel, {"all"})
-
-    local cfgSep2 = GUI.CreateSeparator(CCon)
-    TagControl(cfgSep2, {"all"})
-
-    local themeSection = GUI.CreateSection(CCon, "Theme")
+    local themeSection = GUI.CreateSection(SCon, "Theme")
     TagControl(themeSection, {"all"})
 
-    local themeDropdown = GUI.CreateDropdown(CCon, "Theme Preset", {"Pink", "Icy", "Stary"}, "Pink", function(v)
-        GUI.LoadPreset(v)
+    local themeDropdown = GUI.CreateDropdown(SCon, "Theme", {"Neon Pink", "Neon Red", "Neon Blue", "Neon Green", "Neon Purple", "Neon Orange", "Neon White", "Dark"}, "Neon Pink", function(v)
+        local themeMap = {
+            ["Neon Pink"] = {Primary = Color3.fromRGB(255, 105, 180), Secondary = Color3.fromRGB(255, 20, 147), Accent = Color3.fromRGB(255, 182, 193)},
+            ["Neon Red"] = {Primary = Color3.fromRGB(255, 50, 50), Secondary = Color3.fromRGB(200, 0, 0), Accent = Color3.fromRGB(255, 100, 100)},
+            ["Neon Blue"] = {Primary = Color3.fromRGB(50, 150, 255), Secondary = Color3.fromRGB(0, 100, 200), Accent = Color3.fromRGB(100, 180, 255)},
+            ["Neon Green"] = {Primary = Color3.fromRGB(50, 255, 100), Secondary = Color3.fromRGB(0, 200, 50), Accent = Color3.fromRGB(100, 255, 150)},
+            ["Neon Purple"] = {Primary = Color3.fromRGB(180, 50, 255), Secondary = Color3.fromRGB(130, 0, 200), Accent = Color3.fromRGB(200, 100, 255)},
+            ["Neon Orange"] = {Primary = Color3.fromRGB(255, 150, 50), Secondary = Color3.fromRGB(200, 100, 0), Accent = Color3.fromRGB(255, 180, 100)},
+            ["Neon White"] = {Primary = Color3.fromRGB(255, 255, 255), Secondary = Color3.fromRGB(200, 200, 200), Accent = Color3.fromRGB(240, 240, 240)},
+            ["Dark"] = {Primary = Color3.fromRGB(100, 100, 100), Secondary = Color3.fromRGB(70, 70, 70), Accent = Color3.fromRGB(130, 130, 130)},
+        }
+        local t = themeMap[v]
+        if t then
+            GUI.SetTheme(t.Primary, t.Secondary, t.Accent)
+        end
     end)
     TagControl(themeDropdown, {"all"})
 
-    local cfgSep3 = GUI.CreateSeparator(CCon)
-    TagControl(cfgSep3, {"all"})
+    local sepTheme = GUI.CreateSeparator(SCon)
+    TagControl(sepTheme, {"all"})
 
-    local saveLoadSection = GUI.CreateSection(CCon, "Save / Load")
-    TagControl(saveLoadSection, {"all"})
+    local uiSection = GUI.CreateSection(SCon, "UI Settings")
+    TagControl(uiSection, {"all"})
 
-    GUI.CreateButton(CCon, "Save Config", function()
-        local configs = {}
-        for name, mod in pairs(moduleManager.Modules) do
-            if mod.GetConfig then
-                local ok, cfg = pcall(mod.GetConfig)
-                if ok then configs[name] = cfg end
-            end
-        end
-        local json = game:GetService("HttpService"):JSONEncode(configs)
-        if writefile then
-            writefile("PouncingExe_Config.json", json)
-            print("[Pouncing] Config saved")
-        else
-            print("[Pouncing] Config:", json)
-        end
-    end)
-
-    GUI.CreateButton(CCon, "Load Config", function()
-        if readfile then
-            local ok, content = pcall(readfile, "PouncingExe_Config.json")
-            if ok and content then
-                local jsonOk, configs = pcall(function()
-                    return game:GetService("HttpService"):JSONDecode(content)
-                end)
-                if jsonOk and configs then
-                    for name, cfg in pairs(configs) do
-                        local mod = moduleManager:GetModule(name)
-                        if mod and mod.SetConfig then
-                            for k, v in pairs(cfg) do
-                                pcall(function() mod.SetConfig(k, v) end)
-                            end
-                        end
-                    end
-                    print("[Pouncing] Config loaded")
-                else
-                    warn("[Pouncing] Failed to parse config")
-                end
-            else
-                warn("[Pouncing] Config file not found")
-            end
-        else
-            warn("[Pouncing] readfile not available")
-        end
-    end)
-
-    GUI.CreateButton(CCon, "Reset to Defaults", function()
-        for name, mod in pairs(moduleManager.Modules) do
-            if mod.ResetConfig then pcall(mod.ResetConfig) end
-        end
-        print("[Pouncing] All configs reset")
-    end)
-
-    local cfgSep4 = GUI.CreateSeparator(CCon)
-    TagControl(cfgSep4, {"all"})
-
-    local customColorsSection = GUI.CreateSection(CCon, "Custom Colors")
-    TagControl(customColorsSection, {"all"})
-
-    local primaryPicker = GUI.CreateColorPicker(CCon, "Primary Color", Color3.fromRGB(255, 105, 180))
-    TagControl(primaryPicker, {"all"})
-    local primaryBtn = GUI.CreateButton(CCon, "Set Primary Color", function()
-        primaryPicker:Open(function(c)
-            GUI.Theme.Primary = c
-            GUI.Theme.BorderGlow = c
-            GUI.Theme.On = c
-            GUI.UpdateTheme()
-        end, GUI.Theme.Primary)
-    end)
-    TagControl(primaryBtn, {"all"})
-
-    local accentPicker = GUI.CreateColorPicker(CCon, "Accent Color", Color3.fromRGB(255, 20, 147))
-    TagControl(accentPicker, {"all"})
-    local accentBtn = GUI.CreateButton(CCon, "Set Accent Color", function()
-        accentPicker:Open(function(c)
-            GUI.Theme.Accent = c
-            GUI.Theme.Neon = c
-            GUI.UpdateTheme()
-        end, GUI.Theme.Accent)
-    end)
-    TagControl(accentBtn, {"all"})
-
-    local cfgSep5 = GUI.CreateSeparator(CCon)
-    TagControl(cfgSep5, {"all"})
-
-    local uiToggleSection = GUI.CreateSection(CCon, "UI Toggle")
-    TagControl(uiToggleSection, {"all"})
-
-    local toggleKeyLabel = GUI.CreateLabel(CCon, "Toggle Key: RightShift", true)
-    TagControl(toggleKeyLabel, {"all"})
-    local uiToggleKeyBind = GUI.CreateKeybind(CCon, "UI Toggle Key", Enum.KeyCode.RightShift, function(newKey)
-        uiToggleKey = newKey
-        toggleKeyLabel.Text = "Toggle Key: " .. (newKey.Name or tostring(newKey))
+    local uiToggleKeyBind = GUI.CreateKeybind(SCon, "UI Toggle Key", uiToggleKey, function(k)
+        uiToggleKey = k
     end)
     TagControl(uiToggleKeyBind, {"all"})
 
-    local cfgSep6 = GUI.CreateSeparator(CCon)
-    TagControl(cfgSep6, {"all"})
-
-    local killSwitchSection = GUI.CreateSection(CCon, "Kill Switch")
-    TagControl(killSwitchSection, {"all"})
-
-    GUI.CreateButton(CCon, "UNINJECT / KILL SWITCH", function()
-        print("[Pouncing] Killswitch activated...")
-        for name, mod in pairs(moduleManager.Modules) do
-            if mod and mod.Disable then
-                pcall(function() mod.Disable() end)
-            end
-        end
-        for name, mod in pairs(moduleManager.Modules) do
-            if mod and mod.Cleanup then
-                pcall(function() mod.Cleanup() end)
-            end
-        end
-        if screenGui then
-            pcall(function() screenGui:Destroy() end)
-        end
-        moduleManager.Modules = {}
-        moduleManager.Active = {}
-        print("[Pouncing] Fully uninjected — all modules off, all connections killed")
+    local debugToggle = GUI.CreateToggle(SCon, "Debug Output", false, nil, function(v)
+        DebugGUI = v
     end)
+    TagControl(debugToggle, {"all"})
 
-    local cfgSep7 = GUI.CreateSeparator(CCon)
-    TagControl(cfgSep7, {"all"})
-
-    local infoSection = GUI.CreateSection(CCon, "Info")
-    TagControl(infoSection, {"all"})
-
-    GUI.CreateLabel(CCon, "Press UI Toggle Key to show/hide GUI", true)
-    GUI.CreateLabel(CCon, "Modules load on-demand from GitHub", true)
-    GUI.CreateLabel(CCon, "Theme presets: Pink | Icy | Stary", true)
-    GUI.CreateLabel(CCon, "Cyberpunk HUD design v7.4", true)
-    GUI.CreateLabel(CCon, "Game-specific presets", true)
-    GUI.CreateLabel(CCon, "Arsenal | Da Hood | Zee Hood | Universal", true)
-    GUI.CreateLabel(CCon, "Dynamic UI — controls adapt to preset", true)
-    GUI.CreateLabel(CCon, "Contained star VFX for Stary", true)
-    GUI.CreateLabel(CCon, "Contained snow VFX for Icy", true)
-    GUI.CreateLabel(CCon, "Live theme switching", true)
-    GUI.CreateLabel(CCon, "Contained dropdowns / no clipping", true)
-    GUI.CreateLabel(CCon, "Unified HookManager — no collisions", true)
-
-    -- ============================================================
-    -- Activate default tab
-    -- ============================================================
-    window.ActiveTab = "Aimbot"
-    if window.Tabs["Aimbot"] then
-        TweenService:Create(window.Tabs["Aimbot"], TweenInfo.new(0.2), {
-            BackgroundColor3 = GUI.Theme.Primary, BackgroundTransparency = 0.1
-        }):Play()
-    end
-    if window.Contents["Aimbot"] then
-        window.Contents["Aimbot"].Visible = true
-    end
-
-    -- ============================================================
-    -- UI Toggle System
-    -- ============================================================
-    UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        local isMatch = false
-        if uiToggleKey.EnumType == Enum.KeyCode then
-            isMatch = (input.KeyCode == uiToggleKey)
-        elseif uiToggleKey.EnumType == Enum.UserInputType then
-            isMatch = (input.UserInputType == uiToggleKey)
-        end
-        if isMatch then
-            window.Container.Visible = not window.Container.Visible
-            print("[Pouncing] UI toggled — Visible:", tostring(window.Container.Visible))
-        end
+    local unloadBtn = GUI.CreateButton(SCon, "Unload Script", function()
+        moduleManager:UnloadAll()
+        screenGui:Destroy()
     end)
+    TagControl(unloadBtn, {"all"})
 
     -- ============================================================
-    -- Apply initial preset visibility (auto-detected game)
+    -- INITIAL PRESET APPLICATION
     -- ============================================================
     task.delay(0.1, function()
         if window and window.Tabs and window.Contents then
             ApplyPresetVisibility(gameName)
         else
-            warn("[Pouncing] Delayed preset apply skipped — window not ready")
+            if DebugGUI then warn("[Pouncing] Delayed preset apply skipped — window not ready") end
         end
     end)
 
     -- ============================================================
-    -- Notification
+    -- UI TOGGLE KEY
     -- ============================================================
-    local NF = Instance.new("Frame")
-    NF.Size = UDim2.new(0, 380, 0, 54)
-    NF.Position = UDim2.new(1, 20, 1, -70)
-    NF.BackgroundColor3 = GUI.Theme.ElementBG
-    NF.BackgroundTransparency = 0.15
-    NF.BorderSizePixel = 0
-    NF.Parent = screenGui
-
-    local NS = Instance.new("UIStroke")
-    NS.Color = GUI.Theme.Primary
-    NS.Thickness = 1.5
-    NS.Transparency = 0.25
-    NS.Parent = NF
-
-    local NC = Instance.new("UICorner")
-    NC.CornerRadius = UDim.new(0, 14)
-    NC.Parent = NF
-
-    local NT = Instance.new("TextLabel")
-    NT.Size = UDim2.new(1, -16, 1, 0)
-    NT.Position = UDim2.new(0, 8, 0, 0)
-    NT.BackgroundTransparency = 1
-    NT.Text = "Pouncing.exe v7.4 loaded | Dynamic UI | Preset: " .. gameName .. " | UI Toggle: RightShift"
-    NT.TextColor3 = GUI.Theme.SoftAccent
-    NT.TextSize = 13
-    NT.Font = Enum.Font.GothamSemibold
-    NT.Parent = NF
-
-    TweenService:Create(NF, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        Position = UDim2.new(1, -400, 1, -70)
-    }):Play()
-
-    task.delay(4, function()
-        TweenService:Create(NF, TweenInfo.new(0.5), {
-            Position = UDim2.new(1, 20, 1, -70)
-        }):Play()
-        task.delay(0.6, function() NF:Destroy() end)
+    UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == uiToggleKey then
+            screenGui.Enabled = not screenGui.Enabled
+        end
     end)
 
     return window
