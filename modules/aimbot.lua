@@ -1,8 +1,6 @@
--- Pouncing.exe | Aimbot Module v8.2
--- Silent Aim via DIRECT replacements (no __namecall, no HookManager)
--- Replaces Workspace.Raycast, Workspace.FindPartOnRay, and remote.FireServer directly
--- All replacements wrapped in pcall — one failure won't kill the rest
--- Hitbox: Malrand-style continuous expansion (unchanged)
+-- Pouncing.exe | Aimbot Module v9.0
+-- Arsenal Silent Aim via Events.Fire direction vector hook
+-- Backward compatible with all existing features
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -36,11 +34,9 @@ local Config = {
     LegitMode = false,
     LegitThreshold = 30,
     SnapDuration = 2,
-
-    -- Arsenal Mode (legacy flag, no functional gating)
     ArsenalMode = false,
 
-    -- Hitbox Expansion — Malrand exact
+    -- Hitbox Expansion
     ArsenalHitboxExpand = true,
     ArsenalHitboxSize = 13,
     ArsenalHitboxParts = {"RightUpperLeg", "LeftUpperLeg", "HeadHB", "HumanoidRootPart"},
@@ -79,6 +75,10 @@ local OriginalFindPartOnRayWithIgnoreList = nil
 local OriginalFindPartOnRayWithWhitelist = nil
 local OriginalRemoteFires = {}
 local HooksActive = false
+
+-- ARSENAL FIRE REMOTE HOOK
+local OriginalFireRemote = nil
+local FireRemoteHooked = false
 
 -- ============================================================
 -- RECURSION GUARD
@@ -253,7 +253,7 @@ local function AimAt(target)
 end
 
 -- ============================================================
--- NON-REDIRECT: Camera Snap (fallback when Silent Aim is off)
+-- NON-REDIRECT: Camera Snap
 -- ============================================================
 
 local function DoCameraSnap()
@@ -287,7 +287,6 @@ end
 -- BULLET REDIRECT: Ray replacement
 -- ============================================================
 
--- Only redirect rays that originate near the camera (bullet rays)
 local function IsBulletRay(origin)
     if not origin or typeof(origin) ~= "Vector3" then return false end
     return (origin - Camera.CFrame.Position).Magnitude < 15
@@ -306,7 +305,68 @@ local function GetRedirectRay(origin, direction)
 end
 
 -- ============================================================
--- BULLET REDIRECT: Remote replacement
+-- ARSENAL FIRE REMOTE: Direction vector hook
+-- ============================================================
+
+local function HookArsenalFireRemote()
+    if FireRemoteHooked then return end
+
+    local success, fireRemote = pcall(function()
+        return ReplicatedStorage:WaitForChild("Events", 5):WaitForChild("Fire", 5)
+    end)
+
+    if not success or not fireRemote then
+        warn("[Pouncing] Arsenal Fire remote not found")
+        return
+    end
+
+    OriginalFireRemote = fireRemote.FireServer
+
+    fireRemote.FireServer = function(self, ...)
+        local args = {...}
+
+        if Config.SilentAim and Config.Enabled and Config.ArsenalMode then
+            if math.random(1, 100) <= Config.HitChance then
+                local target = GetSilentAimTarget()
+                if target and target.Part then
+                    -- Arsenal Fire signature: args[1] = direction Vector3
+                    if #args >= 1 and typeof(args[1]) == "Vector3" then
+                        local myHRP = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        local origin = myHRP and myHRP.Position or Camera.CFrame.Position
+                        local targetPos = target.Part.Position + (target.Part.Velocity * 0.03)
+                        local newDir = (targetPos - origin).Unit
+                        args[1] = newDir
+
+                        if Config.DebugMode then
+                            print(string.format("[SA-Fire] Curved → %s | %s | %.1f studs",
+                                target.Player.Name, target.Part.Name, target.Distance))
+                        end
+                    end
+                end
+            end
+        end
+
+        return OriginalFireRemote(self, table.unpack(args))
+    end
+
+    FireRemoteHooked = true
+    print("[Pouncing] Arsenal Fire remote hooked")
+end
+
+local function UnhookArsenalFireRemote()
+    if not FireRemoteHooked then return end
+    local success, fireRemote = pcall(function()
+        return ReplicatedStorage.Events:FindFirstChild("Fire")
+    end)
+    if success and fireRemote and OriginalFireRemote then
+        fireRemote.FireServer = OriginalFireRemote
+    end
+    FireRemoteHooked = false
+    OriginalFireRemote = nil
+end
+
+-- ============================================================
+-- BULLET REDIRECT: Remote replacement (general)
 -- ============================================================
 
 local function IsLikelyHitRemote(remoteName)
@@ -456,7 +516,7 @@ local function ProcessRemoteArgs(args, remoteName)
 end
 
 -- ============================================================
--- HOOK INSTALLATION (direct replacements with pcall)
+-- HOOK INSTALLATION
 -- ============================================================
 
 local function InstallHooks()
@@ -527,16 +587,19 @@ local function InstallHooks()
             end
         end
 
-        -- Hook existing remotes
         for _, child in ipairs(ReplicatedStorage:GetDescendants()) do
             pcall(function() HookRemote(child) end)
         end
 
-        -- Hook new remotes as they're added
         ReplicatedStorage.DescendantAdded:Connect(function(child)
             pcall(function() HookRemote(child) end)
         end)
     end)
+
+    -- 6. Arsenal Fire Remote (specific)
+    if Config.ArsenalMode then
+        pcall(HookArsenalFireRemote)
+    end
 end
 
 local function UninstallHooks()
@@ -563,6 +626,8 @@ local function UninstallHooks()
         end
     end)
 
+    pcall(UnhookArsenalFireRemote)
+
     OriginalRaycast = nil
     OriginalFindPartOnRay = nil
     OriginalFindPartOnRayWithIgnoreList = nil
@@ -571,7 +636,7 @@ local function UninstallHooks()
 end
 
 -- ============================================================
--- HITBOX EXPANSION — Malrand Style (UNCHANGED)
+-- HITBOX EXPANSION
 -- ============================================================
 
 local function RestoreArsenalHitboxes(player)
@@ -894,7 +959,7 @@ local function OnRenderStep()
 
     if target then
         if Config.SilentAim then
-            -- Silent aim uses direct replacements — no camera manipulation
+            -- Silent aim uses direct replacements -- no camera manipulation
         elseif Config.Aiming then
             AimAt(target)
         end
@@ -1027,6 +1092,13 @@ function Module.SetConfig(key, value)
     elseif key == "SnapDuration" then Config.SnapDuration = math.clamp(value, 1, 10)
     elseif key == "ArsenalMode" then 
         Config.ArsenalMode = value
+        if Config.Enabled then
+            if value then
+                pcall(HookArsenalFireRemote)
+            else
+                pcall(UnhookArsenalFireRemote)
+            end
+        end
     elseif key == "ArsenalHitboxExpand" then
         Config.ArsenalHitboxExpand = value
         if Config.Enabled then

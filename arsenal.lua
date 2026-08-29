@@ -1,26 +1,36 @@
--- Pouncing.exe | Arsenal Preset v1.2
--- Silent Aim = Bullet Redirect. No separate flag needed.
+-- Pouncing.exe | Arsenal Preset
+-- Auto-configures modules for Arsenal gameplay
 -- ============================================================
 
 return {
     Configs = {
         Aimbot = {
             Enabled = true,
-            SilentAim = true,           -- this IS bullet redirect now
+            SilentAim = true,
             ArsenalMode = true,
-            ArsenalHitboxExpand = true,
-            ArsenalHitboxSize = 13,
             TeamCheck = true,
             WallCheck = false,
-            FOV = 60,
-            MaxDistance = 1000,
+            FOV = 80,
+            MaxDistance = 1500,
+            HitChance = 100,
             TargetPart = "Head",
             Priority = "Closest to Mouse",
-            HitChance = 100,
+            ArsenalHitboxExpand = true,
+            ArsenalHitboxSize = 15,
             ShowFOV = true,
-            Triggerbot = false,
-            ToggleMode = false,
-            StickyTarget = false,
+            DebugMode = false,
+        },
+        Gun = {
+            Enabled = true,
+            ArsenalMode = true,
+            NoRecoil = true,
+            NoSpread = true,
+            RapidFire = true,
+            FireRate = 80,
+            AlwaysHeadshot = true,
+            InstantReload = true,
+            InfiniteAmmo = true,
+            AutoFire = false,
         },
         ESP = {
             Enabled = true,
@@ -28,18 +38,10 @@ return {
             Names = true,
             Health = true,
             TeamCheck = true,
-            MaxDistance = 1500,
-            BoxThickness = 1,
+            MaxDistance = 2000,
         },
-        Gun = {
-            Enabled = true,
-            NoRecoil = true,
-            NoSpread = true,
-            RapidFire = false,
-            AutoFire = false,
-            FireRate = 2,
-            DamageMult = 1,
-            RecoilReduction = 100,
+        Misc = {
+            Enabled = false,
         },
     }
 }

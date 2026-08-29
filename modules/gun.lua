@@ -1,12 +1,13 @@
--- Pouncing.exe | Gun Module v2.2
--- Weapon modifications and firing logic
--- Fixed: AlwaysHeadshot now uses unified HookManager
+-- Pouncing.exe | Gun Module v3.0
+-- Weapon modifications + Arsenal Fire remote headshot forcing
+-- Fixed: AlwaysHeadshot now hooks Events.Fire directly for Arsenal
 -- ============================================================
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local UserInputService = game:GetService("UserInputService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local LocalPlayer = Players.LocalPlayer
 local Mouse = LocalPlayer:GetMouse()
@@ -17,7 +18,10 @@ local Config = {
     Enabled = false, AutoFire = false, NoRecoil = false, NoSpread = false,
     InstantReload = false, RapidFire = false, InfiniteAmmo = false, AlwaysHeadshot = false,
     FireRate = 50, DamageMult = 1, RecoilReduction = 100,
-    OriginalValues = {}, Connections = {}, AmmoHooks = {}
+    ArsenalMode = false,
+    OriginalValues = {}, Connections = {}, AmmoHooks = {},
+    FireRemoteOriginal = nil,
+    FireRemoteHooked = false,
 }
 
 local function GetCurrentTool()
@@ -110,11 +114,72 @@ local function RemoveInfiniteAmmo()
 end
 
 -- ============================================================
--- Always Headshot — HookManager Handler
+-- Arsenal Fire Remote Headshot Hook
+-- ============================================================
+
+local function HookArsenalFireForHeadshot()
+    if Config.FireRemoteHooked then return end
+
+    local success, fireRemote = pcall(function()
+        return ReplicatedStorage:WaitForChild("Events", 5):WaitForChild("Fire", 5)
+    end)
+
+    if not success or not fireRemote then return end
+
+    Config.FireRemoteOriginal = fireRemote.FireServer
+
+    fireRemote.FireServer = function(self, ...)
+        local args = {...}
+
+        if Config.AlwaysHeadshot and Config.Enabled and Config.ArsenalMode then
+            -- Find nearest head and aim there
+            local bestHead = nil
+            local bestDist = math.huge
+            local myPos = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position or Camera.CFrame.Position
+
+            for _, plr in pairs(Players:GetPlayers()) do
+                if plr ~= LocalPlayer and plr.Character then
+                    local head = plr.Character:FindFirstChild("Head")
+                    if head then
+                        local dist = (head.Position - myPos).Magnitude
+                        if dist < bestDist then
+                            bestDist = dist
+                            bestHead = head
+                        end
+                    end
+                end
+            end
+
+            if bestHead and #args >= 1 and typeof(args[1]) == "Vector3" then
+                local newDir = (bestHead.Position - myPos).Unit
+                args[1] = newDir
+            end
+        end
+
+        return Config.FireRemoteOriginal(self, table.unpack(args))
+    end
+
+    Config.FireRemoteHooked = true
+end
+
+local function UnhookArsenalFireForHeadshot()
+    if not Config.FireRemoteHooked then return end
+    local success, fireRemote = pcall(function()
+        return ReplicatedStorage.Events:FindFirstChild("Fire")
+    end)
+    if success and fireRemote and Config.FireRemoteOriginal then
+        fireRemote.FireServer = Config.FireRemoteOriginal
+    end
+    Config.FireRemoteHooked = false
+    Config.FireRemoteOriginal = nil
+end
+
+-- ============================================================
+-- Always Headshot — HookManager Handler (non-Arsenal)
 -- ============================================================
 
 local function GunNamecallHandler(args, method, self_obj)
-    if not Config.Enabled or not Config.AlwaysHeadshot then
+    if not Config.Enabled or not Config.AlwaysHeadshot or Config.ArsenalMode then
         return args, false
     end
 
@@ -193,10 +258,16 @@ function Module.Enable()
     if tool then ApplyGunMods(tool) end
     if Config.AutoFire and not AutoFireConn then AutoFireConn = RunService.RenderStepped:Connect(OnAutoFire) end
     if Config.InfiniteAmmo then SetupInfiniteAmmo() end
-    if Config.AlwaysHeadshot and Utils and Utils.HookManager then
-        Utils.HookManager:RegisterNamecallHandler("Gun", GunNamecallHandler)
-        Utils.HookManager:Install()
+
+    if Config.AlwaysHeadshot then
+        if Config.ArsenalMode then
+            pcall(HookArsenalFireForHeadshot)
+        elseif Utils and Utils.HookManager then
+            Utils.HookManager:RegisterNamecallHandler("Gun", GunNamecallHandler)
+            Utils.HookManager:Install()
+        end
     end
+
     if not Config.Connections.InputBegan then
         Config.Connections.InputBegan = UserInputService.InputBegan:Connect(function(input, gp) if gp then return end; if input.UserInputType == Enum.UserInputType.MouseButton1 then MouseDown = true end end)
         Config.Connections.InputEnded = UserInputService.InputEnded:Connect(function(input, gp) if gp then return end; if input.UserInputType == Enum.UserInputType.MouseButton1 then MouseDown = false end end)
@@ -211,6 +282,9 @@ function Module.Disable()
     if AutoFireConn then AutoFireConn:Disconnect(); AutoFireConn = nil end
     for name, conn in pairs(Config.Connections) do conn:Disconnect() end
     Config.Connections = {}
+
+    pcall(UnhookArsenalFireForHeadshot)
+
     if Utils and Utils.HookManager then
         Utils.HookManager:UnregisterNamecallHandler("Gun")
     end
@@ -225,17 +299,35 @@ function Module.SetConfig(key, value)
     elseif key == "InfiniteAmmo" then Config.InfiniteAmmo = value; if Config.Enabled then if value then SetupInfiniteAmmo() else RemoveInfiniteAmmo() end end
     elseif key == "AlwaysHeadshot" then
         Config.AlwaysHeadshot = value
-        if Config.Enabled and Utils and Utils.HookManager then
-            if value then
-                Utils.HookManager:RegisterNamecallHandler("Gun", GunNamecallHandler)
-                Utils.HookManager:Install()
-            else
-                Utils.HookManager:UnregisterNamecallHandler("Gun")
+        if Config.Enabled then
+            if Config.ArsenalMode then
+                if value then pcall(HookArsenalFireForHeadshot) else pcall(UnhookArsenalFireForHeadshot) end
+            elseif Utils and Utils.HookManager then
+                if value then
+                    Utils.HookManager:RegisterNamecallHandler("Gun", GunNamecallHandler)
+                    Utils.HookManager:Install()
+                else
+                    Utils.HookManager:UnregisterNamecallHandler("Gun")
+                end
             end
         end
     elseif key == "FireRate" then Config.FireRate = value
     elseif key == "DamageMult" then Config.DamageMult = value
     elseif key == "RecoilReduction" then Config.RecoilReduction = value
+    elseif key == "ArsenalMode" then
+        Config.ArsenalMode = value
+        if Config.Enabled and Config.AlwaysHeadshot then
+            if value then
+                pcall(HookArsenalFireForHeadshot)
+                if Utils and Utils.HookManager then Utils.HookManager:UnregisterNamecallHandler("Gun") end
+            else
+                pcall(UnhookArsenalFireForHeadshot)
+                if Utils and Utils.HookManager then
+                    Utils.HookManager:RegisterNamecallHandler("Gun", GunNamecallHandler)
+                    Utils.HookManager:Install()
+                end
+            end
+        end
     end
     if Config.Enabled then local tool = GetCurrentTool(); if tool then ApplyGunMods(tool) end end
 end
@@ -245,6 +337,8 @@ function Module.GetConfig() return Config end
 function Module.ResetConfig()
     Config.Enabled = false; Config.AutoFire = false; Config.NoRecoil = false; Config.NoSpread = false; Config.InstantReload = false
     Config.RapidFire = false; Config.InfiniteAmmo = false; Config.AlwaysHeadshot = false; Config.FireRate = 50; Config.DamageMult = 1; Config.RecoilReduction = 100
+    Config.ArsenalMode = false
+    pcall(UnhookArsenalFireForHeadshot)
     if Utils and Utils.HookManager then
         Utils.HookManager:UnregisterNamecallHandler("Gun")
     end
